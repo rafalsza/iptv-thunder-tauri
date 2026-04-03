@@ -54,7 +54,14 @@ async function fetchAllSeries(
   for (const item of allItems) {
     map.set(String(item.id), item);
   }
-  return Array.from(map.values());
+  const uniqueItems = Array.from(map.values());
+  
+  // Sort by added date descending (newest first)
+  return uniqueItems.sort((a, b) => {
+    const dateA = a.added ? new Date(a.added).getTime() : 0;
+    const dateB = b.added ? new Date(b.added).getTime() : 0;
+    return dateB - dateA;
+  });
 }
 
 // ─── Main hook: useSeriesAll (SQLite first, then API refresh) ─────────────────

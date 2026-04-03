@@ -23,15 +23,6 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
       if (!genreId || genreId === '*') {
         const result = await client.getAllChannels();
         console.log('📺 Got all channels:', result.length);
-        // Save to SQLite database with portal_id
-        await saveChannels(result.map(ch => ({
-          id: ch.id?.toString() || '',
-          name: ch.name || '',
-          streamUrl: ch.cmd || '',
-          iconUrl: ch.logo_url || ch.logo || '',
-          genreId: genreId || ch.tv_genre_id?.toString(),
-          orderNum: ch.number || 0,
-        })), accountId);
         return result;
       }
       
@@ -48,23 +39,27 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
       }
       
       console.log('📺 Total channels fetched:', allChannels.length);
-      
-      // Save to SQLite database with portal_id
-      await saveChannels(allChannels.map(ch => ({
-        id: ch.id?.toString() || '',
-        name: ch.name || '',
-        streamUrl: ch.cmd || '',
-        iconUrl: ch.logo_url || ch.logo || '',
-        genreId: genreId || ch.tv_genre_id?.toString(),
-        orderNum: ch.number || 0,
-      })), accountId);
-      
       return allChannels;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     enabled: !!client && !!genreId,
   });
+  
+  // Save channels to SQLite when data changes (replaces onSuccess callback)
+  useEffect(() => {
+    const data = query.data;
+    if (!data || data.length === 0) return;
+    
+    saveChannels(data.map(ch => ({
+      id: ch.id?.toString() || '',
+      name: ch.name || '',
+      streamUrl: ch.cmd || '',
+      iconUrl: ch.logo_url || ch.logo || '',
+      genreId: genreId || ch.tv_genre_id?.toString(),
+      orderNum: ch.number || 0,
+    })), accountId).catch(err => console.error('[DB] Failed to save channels:', err));
+  }, [query.data, accountId, genreId]);
   
   // Pre-fetch EPG for channels (only for first 20 visible channels)
   const cacheStore = usePortalCacheStore();

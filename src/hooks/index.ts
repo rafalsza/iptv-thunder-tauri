@@ -9,6 +9,8 @@ export { secureStorage, useSecureStorage, type SecureAuthData } from './useSecur
 // Use for: Large datasets, searchable content, relational data
 export {
   useDatabase,
+  // Unified DB access
+  getDb, resetDatabase,
   // Channels
   saveChannels, getChannels, getChannelCount, searchChannels,
   // VOD
@@ -20,6 +22,17 @@ export {
   // Types
   type Channel, type Vod, type EpgEntry
 } from './useDatabase';
+
+// Also export from db.ts directly for low-level access
+export { 
+  getDB as getDatabase, 
+  resetDatabase as resetDb, 
+  withTransaction, 
+  dbExecute, 
+  dbSelect,
+  cleanupOldData,
+  cleanupAllStaleData
+} from './db';
 
 // 📁 FILES: Image cache, downloads
 // Use for: Binary data, media files, cache that needs file system access

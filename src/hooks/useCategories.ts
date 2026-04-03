@@ -3,7 +3,7 @@
 // =========================
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { getDb } from './useDatabase';
+import { getDB } from './db';
 import { StalkerGenre } from '@/types';
 
 const ONE_DAY = 24 * 60 * 60 * 1000;
@@ -19,10 +19,10 @@ interface CategoryItem {
   updated_at: number;
 }
 
-// Initialize categories table
+// Initialize categories table (now handled centrally in db.ts, kept for compatibility)
 async function initCategoriesTable(): Promise<void> {
   try {
-    const db = await getDb();
+    const db = await getDB();
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS categories (
@@ -40,7 +40,6 @@ async function initCategoriesTable(): Promise<void> {
     await db.execute(`CREATE INDEX IF NOT EXISTS idx_categories_full ON categories(portal_id, type, id)`);
     await db.execute(`CREATE INDEX IF NOT EXISTS idx_categories_updated ON categories(updated_at)`);
 
-    console.log('[Categories] Table initialized');
   } catch (error) {
     console.error('[Categories] Error initializing table:', error);
   }
@@ -53,7 +52,7 @@ export async function loadCategories(
   maxAge: number = CACHE_TTL
 ): Promise<StalkerGenre[]> {
   try {
-    const db = await getDb();
+    const db = await getDB();
     const minUpdatedAt = Date.now() - maxAge;
     
     // Load all categories for this portal/type (without TTL filter per-row)
@@ -92,7 +91,7 @@ export async function saveCategories(
   categories: StalkerGenre[]
 ): Promise<void> {
   try {
-    const db = await getDb();
+    const db = await getDB();
     const now = Date.now();
 
     // Pre-filter and validate categories
@@ -159,7 +158,7 @@ export async function saveCategories(
 // Clear all categories cache (for all types and portals)
 export async function clearAllCategoriesCache(): Promise<void> {
   try {
-    const db = await getDb();
+    const db = await getDB();
     await db.execute(`DELETE FROM categories`);
     await db.execute(`DELETE FROM cache_version WHERE key = 'categories'`);
     console.log('[Categories] All cache cleared');

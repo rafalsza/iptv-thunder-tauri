@@ -149,13 +149,13 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
 
       {/* Series Categories Grid */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
           {filteredCategories.map((category, index) => (
             <div
               key={category.id}
               onClick={() => handleCategoryClick(category)}
               className={`
-                relative bg-slate-800 bg-opacity-50 backdrop-blur-sm border rounded-xl p-6 
+                relative bg-slate-800 bg-opacity-50 backdrop-blur-sm border rounded-lg p-4
                 cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl
                 ${selectedCategory?.id === category.id 
                   ? 'border-blue-500 bg-blue-500 bg-opacity-10 shadow-lg shadow-blue-500/25' 
@@ -166,9 +166,9 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
               {/* Index number for debugging */}
               <div className="absolute top-1 left-1 text-xs text-slate-600">#{index + 1}</div>
               {/* Category Icon/Number */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3">
                 <div className={`
-                  w-12 h-12 rounded-lg flex items-center justify-center text-2xl font-bold
+                  w-10 h-10 rounded-lg flex items-center justify-center text-xl font-bold
                   ${selectedCategory?.id === category.id 
                     ? 'bg-blue-500 text-white' 
                     : 'bg-slate-700 text-slate-300'
@@ -198,14 +198,14 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
 
               {/* Category Title */}
               <h3 className={`
-                font-semibold text-lg mb-2 line-clamp-2
+                font-semibold text-base mb-1 line-clamp-2
                 ${selectedCategory?.id === category.id ? 'text-blue-400' : 'text-white'}
               `}>
                 {category.title}
               </h3>
 
               {/* Category Description */}
-              <p className="text-slate-400 text-sm mb-4">
+              <p className="text-slate-400 text-sm mb-2">
                 {category.id === '*' 
                   ? 'Wszystkie dostępne seriale' 
                   : `Kategoria seriali #${category.id}`
@@ -231,9 +231,9 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
 
         {/* Selected Category Info */}
         {selectedCategory && (
-          <div className="mt-8 p-6 bg-slate-800 bg-opacity-50 backdrop-blur-sm border border-slate-600 rounded-xl">
+          <div className="mt-6 p-4 bg-slate-800 bg-opacity-50 backdrop-blur-sm border border-slate-600 rounded-lg">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center text-3xl">
+              <div className="w-14 h-14 bg-blue-500 bg-opacity-20 rounded-lg flex items-center justify-center text-2xl">
                 {selectedCategory.id === '*' ? '📺' : '🎭'}
               </div>
               <div className="flex-1">
@@ -249,7 +249,7 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
               </div>
               <button
                 onClick={() => onCategorySelect(selectedCategory)}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
               >
                 <span>📺</span>
                 Pokaż seriale

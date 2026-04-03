@@ -1,280 +1,26 @@
 import Database from '@tauri-apps/plugin-sql';
 import { clearTauriStore } from '@/lib/tauriStorage';
+import { getDB, withTransaction } from './db';
 
-let dbInstance: Database | null = null;
-let initPromise: Promise<Database> | null = null;
-
-const DB_PATH = 'sqlite:iptv_data.db';
 const BATCH_SIZE = 100;
 const STORAGE_PREFIX = 'iptv-thunder';
 
 export async function getDb(): Promise<Database> {
-  if (dbInstance) {
-    return dbInstance;
-  }
-  
-  // Prevent concurrent initialization
-  if (initPromise) {
-    return initPromise;
-  }
-  
-  initPromise = (async () => {
-    const db = await Database.load(DB_PATH);
-    await initSchema(db);
-    dbInstance = db;
-    initPromise = null;
-    return db;
-  })();
-  
-  return initPromise;
+  return getDB();
 }
 
-async function initSchema(db: Database): Promise<void> {
-  const CURRENT_SCHEMA_VERSION = 1;
-  
-  // Create schema_version table first
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS schema_version (
-      version INTEGER PRIMARY KEY
-    )
-  `);
-  
-  // Check current schema version
-  const versionRows = await db.select<{version: number}[]>(
-    'SELECT version FROM schema_version LIMIT 1'
-  );
-  const currentVersion = versionRows[0]?.version || 0;
-  
-  if (currentVersion >= CURRENT_SCHEMA_VERSION) {
-    console.log(`[Database] Schema version ${currentVersion} is up to date`);
-    return;
-  }
-  
-  console.log(`[Database] Migrating schema from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`);
-  
-  // Check if any table exists but missing portal_id column - if so, drop them all
-  try {
-    console.log('[Database] Checking schema...');
-    
-    // Check all main tables
-    const tablesToCheck = ['channels', 'vod', 'series', 'series_seasons', 'series_episodes', 'epg'];
-    let hasOldSchema = false;
-    
-    for (const table of tablesToCheck) {
-      try {
-        const tableInfo = await db.select<{name: string, type: string}[]>(`PRAGMA table_info(${table})`);
-        if (tableInfo.length > 0) {
-          const hasPortalId = tableInfo.some(col => col.name === 'portal_id');
-          console.log(`[Database] ${table} columns:`, tableInfo.map(c => c.name).join(', '), '- has portal_id:', hasPortalId);
-          if (!hasPortalId) {
-            hasOldSchema = true;
-            console.log(`[Database] ${table} missing portal_id!`);
-          }
-        }
-      } catch (e) {
-        console.log(`[Database] ${table} check error:`, e);
-      }
-    }
-    
-    if (hasOldSchema) {
-      console.log('[Database] Old schema detected - dropping all tables to recreate with portal_id');
-      // Drop child tables first (with FKs) to avoid constraint errors
-      await db.execute('DROP TABLE IF EXISTS series_episodes');
-      await db.execute('DROP TABLE IF EXISTS series_seasons');
-      await db.execute('DROP TABLE IF EXISTS epg');
-      await db.execute('DROP TABLE IF EXISTS series');
-      await db.execute('DROP TABLE IF EXISTS vod');
-      await db.execute('DROP TABLE IF EXISTS channels');
-      console.log('[Database] Tables dropped');
-      
-      // Continue to CREATE TABLE statements below (don't reset)
-      console.log('[Database] Recreating tables with new schema...');
-    } else {
-      console.log('[Database] Schema OK');
-    }
-  } catch (e) {
-    console.log('[Database] Schema check error:', e);
-  }
-
-  // Migration: Add added column to series table if missing
-  try {
-    const seriesInfo = await db.select<{name: string, type: string}[]>(`PRAGMA table_info(series)`);
-    if (seriesInfo.length > 0) {
-      const hasAdded = seriesInfo.some(col => col.name === 'added');
-      if (!hasAdded) {
-        console.log('[Database] Migration: Adding added column to series table');
-        await db.execute('ALTER TABLE series ADD COLUMN added INTEGER');
-        console.log('[Database] Migration: added column added');
-      }
-    }
-  } catch (e) {
-    console.log('[Database] Migration error (added column):', e);
-  }
-
-  // Migration: Add category_id to series table if missing
-  try {
-    const seriesInfo = await db.select<{name: string, type: string}[]>(`PRAGMA table_info(series)`);
-    if (seriesInfo.length > 0) {
-      const hasCategoryId = seriesInfo.some(col => col.name === 'category_id');
-      if (!hasCategoryId) {
-        console.log('[Database] Migration: Adding category_id column to series table');
-        await db.execute('ALTER TABLE series ADD COLUMN category_id TEXT');
-        console.log('[Database] Migration: category_id column added');
-      }
-    }
-  } catch (e) {
-    console.log('[Database] Migration error:', e);
-  }
-
-  // Channels table with portal_id and composite PK
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS channels (
-      id INTEGER,
-      portal_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      stream_url TEXT,
-      icon_url TEXT,
-      genre_id TEXT,
-      genre_name TEXT,
-      epg_channel_id TEXT,
-      order_num INTEGER DEFAULT 0,
-      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      PRIMARY KEY (id, portal_id)
-    )
-  `);
-
-  // VOD/Movies table with portal_id and composite PK
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS vod (
-      id INTEGER,
-      portal_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      description TEXT,
-      poster_url TEXT,
-      poster_local TEXT,
-      stream_url TEXT,
-      year INTEGER,
-      rating REAL,
-      duration INTEGER,
-      genre TEXT,
-      director TEXT,
-      actors TEXT,
-      added INTEGER,
-      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      PRIMARY KEY (id, portal_id)
-    )
-  `);
-
-  // Series table with portal_id and composite PK
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS series (
-      id INTEGER,
-      portal_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      description TEXT,
-      poster_url TEXT,
-      poster_local TEXT,
-      year INTEGER,
-      rating REAL,
-      genre TEXT,
-      category_id TEXT,
-      added INTEGER,
-      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      PRIMARY KEY (id, portal_id)
-    )
-  `);
-
-  // Series seasons with portal_id
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS series_seasons (
-      id INTEGER,
-      series_id INTEGER NOT NULL,
-      portal_id TEXT NOT NULL,
-      season_number INTEGER NOT NULL,
-      name TEXT,
-      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      PRIMARY KEY (id, portal_id),
-      FOREIGN KEY (series_id, portal_id) REFERENCES series(id, portal_id) ON DELETE CASCADE
-    )
-  `);
-
-  // Series episodes with portal_id
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS series_episodes (
-      id INTEGER,
-      series_id INTEGER NOT NULL,
-      season_id INTEGER NOT NULL,
-      portal_id TEXT NOT NULL,
-      episode_number INTEGER NOT NULL,
-      name TEXT,
-      stream_url TEXT,
-      duration INTEGER,
-      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      PRIMARY KEY (id, series_id, portal_id),
-      FOREIGN KEY (series_id, portal_id) REFERENCES series(id, portal_id) ON DELETE CASCADE,
-      FOREIGN KEY (season_id, portal_id) REFERENCES series_seasons(id, portal_id) ON DELETE CASCADE
-    )
-  `);
-
-  // EPG data table with portal_id and INTEGER timestamps
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS epg (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channel_id INTEGER NOT NULL,
-      portal_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      description TEXT,
-      start_time INTEGER NOT NULL,
-      end_time INTEGER NOT NULL,
-      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      UNIQUE(channel_id, portal_id, start_time)
-    )
-  `);
-
-  // Create optimized indexes
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_portal ON channels(portal_id)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_genre ON channels(portal_id, genre_id)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_updated ON channels(portal_id, updated_at)`);
-  
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_vod_portal ON vod(portal_id)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_vod_genre ON vod(portal_id, genre)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_vod_updated ON vod(portal_id, updated_at)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_vod_name ON vod(name COLLATE NOCASE)`);
-  
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_series_portal ON series(portal_id)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_series_category ON series(portal_id, category_id)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_series_updated ON series(portal_id, updated_at)`);
-  
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_seasons_portal ON series_seasons(portal_id)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_episodes_portal ON series_episodes(portal_id)`);
-  
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_epg_portal_time ON epg(portal_id, channel_id, start_time)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_epg_channel_time ON epg(channel_id, portal_id, start_time, end_time)`);
-
-  // Update schema version
-  await db.execute('DELETE FROM schema_version');
-  await db.execute('INSERT INTO schema_version (version) VALUES (?)', [CURRENT_SCHEMA_VERSION]);
-  console.log(`[Database] Schema updated to version ${CURRENT_SCHEMA_VERSION}`);
-}
-
-// Channels API
+// =========================
+// 📺 CHANNELS API
+// =========================
 export async function saveChannels(channels: Channel[], portalId: string): Promise<void> {
   console.log('[Database] saveChannels called with', channels.length, 'channels for portal', portalId);
-  const db = await getDb();
   const now = Date.now();
 
-  await db.execute('BEGIN TRANSACTION');
-  try {
+  await withTransaction(async (db) => {
     // Remove old channels for this portal
     await db.execute('DELETE FROM channels WHERE portal_id = ?', [portalId]);
 
     if (channels.length === 0) {
-      await db.execute('COMMIT');
       return;
     }
 
@@ -313,23 +59,9 @@ export async function saveChannels(channels: Channel[], portalId: string): Promi
 
       await db.execute(query, params);
     }
+  });
 
-    await db.execute('COMMIT');
-    console.log('[Database] Saved', channels.length, 'channels for portal', portalId);
-  } catch (error: any) {
-    const errorMsg = error?.message?.toLowerCase() || '';
-    const isTransactionClosedError = errorMsg.includes('cannot rollback') || errorMsg.includes('no transaction is active');
-    
-    if (!isTransactionClosedError) {
-      try {
-        await db.execute('ROLLBACK');
-      } catch (rollbackError) {
-        // Ignore - transaction already closed
-      }
-    }
-    console.error('[Database] Failed to save channels:', error);
-    throw error;
-  }
+  console.log('[Database] Saved', channels.length, 'channels for portal', portalId);
 }
 
 export async function getChannels(portalId: string, genreId?: string, limit?: number, offset?: number): Promise<Channel[]> {
@@ -381,59 +113,59 @@ export async function getChannelCount(portalId: string, genreId?: string): Promi
   return result[0]?.count || 0;
 }
 
-// VOD API
+// VOD API (with transaction support)
 export async function saveVod(vodList: Vod[], portalId: string): Promise<void> {
   console.log('[Database] saveVod called with', vodList.length, 'items for portal', portalId);
-  const db = await getDb();
   const now = Date.now();
 
   if (vodList.length === 0) return;
 
-  // Batch insert with UPSERT - do not delete, append/update only
-  for (let i = 0; i < vodList.length; i += BATCH_SIZE) {
-    const chunk = vodList.slice(i, i + BATCH_SIZE);
-    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+  await withTransaction(async (db) => {
+    for (let i = 0; i < vodList.length; i += BATCH_SIZE) {
+      const chunk = vodList.slice(i, i + BATCH_SIZE);
+      const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
 
-    const query = `
-      INSERT INTO vod
-        (id, portal_id, name, description, poster_url, poster_local, stream_url, year, rating, duration, genre, director, actors, added, updated_at)
-      VALUES ${placeholders}
-      ON CONFLICT(id, portal_id) DO UPDATE SET
-        name = excluded.name,
-        description = excluded.description,
-        poster_url = excluded.poster_url,
-        poster_local = excluded.poster_local,
-        stream_url = excluded.stream_url,
-        year = excluded.year,
-        rating = excluded.rating,
-        duration = excluded.duration,
-        genre = excluded.genre,
-        director = excluded.director,
-        actors = excluded.actors,
-        added = excluded.added,
-        updated_at = excluded.updated_at
-    `;
+      const query = `
+        INSERT INTO vod
+          (id, portal_id, name, description, poster_url, poster_local, stream_url, year, rating, duration, genre, director, actors, added, updated_at)
+        VALUES ${placeholders}
+        ON CONFLICT(id, portal_id) DO UPDATE SET
+          name = excluded.name,
+          description = excluded.description,
+          poster_url = excluded.poster_url,
+          poster_local = excluded.poster_local,
+          stream_url = excluded.stream_url,
+          year = excluded.year,
+          rating = excluded.rating,
+          duration = excluded.duration,
+          genre = excluded.genre,
+          director = excluded.director,
+          actors = excluded.actors,
+          added = excluded.added,
+          updated_at = excluded.updated_at
+      `;
 
-    const params = chunk.flatMap(vod => [
-      Number(vod.id) || 0,
-      portalId,
-      vod.name,
-      vod.description || null,
-      vod.posterUrl || null,
-      vod.posterLocal || null,
-      vod.streamUrl || null,
-      vod.year || null,
-      vod.rating || null,
-      vod.duration || null,
-      vod.genre || null,
-      vod.director || null,
-      vod.actors || null,
-      vod.added ? new Date(vod.added).getTime() : null,
-      now
-    ]);
+      const params = chunk.flatMap(vod => [
+        Number(vod.id) || 0,
+        portalId,
+        vod.name,
+        vod.description || null,
+        vod.posterUrl || null,
+        vod.posterLocal || null,
+        vod.streamUrl || null,
+        vod.year || null,
+        vod.rating || null,
+        vod.duration || null,
+        vod.genre || null,
+        vod.director || null,
+        vod.actors || null,
+        vod.added ? new Date(vod.added).getTime() : null,
+        now
+      ]);
 
-    await db.execute(query, params);
-  }
+      await db.execute(query, params);
+    }
+  });
 
   console.log('[Database] Saved', vodList.length, 'VOD items for portal', portalId);
 }
@@ -492,57 +224,56 @@ export async function getVodCount(portalId: string, genre?: string): Promise<num
   return result[0]?.count || 0;
 }
 
-// Series API
+// Series API (with transaction support)
 export async function saveSeries(seriesList: Series[], portalId: string, categoryId?: string): Promise<void> {
-  const db = await getDb();
   const now = Date.now();
 
   if (seriesList.length === 0) return;
 
-  // Batch insert with UPSERT
-  for (let i = 0; i < seriesList.length; i += BATCH_SIZE) {
-    const chunk = seriesList.slice(i, i + BATCH_SIZE);
-    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+  await withTransaction(async (db) => {
+    for (let i = 0; i < seriesList.length; i += BATCH_SIZE) {
+      const chunk = seriesList.slice(i, i + BATCH_SIZE);
+      const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
 
-    const query = `
-      INSERT INTO series
-        (id, portal_id, name, description, poster_url, year, rating, genre, category_id, added, updated_at)
-      VALUES ${placeholders}
-      ON CONFLICT(id, portal_id) DO UPDATE SET
-        name = excluded.name,
-        description = excluded.description,
-        poster_url = excluded.poster_url,
-        year = excluded.year,
-        rating = excluded.rating,
-        genre = excluded.genre,
-        category_id = excluded.category_id,
-        added = excluded.added,
-        updated_at = excluded.updated_at
-    `;
+      const query = `
+        INSERT INTO series
+          (id, portal_id, name, description, poster_url, year, rating, genre, category_id, added, updated_at)
+        VALUES ${placeholders}
+        ON CONFLICT(id, portal_id) DO UPDATE SET
+          name = excluded.name,
+          description = excluded.description,
+          poster_url = excluded.poster_url,
+          year = excluded.year,
+          rating = excluded.rating,
+          genre = excluded.genre,
+          category_id = excluded.category_id,
+          added = excluded.added,
+          updated_at = excluded.updated_at
+      `;
 
-    const params = chunk.flatMap(s => {
-      // Handle ID format "41873:41873" - take first part before colon
-      const idStr = s.id?.toString() || '';
-      const cleanId = idStr.split(':')[0];
-      const id = Number(cleanId) || 0;
-      
-      return [
-        id,
-        portalId,
-        s.name,
-        s.description || null,
-        s.posterUrl || null,
-        s.year || null,
-        s.rating || null,
-        s.genre || null,
-        categoryId || s.categoryId || null,
-        s.added ? Number(s.added) : null,
-        now
-      ];
-    });
+      const params = chunk.flatMap(s => {
+        const idStr = s.id?.toString() || '';
+        const cleanId = idStr.split(':')[0];
+        const id = Number(cleanId) || 0;
+        
+        return [
+          id,
+          portalId,
+          s.name,
+          s.description || null,
+          s.posterUrl || null,
+          s.year || null,
+          s.rating || null,
+          s.genre || null,
+          categoryId || s.categoryId || null,
+          s.added ? Number(s.added) : null,
+          now
+        ];
+      });
 
-    await db.execute(query, params);
-  }
+      await db.execute(query, params);
+    }
+  });
 }
 
 export async function getSeries(portalId: string, categoryId?: string, limit?: number, offset?: number): Promise<Series[]> {
@@ -581,41 +312,42 @@ export async function getSeries(portalId: string, categoryId?: string, limit?: n
   }));
 }
 export async function saveEpg(epgData: EpgEntry[], portalId: string): Promise<void> {
-  const db = await getDb();
   const now = Date.now();
 
-  // Remove old expired EPG for this portal using INTEGER timestamps (milliseconds)
-  const cutoff = now - 24 * 60 * 60 * 1000; // 24 hours ago
-  await db.execute('DELETE FROM epg WHERE portal_id = ? AND end_time < ?', [portalId, cutoff]);
+  await withTransaction(async (db) => {
+    // Remove old expired EPG for this portal using INTEGER timestamps (milliseconds)
+    const cutoff = now - 24 * 60 * 60 * 1000; // 24 hours ago
+    await db.execute('DELETE FROM epg WHERE portal_id = ? AND end_time < ?', [portalId, cutoff]);
 
-  if (epgData.length === 0) return;
+    if (epgData.length === 0) return;
 
-  // Batch insert with UPSERT
-  for (let i = 0; i < epgData.length; i += BATCH_SIZE) {
-    const chunk = epgData.slice(i, i + BATCH_SIZE);
-    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+    // Batch insert with UPSERT
+    for (let i = 0; i < epgData.length; i += BATCH_SIZE) {
+      const chunk = epgData.slice(i, i + BATCH_SIZE);
+      const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
 
-    const query = `
-      INSERT INTO epg
-        (channel_id, portal_id, title, description, start_time, end_time)
-      VALUES ${placeholders}
-      ON CONFLICT(channel_id, portal_id, start_time) DO UPDATE SET
-        title = excluded.title,
-        description = excluded.description,
-        end_time = excluded.end_time
-    `;
+      const query = `
+        INSERT INTO epg
+          (channel_id, portal_id, title, description, start_time, end_time)
+        VALUES ${placeholders}
+        ON CONFLICT(channel_id, portal_id, start_time) DO UPDATE SET
+          title = excluded.title,
+          description = excluded.description,
+          end_time = excluded.end_time
+      `;
 
-    const params = chunk.flatMap(entry => [
-      Number(entry.channelId) || 0,
-      portalId,
-      entry.title,
-      entry.description || null,
-      Number(entry.startTime) || 0,
-      Number(entry.endTime) || 0
-    ]);
+      const params = chunk.flatMap(entry => [
+        Number(entry.channelId) || 0,
+        portalId,
+        entry.title,
+        entry.description || null,
+        Number(entry.startTime) || 0,
+        Number(entry.endTime) || 0
+      ]);
 
-    await db.execute(query, params);
-  }
+      await db.execute(query, params);
+    }
+  });
 
   console.log('[Database] Saved', epgData.length, 'EPG entries for portal', portalId);
 }
@@ -717,25 +449,9 @@ export async function searchVod(query: string, portalId: string, limit: number =
 }
 
 export async function resetDatabase(): Promise<void> {
-  console.log('[Database] Resetting database - closing and clearing instance...');
-  
-  // Close existing connection if any
-  if (dbInstance) {
-    try {
-      await dbInstance.close();
-    } catch (e) {
-      // Ignore close errors
-    }
-    dbInstance = null;
-    initPromise = null;
-  }
-  
-  // Small delay to ensure connection is fully closed
-  await new Promise(resolve => setTimeout(resolve, 100));
-  
-  // Re-initialize fresh
-  await getDb();
-  console.log('[Database] Database reset complete - fresh connection established');
+  // Delegate to unified reset in db.ts
+  const { resetDatabase: unifiedReset } = await import('./db');
+  await unifiedReset();
 }
 
 export async function dropAllTables(): Promise<void> {
@@ -764,21 +480,15 @@ export async function dropAllTables(): Promise<void> {
 
 // Cleanup
 export async function clearAllData(): Promise<void> {
-  const db = await getDb();
-  await db.execute('BEGIN TRANSACTION');
-  try {
+  await withTransaction(async (db) => {
     await db.execute('DELETE FROM channels');
     await db.execute('DELETE FROM vod');
     await db.execute('DELETE FROM epg');
     await db.execute('DELETE FROM series_episodes');
     await db.execute('DELETE FROM series_seasons');
     await db.execute('DELETE FROM series');
-    await db.execute('COMMIT');
-    console.log('[Database] All data cleared');
-  } catch (error) {
-    await db.execute('ROLLBACK');
-    throw error;
-  }
+  });
+  console.log('[Database] All data cleared');
 }
 
 export async function clearAllDataForPortal(portalId: string): Promise<void> {

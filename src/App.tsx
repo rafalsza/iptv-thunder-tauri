@@ -156,7 +156,8 @@ function AppInner({ }: AppProps) {
     console.log('🎬 Category received:', category);
     
     setSelectedCategory(category);
-    
+    setSearch(''); // Reset search when changing category
+
     // Use functional update to get current activeView value
     setActiveView(currentView => {
       

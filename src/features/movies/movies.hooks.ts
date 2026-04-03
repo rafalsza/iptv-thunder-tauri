@@ -63,9 +63,22 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
       const items = await fetchAllMovies(client, categoryId);
       console.log('🎬 Total movies loaded:', items.length);
 
-      // Persist to SQLite non-blocking
+      return items;
+    },
+    enabled: !!categoryId && !!accountId && accountId !== 'default',
+    staleTime: 10 * 60 * 1000,
+    gcTime:    30 * 60 * 1000,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
+
+  // Persist to SQLite when data successfully loads
+  React.useEffect(() => {
+    if (query.data && categoryId) {
       saveVod(
-        items.map(vod => ({
+        query.data.map(vod => ({
           id: vod.id?.toString() || '',
           name: vod.name || '',
           description: vod.description || '',
@@ -81,17 +94,8 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
         })),
         accountId,
       ).catch(err => console.error('[DB] Failed to save VOD:', err));
-
-      return items;
-    },
-    enabled: !!categoryId && !!accountId && accountId !== 'default',
-    staleTime: 10 * 60 * 1000,  // 10 min — category data doesn't change often
-    gcTime:    30 * 60 * 1000,  // keep in memory 30 min after last use
-    placeholderData: keepPreviousData, // show previous category while new loads
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    refetchOnMount: false,
-  });
+    }
+  }, [query.data, categoryId, accountId]);
 
   return {
     ...query,

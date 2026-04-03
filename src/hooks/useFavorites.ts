@@ -4,7 +4,7 @@
 // =========================
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import Database from '@tauri-apps/plugin-sql';
+import { getDB } from './db';
 import { createLogger } from '../lib/logger';
 
 interface FavoriteItem {
@@ -23,20 +23,14 @@ interface FavoriteItem {
   created_at: number;
 }
 
-// Singleton DB instance
-let dbInstance: Database | null = null;
+// Singleton state
 let isInitializing = false;
 let initPromise: Promise<void> | null = null;
 let isTableReady = false;
 
 const logger = createLogger('Favorites');
 
-async function getDB(): Promise<Database> {
-  if (!dbInstance) {
-    dbInstance = await Database.load('sqlite:iptv_data.db');
-  }
-  return dbInstance;
-}
+// Note: getDB is imported from ./db - unified singleton
 
 // Initialize favorites table
 export async function initFavoritesTable(): Promise<void> {
@@ -45,8 +39,8 @@ export async function initFavoritesTable(): Promise<void> {
     return initPromise;
   }
 
-  // Skip if already initialized and DB instance exists
-  if (dbInstance) {
+  // Skip if already initialized
+  if (isTableReady) {
     return;
   }
 
