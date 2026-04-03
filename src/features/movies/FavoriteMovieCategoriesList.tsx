@@ -4,7 +4,7 @@
 import React, { useState, useMemo } from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
-import { useAppStore } from '@/store/app.store';
+import { useFavoriteCategories } from '@/hooks/useFavorites';
 import { useMovieCategories } from './movies.hooks';
 
 interface FavoriteMovieCategoriesListProps {
@@ -20,8 +20,7 @@ export const FavoriteMovieCategoriesList: React.FC<FavoriteMovieCategoriesListPr
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
   const accountId = client?.getAccount?.()?.id || 'default';
-  const { getFavoriteCategories, toggleFavoriteCategory } = useAppStore();
-  const favoriteCategories = getFavoriteCategories(accountId);
+  const { categoryIds: favoriteCategories, toggleCategory } = useFavoriteCategories(accountId, 'vod');
 
   // Pobieranie wszystkich kategorii filmów z cache
   const { 
@@ -51,7 +50,7 @@ export const FavoriteMovieCategoriesList: React.FC<FavoriteMovieCategoriesListPr
   const handleToggleFavorite = (e: React.MouseEvent, categoryId: string) => {
     e.stopPropagation();
     e.preventDefault();
-    toggleFavoriteCategory(accountId, categoryId);
+    toggleCategory(categoryId);
   };
 
   if (isLoading) {

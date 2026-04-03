@@ -5,7 +5,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
-import { useAppStore } from '@/store/app.store';
+import { useFavoriteCategories } from '@/hooks/useFavorites';
 
 interface FavoriteCategoriesListProps {
   client: StalkerClient;
@@ -20,8 +20,7 @@ export const FavoriteCategoriesList: React.FC<FavoriteCategoriesListProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
   const accountId = client?.getAccount?.()?.id || 'default';
-  const { getFavoriteCategories, toggleFavoriteCategory } = useAppStore();
-  const favoriteCategories = getFavoriteCategories(accountId);
+  const { categoryIds: favoriteCategories, toggleCategory } = useFavoriteCategories(accountId, 'live');
 
   // Pobieranie wszystkich kategorii kanałów z cache
   const { 
@@ -56,7 +55,8 @@ export const FavoriteCategoriesList: React.FC<FavoriteCategoriesListProps> = ({
   const handleToggleFavorite = (e: React.MouseEvent, categoryId: string) => {
     e.stopPropagation();
     e.preventDefault();
-    toggleFavoriteCategory(accountId, categoryId);
+    const category = categories.find(c => String(c.id) === categoryId);
+    toggleCategory(categoryId, category?.title);
   };
 
   if (isLoading) {

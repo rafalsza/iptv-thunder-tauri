@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StalkerVOD } from '@/types';
-import { useAppStore } from '@/store/app.store';
+import { useFavorites } from '@/hooks/useFavorites';
+import { usePortalsStore } from '@/store/portals.store';
 import { useResumeStore } from '@/store/resume.store';
 
 interface MovieDetailsProps {
@@ -14,7 +15,10 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
   onPlay,
   onBack,
 }) => {
-  const { favorites, toggleFavorite } = useAppStore();
+  const accountId = usePortalsStore(s =>
+    s.portals.find(p => p.id === s.activePortalId)?.id ?? 'default'
+  );
+  const { isItemFavorite, toggleItemFavorite } = useFavorites(accountId);
   const { getPosition, clearPosition } = useResumeStore();
   const [isHovered, setIsHovered] = useState(false);
   const [showResumeDialog, setShowResumeDialog] = useState(false);
@@ -56,7 +60,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
     console.log('Download movie:', movie.name);
   };
 
-  const isFavorite = favorites.includes(String(movie.id));
+  const isFavorite = isItemFavorite('vod', String(movie.id));
 
   // Parse actors string into array
   const actorsList = movie.actors
@@ -206,7 +210,11 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               </button>
 
               <button
-                onClick={() => toggleFavorite(String(movie.id))}
+                onClick={() => toggleItemFavorite('vod', String(movie.id), {
+                  name: movie.name,
+                  poster: movie.poster,
+                  cmd: movie.cmd,
+                })}
                 className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-lg font-semibold hover:bg-slate-600 transition-colors"
               >
                 {isFavorite ? (

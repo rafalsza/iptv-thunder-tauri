@@ -6,8 +6,7 @@ import React, {
 } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useSeriesAll, usePrefetchSeriesStream } from './series.hooks';
-import { useFavorites } from '@/hooks/useFavorites';
-import { useAppStore } from '@/store/app.store';
+import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { usePortalsStore } from '@/store/portals.store';
 import { getImageUrl } from '@/hooks/useImageCache';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
@@ -139,7 +138,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
     s.portals.find(p => p.id === s.activePortalId)?.id ?? 'default'
   );
   const { favorites, toggleItemFavorite } = useFavorites(accountId);
-  const { isFavoriteCategory, toggleFavoriteCategory } = useAppStore();
+  const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'series');
 
   const favoriteIds = useMemo(
     () => new Set(favorites.filter(f => f.type === 'series').map(f => String(f.item_id))),
@@ -212,7 +211,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
     e.stopPropagation();
     const posterUrl = series.poster || series.logo || '';
     const name = series.name || series.series || '';
-    toggleItemFavorite('series', series.id, {
+    toggleItemFavorite('series', String(series.id), {
       name: name as string,
       poster: posterUrl,
       cmd: series.cmd,
@@ -223,9 +222,9 @@ export const SeriesList: React.FC<SeriesListProps> = ({
   const handleToggleCategoryFavorite = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (selectedCategory) {
-      toggleFavoriteCategory(accountId, String(selectedCategory.id));
+      toggleCategory(String(selectedCategory.id), selectedCategory.title);
     }
-  }, [accountId, selectedCategory, toggleFavoriteCategory]);
+  }, [selectedCategory, toggleCategory]);
 
   const handleSeriesSelect = (seriesId: string) => {
     const series = seriesData?.find(s => String(s.id) === seriesId);
@@ -280,9 +279,9 @@ export const SeriesList: React.FC<SeriesListProps> = ({
               <button
                 onClick={handleToggleCategoryFavorite}
                 className="text-xl hover:scale-110 transition-transform p-2 rounded-full hover:bg-slate-700"
-                title={isFavoriteCategory(accountId, String(selectedCategory.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+                title={isCategoryFavorite(String(selectedCategory.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
               >
-                {isFavoriteCategory(accountId, String(selectedCategory.id)) ? '❤️' : '🤍'}
+                {isCategoryFavorite(String(selectedCategory.id)) ? '❤️' : '🤍'}
               </button>
             </div>
           </div>

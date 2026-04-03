@@ -6,6 +6,7 @@ let initPromise: Promise<Database> | null = null;
 
 const DB_PATH = 'sqlite:iptv_data.db';
 const BATCH_SIZE = 100;
+const STORAGE_PREFIX = 'iptv-thunder';
 
 export async function getDb(): Promise<Database> {
   if (dbInstance) {
@@ -21,6 +22,7 @@ export async function getDb(): Promise<Database> {
     const db = await Database.load(DB_PATH);
     await initSchema(db);
     dbInstance = db;
+    initPromise = null;
     return db;
   })();
   
@@ -28,6 +30,28 @@ export async function getDb(): Promise<Database> {
 }
 
 async function initSchema(db: Database): Promise<void> {
+  const CURRENT_SCHEMA_VERSION = 1;
+  
+  // Create schema_version table first
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS schema_version (
+      version INTEGER PRIMARY KEY
+    )
+  `);
+  
+  // Check current schema version
+  const versionRows = await db.select<{version: number}[]>(
+    'SELECT version FROM schema_version LIMIT 1'
+  );
+  const currentVersion = versionRows[0]?.version || 0;
+  
+  if (currentVersion >= CURRENT_SCHEMA_VERSION) {
+    console.log(`[Database] Schema version ${currentVersion} is up to date`);
+    return;
+  }
+  
+  console.log(`[Database] Migrating schema from version ${currentVersion} to ${CURRENT_SCHEMA_VERSION}`);
+  
   // Check if any table exists but missing portal_id column - if so, drop them all
   try {
     console.log('[Database] Checking schema...');
@@ -207,7 +231,8 @@ async function initSchema(db: Database): Promise<void> {
       description TEXT,
       start_time INTEGER NOT NULL,
       end_time INTEGER NOT NULL,
-      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
+      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+      UNIQUE(channel_id, portal_id, start_time)
     )
   `);
 
@@ -230,6 +255,11 @@ async function initSchema(db: Database): Promise<void> {
   
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_epg_portal_time ON epg(portal_id, channel_id, start_time)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_epg_channel_time ON epg(channel_id, portal_id, start_time, end_time)`);
+
+  // Update schema version
+  await db.execute('DELETE FROM schema_version');
+  await db.execute('INSERT INTO schema_version (version) VALUES (?)', [CURRENT_SCHEMA_VERSION]);
+  console.log(`[Database] Schema updated to version ${CURRENT_SCHEMA_VERSION}`);
 }
 
 // Channels API
@@ -238,48 +268,68 @@ export async function saveChannels(channels: Channel[], portalId: string): Promi
   const db = await getDb();
   const now = Date.now();
 
-  // Remove old channels for this portal
-  await db.execute('DELETE FROM channels WHERE portal_id = ?', [portalId]);
+  await db.execute('BEGIN TRANSACTION');
+  try {
+    // Remove old channels for this portal
+    await db.execute('DELETE FROM channels WHERE portal_id = ?', [portalId]);
 
-  if (channels.length === 0) return;
+    if (channels.length === 0) {
+      await db.execute('COMMIT');
+      return;
+    }
 
-  // Batch insert with UPSERT
-  for (let i = 0; i < channels.length; i += BATCH_SIZE) {
-    const chunk = channels.slice(i, i + BATCH_SIZE);
-    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+    // Batch insert with UPSERT
+    for (let i = 0; i < channels.length; i += BATCH_SIZE) {
+      const chunk = channels.slice(i, i + BATCH_SIZE);
+      const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
 
-    const query = `
-      INSERT INTO channels
-        (id, portal_id, name, stream_url, icon_url, genre_id, genre_name, epg_channel_id, order_num, updated_at)
-      VALUES ${placeholders}
-      ON CONFLICT(id, portal_id) DO UPDATE SET
-        name = excluded.name,
-        stream_url = excluded.stream_url,
-        icon_url = excluded.icon_url,
-        genre_id = excluded.genre_id,
-        genre_name = excluded.genre_name,
-        epg_channel_id = excluded.epg_channel_id,
-        order_num = excluded.order_num,
-        updated_at = excluded.updated_at
-    `;
+      const query = `
+        INSERT INTO channels
+          (id, portal_id, name, stream_url, icon_url, genre_id, genre_name, epg_channel_id, order_num, updated_at)
+        VALUES ${placeholders}
+        ON CONFLICT(id, portal_id) DO UPDATE SET
+          name = excluded.name,
+          stream_url = excluded.stream_url,
+          icon_url = excluded.icon_url,
+          genre_id = excluded.genre_id,
+          genre_name = excluded.genre_name,
+          epg_channel_id = excluded.epg_channel_id,
+          order_num = excluded.order_num,
+          updated_at = excluded.updated_at
+      `;
 
-    const params = chunk.flatMap(ch => [
-      Number(ch.id) || 0,
-      portalId,
-      ch.name,
-      ch.streamUrl || null,
-      ch.iconUrl || null,
-      ch.genreId || null,
-      ch.genreName || null,
-      ch.epgChannelId || null,
-      ch.orderNum || 0,
-      now
-    ]);
+      const params = chunk.flatMap(ch => [
+        Number(ch.id) || 0,
+        portalId,
+        ch.name,
+        ch.streamUrl || null,
+        ch.iconUrl || null,
+        ch.genreId || null,
+        ch.genreName || null,
+        ch.epgChannelId || null,
+        ch.orderNum || 0,
+        now
+      ]);
 
-    await db.execute(query, params);
+      await db.execute(query, params);
+    }
+
+    await db.execute('COMMIT');
+    console.log('[Database] Saved', channels.length, 'channels for portal', portalId);
+  } catch (error: any) {
+    const errorMsg = error?.message?.toLowerCase() || '';
+    const isTransactionClosedError = errorMsg.includes('cannot rollback') || errorMsg.includes('no transaction is active');
+    
+    if (!isTransactionClosedError) {
+      try {
+        await db.execute('ROLLBACK');
+      } catch (rollbackError) {
+        // Ignore - transaction already closed
+      }
+    }
+    console.error('[Database] Failed to save channels:', error);
+    throw error;
   }
-
-  console.log('[Database] Saved', channels.length, 'channels for portal', portalId);
 }
 
 export async function getChannels(portalId: string, genreId?: string, limit?: number, offset?: number): Promise<Channel[]> {
@@ -549,10 +599,9 @@ export async function saveEpg(epgData: EpgEntry[], portalId: string): Promise<vo
       INSERT INTO epg
         (channel_id, portal_id, title, description, start_time, end_time)
       VALUES ${placeholders}
-      ON CONFLICT DO UPDATE SET
+      ON CONFLICT(channel_id, portal_id, start_time) DO UPDATE SET
         title = excluded.title,
         description = excluded.description,
-        start_time = excluded.start_time,
         end_time = excluded.end_time
     `;
 
@@ -681,6 +730,9 @@ export async function resetDatabase(): Promise<void> {
     initPromise = null;
   }
   
+  // Small delay to ensure connection is fully closed
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
   // Re-initialize fresh
   await getDb();
   console.log('[Database] Database reset complete - fresh connection established');
@@ -746,11 +798,7 @@ export async function clearAllDataForPortal(portalId: string): Promise<void> {
       SELECT 'series_episodes', COUNT(*) FROM series_episodes WHERE portal_id = ?
       UNION ALL
       SELECT 'epg', COUNT(*) FROM epg WHERE portal_id = ?
-      UNION ALL
-      SELECT 'categories', COUNT(*) FROM categories WHERE portal_id = ?
-      UNION ALL
-      SELECT 'favorites', COUNT(*) FROM favorites WHERE portal_id = ?
-    `, [portalId, portalId, portalId, portalId, portalId, portalId, portalId, portalId]);
+    `, [portalId, portalId, portalId, portalId, portalId, portalId]);
     
     await db.execute('BEGIN TRANSACTION');
     try {
@@ -760,8 +808,6 @@ export async function clearAllDataForPortal(portalId: string): Promise<void> {
       await db.execute('DELETE FROM series_seasons WHERE portal_id = ?', [portalId]);
       await db.execute('DELETE FROM series_episodes WHERE portal_id = ?', [portalId]);
       await db.execute('DELETE FROM epg WHERE portal_id = ?', [portalId]);
-      await db.execute('DELETE FROM categories WHERE portal_id = ?', [portalId]);
-      await db.execute('DELETE FROM favorites WHERE portal_id = ?', [portalId]);
       await db.execute('COMMIT');
       
       const totalDeleted = counts.reduce((sum, c) => sum + c.count, 0);
@@ -1010,13 +1056,27 @@ export async function clearAllStorage(): Promise<void> {
     console.log('[Database] Tauri store clear error (ignoring):', error);
   }
   
-  // Clear localStorage as backup
-  localStorage.clear();
-  console.log('[Database] localStorage cleared');
+  // Clear only own localStorage keys (not all - avoid breaking other libraries)
+  const localKeysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith(STORAGE_PREFIX) || key === 'REACT_QUERY_OFFLINE_CACHE')) {
+      localKeysToRemove.push(key);
+    }
+  }
+  localKeysToRemove.forEach(key => localStorage.removeItem(key));
+  console.log('[Database] localStorage cleared:', localKeysToRemove.length, 'keys');
   
-  // Clear sessionStorage too
-  sessionStorage.clear();
-  console.log('[Database] sessionStorage cleared');
+  // Clear only own sessionStorage keys
+  const sessionKeysToRemove: string[] = [];
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const key = sessionStorage.key(i);
+    if (key && key.startsWith(STORAGE_PREFIX)) {
+      sessionKeysToRemove.push(key);
+    }
+  }
+  sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+  console.log('[Database] sessionStorage cleared:', sessionKeysToRemove.length, 'keys');
   
   console.log('[Database] All storage cleared - please refresh the page');
 }

@@ -6,19 +6,12 @@ import { immer } from 'zustand/middleware/immer';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
 interface AppState {
-  // Per-portal favorites (portalId -> categoryIds[])
-  portalFavoriteCategories: Record<string, string[]>;
-  favorites: string[];
+  favorites: string[]; // deprecated - do not use for new code
   recentChannels: string[];
   recentMovies: string[];
   isHydrated: boolean;
   
   // Actions
-  toggleFavorite: (id: string) => void;
-  toggleFavoriteCategory: (portalId: string, categoryId: string) => void;
-  isFavoriteCategory: (portalId: string, categoryId: string) => boolean;
-  getFavoriteCategories: (portalId: string) => string[];
-  clearPortalFavorites: (portalId: string) => void;
   addRecentChannel: (id: string) => void;
   addRecentMovie: (id: string) => void;
   setHydrated: (value: boolean) => void;
@@ -26,53 +19,11 @@ interface AppState {
 
 export const useAppStore = create<AppState>()(
   persist(
-    immer((set, get) => ({
-      portalFavoriteCategories: {},
+    immer((set) => ({
       favorites: [],
       recentChannels: [],
       recentMovies: [],
       isHydrated: false,
-      
-      toggleFavorite: (id: string) => {
-        set((state) => {
-          const index = state.favorites.indexOf(id);
-          if (index > -1) {
-            state.favorites.splice(index, 1);
-          } else {
-            state.favorites.push(id);
-          }
-        });
-      },
-      
-      toggleFavoriteCategory: (portalId: string, categoryId: string) => {
-        set((state) => {
-          if (!state.portalFavoriteCategories[portalId]) {
-            state.portalFavoriteCategories[portalId] = [];
-          }
-          const categories = state.portalFavoriteCategories[portalId];
-          const index = categories.indexOf(categoryId);
-          if (index > -1) {
-            categories.splice(index, 1);
-          } else {
-            categories.push(categoryId);
-          }
-        });
-      },
-      
-      isFavoriteCategory: (portalId: string, categoryId: string) => {
-        const categories = get().portalFavoriteCategories[portalId] || [];
-        return categories.includes(categoryId);
-      },
-      
-      getFavoriteCategories: (portalId: string) => {
-        return get().portalFavoriteCategories[portalId] || [];
-      },
-      
-      clearPortalFavorites: (portalId: string) => {
-        set((state) => {
-          delete state.portalFavoriteCategories[portalId];
-        });
-      },
       
       addRecentChannel: (id: string) => {
         set((state) => {
@@ -110,7 +61,7 @@ export const useAppStore = create<AppState>()(
       },
     })),
     {
-      name: 'iptv-app-store-v2',
+      name: 'iptv-app-store-v3',
       storage: createJSONStorage(() => localStorage),
       onRehydrateStorage: () => (state) => {
         // Mark as hydrated when loaded
@@ -118,7 +69,6 @@ export const useAppStore = create<AppState>()(
       },
       partialize: (state) => ({
         favorites: state.favorites,
-        portalFavoriteCategories: state.portalFavoriteCategories,
         recentChannels: state.recentChannels,
         recentMovies: state.recentMovies,
       }),

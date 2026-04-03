@@ -47,6 +47,18 @@ export {
   type AppSettings
 } from './useSettings';
 
+// ❤️ FAVORITES: User favorites (channels, movies, series, categories)
+export {
+  useFavorites,
+  useFavoriteIds,
+  useFavoriteCategories,
+  // Functions
+  loadFavorites, addFavorite, removeFavorite, toggleFavorite, isFavorite,
+  loadFavoriteCategories, loadAllFavoriteCategories,
+  addFavoriteCategory, removeFavoriteCategory, toggleFavoriteCategory, isFavoriteCategory,
+  initFavoritesTable,
+} from './useFavorites';
+
 /**
  * STORAGE ARCHITECTURE GUIDE
  * ==========================

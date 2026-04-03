@@ -10,11 +10,6 @@ async fn stalker_request(
 ) -> Result<String, String> {
     use reqwest;
 
-    println!("Rust stalker_request called: {} {}", method, url);
-    println!("Rust URL: {}", url);
-    println!("Rust method: {}", method);
-    println!("Rust headers count: {:?}", headers.as_ref().map(|h| h.len()));
-
     let client = reqwest::Client::new();
 
     let http_method = match method.as_str() {
@@ -107,9 +102,6 @@ async fn stalker_request(
 
     let response = request.send().await.map_err(|e| e.to_string())?;
     let response_text = response.text().await.map_err(|e| e.to_string())?;
-    
-    println!("Rust response length: {}", response_text.len());
-    println!("Rust response preview: {}", &response_text[..200.min(response_text.len())]);
 
     Ok(response_text)
 }
@@ -118,8 +110,6 @@ async fn stalker_request(
 async fn fetch_image(url: String, timeout: u64) -> Result<serde_json::Value, String> {
     use reqwest;
     use serde_json::json;
-
-    println!("Rust fetch_image called: {}", url);
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_millis(timeout))
@@ -145,8 +135,6 @@ async fn fetch_image(url: String, timeout: u64) -> Result<serde_json::Value, Str
 
     let bytes = response.bytes().await.map_err(|e| e.to_string())?;
     let body: Vec<u8> = bytes.to_vec();
-
-    println!("Rust fetch_image success: {} bytes for {}", body.len(), url);
 
     Ok(json!({
         "status": status,

@@ -3,8 +3,7 @@
 // =========================
 import React, { useMemo } from 'react';
 import { useChannels, usePrefetchStream } from './tv.hooks';
-import { useFavorites } from '@/hooks/useFavorites';
-import { useAppStore } from '@/store/app.store';
+import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel, StalkerGenre } from '@/types';
 
@@ -30,7 +29,7 @@ export const TVList: React.FC<TVListProps> = ({
   } = useChannels(client, selectedCategory?.id);
   const preload = usePrefetchStream(client);
   const { isItemFavorite, toggleItemFavorite } = useFavorites(accountId);
-  const { isFavoriteCategory, toggleFavoriteCategory } = useAppStore();
+  const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'live');
 
   const filtered = useMemo(() =>
     allChannels.filter((c: StalkerChannel) => 
@@ -74,13 +73,13 @@ export const TVList: React.FC<TVListProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 if (selectedCategory) {
-                  toggleFavoriteCategory(accountId, String(selectedCategory.id));
+                  toggleCategory(String(selectedCategory.id), selectedCategory.title);
                 }
               }}
               className="text-xl hover:scale-110 transition-transform p-2 rounded-full hover:bg-slate-700"
-              title={isFavoriteCategory(accountId, String(selectedCategory.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+              title={isCategoryFavorite(String(selectedCategory.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
             >
-              {isFavoriteCategory(accountId, String(selectedCategory.id)) ? '❤️' : '🤍'}
+              {isCategoryFavorite(String(selectedCategory.id)) ? '❤️' : '🤍'}
             </button>
           </div>
         </div>

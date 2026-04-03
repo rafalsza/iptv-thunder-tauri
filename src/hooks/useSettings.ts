@@ -1,20 +1,11 @@
 import { Store } from '@tauri-apps/plugin-store';
 
-// Store for app settings and configuration
-// Part of the modern Tauri 2 architecture:
-// - Stronghold: auth/tokens (secure)
-// - SQLite: VOD/channels/EPG (structured data)
-// - FS: image cache (files)
-// - Store: settings (config) 👈 THIS FILE
-
 let storeInstance: Store | null = null;
 
 const STORE_NAME = 'app_settings';
 
 async function getStore(): Promise<Store> {
-  if (!storeInstance) {
-    storeInstance = await Store.load(STORE_NAME);
-  }
+  storeInstance ??= await Store.load(STORE_NAME);
   return storeInstance;
 }
 

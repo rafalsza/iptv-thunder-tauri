@@ -4,7 +4,7 @@
 import React, { useState, useMemo } from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
-import { useAppStore } from '@/store/app.store';
+import { useFavoriteCategories } from '@/hooks/useFavorites';
 import { usePortalCacheStore } from '@/store/portalCache.store';
 import { useSeriesCategories } from './series.hooks';
 import { useQueryClient } from '@tanstack/react-query';
@@ -23,7 +23,7 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
   const accountId = client?.getAccount?.()?.id || 'default';
-  const { toggleFavoriteCategory, isFavoriteCategory } = useAppStore();
+  const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'series');
   const cacheStore = usePortalCacheStore();
   const queryClient = useQueryClient();
 
@@ -67,10 +67,10 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
     console.log('📺 Called onCategorySelect with:', category);
   };
 
-  const handleToggleFavorite = (e: React.MouseEvent, categoryId: string) => {
+  const handleToggleFavorite = (e: React.MouseEvent, categoryId: string, categoryName?: string) => {
     e.stopPropagation();
     e.preventDefault();
-    toggleFavoriteCategory(accountId, categoryId);
+    toggleCategory(categoryId, categoryName);
   };
 
   if (isLoading) {
@@ -186,12 +186,12 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
                       e.stopPropagation();
                       e.preventDefault();
                       const categoryId = String(category.id);
-                      handleToggleFavorite(e, categoryId);
+                      handleToggleFavorite(e, categoryId, category.title);
                     }}
                     className="text-xl hover:scale-110 transition-transform bg-transparent border-0 p-0"
-                    title={isFavoriteCategory(accountId, String(category.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+                    title={isCategoryFavorite(String(category.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
                   >
-                    {isFavoriteCategory(accountId, String(category.id)) ? '❤️' : '🤍'}
+                    {isCategoryFavorite(String(category.id)) ? '❤️' : '🤍'}
                   </button>
                 </div>
               </div>

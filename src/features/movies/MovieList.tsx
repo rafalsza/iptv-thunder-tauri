@@ -6,8 +6,7 @@ import React, {
 } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useMoviesAll, usePrefetchMovieStream } from './movies.hooks';
-import { useFavorites } from '@/hooks/useFavorites';
-import { useAppStore } from '@/store/app.store';
+import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { usePortalsStore } from '@/store/portals.store';
 import { getImageUrl } from '@/hooks/useImageCache';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
@@ -141,7 +140,7 @@ export const MovieList: React.FC<MovieListProps> = ({
     s.portals.find(p => p.id === s.activePortalId)?.id ?? 'default'
   );
   const { favorites, toggleItemFavorite } = useFavorites(accountId);
-  const { isFavoriteCategory, toggleFavoriteCategory } = useAppStore();
+  const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'vod');
 
   const favoriteIds = useMemo(
     () => new Set(favorites.filter(f => f.type === 'vod').map(f => String(f.item_id))),
@@ -218,14 +217,14 @@ export const MovieList: React.FC<MovieListProps> = ({
   const handleToggleCategoryFavorite = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (selectedCategory) {
-      toggleFavoriteCategory(accountId, String(selectedCategory.id));
+      toggleCategory(String(selectedCategory.id), selectedCategory.title);
     }
-  }, [accountId, selectedCategory, toggleFavoriteCategory]);
+  }, [selectedCategory, toggleCategory]);
 
   const handleToggleFavorite = useCallback((e: React.MouseEvent, movie: StalkerVOD) => {
     e.stopPropagation();
     const posterUrl = movie.poster || movie.logo || '';
-    toggleItemFavorite('vod', movie.id, {
+    toggleItemFavorite('vod', String(movie.id), {
       name: movie.name,
       poster: posterUrl,
       cmd: movie.cmd,
@@ -277,9 +276,9 @@ export const MovieList: React.FC<MovieListProps> = ({
             <button
               onClick={handleToggleCategoryFavorite}
               className="text-xl hover:scale-110 transition-transform p-2 rounded-full hover:bg-slate-700"
-              title={isFavoriteCategory(accountId, String(selectedCategory.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+              title={isCategoryFavorite(String(selectedCategory.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
             >
-              {isFavoriteCategory(accountId, String(selectedCategory.id)) ? '❤️' : '🤍'}
+              {isCategoryFavorite(String(selectedCategory.id)) ? '❤️' : '🤍'}
             </button>
           </div>
         </div>
