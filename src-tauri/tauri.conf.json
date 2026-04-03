@@ -1,0 +1,76 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "iptv-thunder-tauri",
+  "version": "0.1.0",
+  "identifier": "com.iptv.tauri",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "IPTV Thunder",
+        "width": 800,
+        "height": 600,
+        "visible": true,
+        "decorations": true,
+        "transparent": true,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https: asset:; connect-src 'self' http: https: ws: wss:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none';",
+      "capabilities": [
+        {
+          "identifier": "default",
+          "windows": ["main"],
+          "webviews": ["main"],
+          "permissions": [
+            "core:default",
+            "core:window:allow-set-fullscreen",
+            "opener:default",
+            "store:default",
+            "stronghold:default",
+            "shell:default",
+            "http:default",
+            "sql:default",
+            "sql:allow-load",
+            "sql:allow-execute",
+            "sql:allow-select",
+            "fs:default",
+            "fs:allow-appdata-read-recursive",
+            "fs:allow-appdata-write-recursive",
+            "fs:allow-appdata-meta",
+            "fs:scope-appdata-recursive",
+            "libmpv:default",
+            "libmpv:allow-init",
+            "libmpv:allow-command",
+            "libmpv:allow-destroy",
+            "libmpv:allow-get-property",
+            "libmpv:allow-set-property"
+          ]
+        }
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [
+      "lib/**/*"
+    ]
+  }
+}

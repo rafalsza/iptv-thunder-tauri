@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/* stylelint-disable at-rule-no-unknown */
+@theme {
+  --color-background: hsl(15 23 42 / 1);
+  --color-foreground: hsl(250 250 250 / 1);
+  --color-card: hsl(15 23 42 / 1);
+  --color-card-foreground: hsl(250 250 250 / 1);
+  --color-popover: hsl(15 23 42 / 1);
+  --color-popover-foreground: hsl(250 250 250 / 1);
+  --color-primary: hsl(59 130 246 / 1);
+  --color-primary-foreground: hsl(250 250 250 / 1);
+  --color-secondary: hsl(30 41 59 / 1);
+  --color-secondary-foreground: hsl(250 250 250 / 1);
+  --color-muted: hsl(30 41 59 / 1);
+  --color-muted-foreground: hsl(250 250 250 / 1);
+  --color-accent: hsl(30 41 59 / 1);
+  --color-accent-foreground: hsl(250 250 250 / 1);
+  --color-destructive: hsl(0 62.8% 30.6%);
+  --color-destructive-foreground: hsl(250 250 250 / 1);
+  --color-border: hsl(30 41 59 / 1);
+  --color-input: hsl(30 41 59 / 1);
+  --color-ring: hsl(59 130 246 / 1);
+  --radius-sm: 0.5rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.5rem;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html, body, #root {
+    margin: 0;
+    padding: 0;
+    color: var(--color-foreground);
+    background: transparent !important;
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    background: transparent !important;
+  }
+}

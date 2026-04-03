@@ -1,0 +1,678 @@
+// =========================
+// 🎬 PLAYER — Ultra Streaming Engine (Smart Ranking)
+// HLS.js · retry · fallback · watchdog
+// =========================
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useStreamStore } from '@/store/stream.store';
+import { rankUrls } from './ranking';
+import { useCurrentProgram } from '@/features/epg/epg.hooks';
+import { StalkerClient } from '@/lib/stalkerAPI_new';
+import Hls from 'hls.js';
+import mpegts from 'mpegts.js';
+
+type StreamState = 'connecting' | 'playing' | 'stalled' | 'retrying' | 'dead';
+
+interface PlayerProps {
+  url: string;
+  fallbackUrls?: string[];
+  name: string;
+  channelId?: number;
+  client?: StalkerClient;
+  buffering?: boolean;
+  onClose: () => void;
+}
+
+const MAX_RETRIES_PER_URL  = 3;
+const WATCHDOG_INTERVAL_MS = 5_000;
+const STALL_THRESHOLD_S    = 6;
+const DEAD_TIMEOUT_MS      = 25_000; // Increased from 15s to allow MP3 recovery
+const BACKOFF_BASE_MS      = 2_000;
+
+type StreamFormat = 'hls' | 'native' | 'mpegts';
+function detectFormat(url: string): StreamFormat {
+  const u = url.toLowerCase();
+
+  if (u.endsWith('.m3u8')) return 'hls';
+
+  // MPEG-TS streams handled by mpegts.js
+  if (u.includes('.ts') || u.includes('live.php')) {
+    return 'mpegts';
+  }
+
+  return 'native';
+}
+
+function createHls(video: HTMLVideoElement, url: string, onFatalError: () => void): Hls {
+  const hls = new Hls({
+    enableWorker: true,
+    lowLatencyMode: false,
+    backBufferLength: 30,
+    maxBufferLength: 60,
+    maxMaxBufferLength: 120,
+    liveSyncDurationCount: 3,
+    liveMaxLatencyDurationCount: 10,
+    manifestLoadingMaxRetry: 4,
+    levelLoadingMaxRetry: 4,
+    fragLoadingMaxRetry: 4,
+    manifestLoadingRetryDelay: 1000,
+    levelLoadingRetryDelay: 1000,
+    fragLoadingRetryDelay: 1000,
+  });
+
+  hls.loadSource(url);
+  hls.attachMedia(video);
+
+  hls.on(Hls.Events.ERROR, (_evt, data) => {
+    if (data.fatal) {
+      switch (data.type) {
+        case Hls.ErrorTypes.NETWORK_ERROR: hls.startLoad(); break;
+        case Hls.ErrorTypes.MEDIA_ERROR: hls.recoverMediaError(); break;
+        default: onFatalError();
+      }
+    }
+  });
+
+  return hls;
+}
+
+export const Player: React.FC<PlayerProps> = ({ url, fallbackUrls = [], name, channelId, client, buffering = false, onClose }) => {
+  const videoRef  = useRef<HTMLVideoElement>(null);
+  const hlsRef    = useRef<Hls | null>(null);
+  const mpegtsRef = useRef<mpegts.Player | null>(null);
+
+  // ── Smart ranking ───────────────────────────────────────────────
+  const getRankedUrls = useCallback(() => {
+    const store = useStreamStore.getState();
+    return rankUrls([url, ...fallbackUrls], store.streams);
+  }, [url, fallbackUrls]);
+
+  const allUrls = useRef<string[]>(getRankedUrls());
+
+  // ── UI state ─────────────────────────────────────────────────────
+  const [streamState,   setStreamState]   = useState<StreamState>('connecting');
+  const [currentUrlIdx, setCurrentUrlIdx] = useState(0);
+  const [totalRetries,  setTotalRetries]  = useState(0);
+  const [statusMsg,     setStatusMsg]     = useState('Connecting…');
+  const [errorMsg,      setErrorMsg]      = useState<string | null>(null);
+  const [formatBadge,   setFormatBadge]   = useState('');
+
+  // ── EPG ───────────────────────────────────────────────────────────
+  const { data: currentProgram } = useCurrentProgram(
+    client || new StalkerClient({ id: 'placeholder', name: 'placeholder', portalUrl: 'http://localhost', mac: '', token: '', lastUsed: new Date(), isActive: false }), 
+    channelId || 0,
+    name
+  );
+
+  // ── Refs for callbacks ───────────────────────────────────────────
+  const isMountedRef  = useRef(true);
+  const hasStartedRef = useRef(false);
+  const tsInitializingRef = useRef(false);
+  const currentIdxRef = useRef(0);
+  const retryCountRef = useRef(0);
+  const lastTimeRef   = useRef(0);
+  const stallStartRef = useRef<number | null>(null);
+  const watchdogRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const errorHandledRef = useRef(false);
+
+  const loadUrlRef             = useRef<(u: string, idx: number, retry: number) => void>(() => {});
+  const triggerRetryRef        = useRef<(reason: string) => void>(() => {});
+  const triggerNextFallbackRef = useRef<(reason: string) => void>(() => {});
+
+  // ── Custom MSE TS Stream ───────────────────────────────────────────
+  const startTSStream = useCallback((url: string, video: HTMLVideoElement, onSuccess: () => void, onFail: (err?: Error) => void) => {
+    // Use mpegts.js for TS streams
+    if (mpegts.getFeatureList().mseLivePlayback) {
+      const player = mpegts.createPlayer({
+        type: 'mpegts',
+        url: url,
+        isLive: true
+      });
+
+      mpegtsRef.current = player;
+
+      player.on(mpegts.Events.ERROR, (errType: any, errDetail: any) => {
+        console.error('🔥 mpegts.js ERROR:', errType, errDetail);
+        console.log('🔥 mpegts error - hasStarted:', hasStartedRef.current, 'tsInit:', tsInitializingRef.current);
+        
+        // Check if it's an audio codec error (MP3 not supported in Chrome MSE)
+        if (typeof errDetail === 'string' && (errDetail.includes('audio') || errDetail.includes('codec'))) {
+          console.error('🔥 Audio codec error detected:', errDetail);
+          
+          // If MP3 audio issue, try to reload without audio
+          if (errDetail.includes('mp3') || errDetail.includes('mpeg')) {
+            console.warn('⚠️ MP3 audio not supported - trying video-only mode');
+            // Destroy current player and restart without audio
+            player.destroy?.();
+            mpegtsRef.current = null;
+            tsInitializingRef.current = false;
+            
+            // Retry with same URL - user will have video without audio
+            setTimeout(() => {
+              if (isMountedRef.current) {
+                startTSStreamVideoOnly(url, video, onSuccess, onFail);
+              }
+            }, 100);
+            return;
+          }
+        }
+        
+        if (isMountedRef.current) {
+          tsInitializingRef.current = false;
+          if (!hasStartedRef.current) {
+            triggerRetryRef.current(`mpegts error: ${errType} - ${errDetail || 'unknown'}`);
+          }
+        }
+      });
+
+      player.on('media_source_opened' as any, () => {
+        console.log('mpegts: MediaSource opened');
+      });
+
+      // Monitor audio codec and disable if MP3 (not supported in Chrome MSE)
+      player.on('demux_complete' as any, (data: any) => {
+        const audioCodec = data?.audioCodec || data?.audioTrack?.codec;
+        if (typeof audioCodec === 'string' && (audioCodec.includes('mp3') || audioCodec.includes('mpeg'))) {
+          console.warn('⚠️ MP3 audio detected - disabling audio (not supported in Chrome)');
+        }
+      });
+
+      // Use canplay event on video element instead of sourcebuffer
+      video.addEventListener('canplay', () => {
+        console.log('🔥 video canplay event fired');
+        if (!hasStartedRef.current && isMountedRef.current) {
+          hasStartedRef.current = true;
+          tsInitializingRef.current = false;
+          video.muted = true;
+          video.play()
+            .then(() => {
+              console.log('🔥 video playing!');
+              setTimeout(() => {
+                if (isMountedRef.current && video) {
+                  video.muted = false;
+                  console.log('🔥 auto-unmuted');
+                }
+              }, 500);
+              if (isMountedRef.current) {
+                onSuccess();
+              }
+            })
+            .catch((err) => {
+              console.log('🔥 video play() failed:', err);
+              if (isMountedRef.current) {
+                onFail(err);
+              }
+            });
+        }
+      }, { once: true });
+
+      player.on(mpegts.Events.LOADING_COMPLETE, () => {
+        console.log('mpegts loading complete');
+      });
+
+      player.attachMediaElement(video);
+      player.load();
+    } else {
+      onFail(new Error('MSE not supported for MPEG-TS'));
+    }
+  }, []);
+
+  // ── Video-only mode for unsupported audio codecs (MP3)
+  const startTSStreamVideoOnly = useCallback((url: string, video: HTMLVideoElement, onSuccess: () => void, onFail: (err?: Error) => void) => {
+    console.log('🎬 Starting TS stream in VIDEO-ONLY mode (no audio)');
+    
+    if (mpegts.getFeatureList().mseLivePlayback) {
+      const player = mpegts.createPlayer({
+        type: 'mpegts',
+        url: url,
+        isLive: true
+      });
+
+      mpegtsRef.current = player;
+
+      player.on(mpegts.Events.ERROR, (errType: any, errDetail: any) => {
+        console.error('🔥 mpegts.js ERROR (video-only):', errType, errDetail);
+        if (isMountedRef.current && !hasStartedRef.current) {
+          tsInitializingRef.current = false;
+          triggerRetryRef.current(`mpegts video-only error: ${errType}`);
+        }
+      });
+
+      player.on('media_source_opened' as any, () => {
+        console.log('mpegts video-only: MediaSource opened');
+      });
+
+      // Use canplay event
+      video.addEventListener('canplay', () => {
+        console.log('🔥 video-only canplay event fired');
+        if (!hasStartedRef.current && isMountedRef.current) {
+          hasStartedRef.current = true;
+          tsInitializingRef.current = false;
+          video.muted = true;
+          video.play()
+            .then(() => {
+              console.log('🔥 video-only playing! (no audio)');
+              // Keep muted since no audio
+              if (isMountedRef.current) {
+                onSuccess();
+              }
+            })
+            .catch((err) => {
+              console.log('🔥 video-only play() failed:', err);
+              if (isMountedRef.current) {
+                onFail(err);
+              }
+            });
+        }
+      }, { once: true });
+
+      player.attachMediaElement(video);
+      player.load();
+    } else {
+      onFail(new Error('MSE not supported for MPEG-TS'));
+    }
+  }, []);
+
+  // ── Cleanup ──────────────────────────────────────────────────────
+  const destroyPlayers = useCallback(() => {
+    try {
+      hlsRef.current?.destroy();
+    } catch {}
+
+    try {
+      mpegtsRef.current?.destroy();
+    } catch {}
+
+    hlsRef.current = null;
+    mpegtsRef.current = null;
+
+    const v = videoRef.current;
+    if (v) {
+      // Clean up MediaSource
+      if (v.srcObject || v.src) {
+        try {
+          const ms = v.srcObject as MediaSource;
+          if (ms && ms.readyState === 'open') {
+            ms.endOfStream();
+          }
+        } catch {}
+        v.src = '';
+      }
+
+      v.pause();
+      v.removeAttribute('src');
+      v.load();
+    }
+
+    // Reset TS flags
+    tsInitializingRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      destroyPlayers();
+      clearInterval(watchdogRef.current!);
+      clearTimeout(retryTimerRef.current!);
+    };
+  }, []);
+
+  const clearWatchdog = () => { if (watchdogRef.current) { clearInterval(watchdogRef.current); watchdogRef.current = null; } };
+  const clearRetryTimer = () => { if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; } };
+
+  // ── Watchdog ─────────────────────────────────────────────────────
+  const startWatchdog = useCallback(() => {
+    clearWatchdog(); stallStartRef.current = null;
+
+    watchdogRef.current = setInterval(() => {
+      const video = videoRef.current;
+      if (!video || !isMountedRef.current) return;
+      if (video.paused) { stallStartRef.current = null; lastTimeRef.current = video.currentTime; return; }
+
+      const progress = video.currentTime - lastTimeRef.current;
+      lastTimeRef.current = video.currentTime;
+
+      // Only detect stall if video has actually started playing (currentTime > 0)
+      if (progress < 0.01 && hasStartedRef.current && video.currentTime > 0) {
+        if (!stallStartRef.current) stallStartRef.current = Date.now();
+        const ms = Date.now() - stallStartRef.current;
+        if (ms >= DEAD_TIMEOUT_MS) triggerNextFallbackRef.current('Stream unresponsive');
+        else if (ms >= STALL_THRESHOLD_S*1000) { setStreamState('stalled'); setStatusMsg('Stream stalled — retrying…'); triggerRetryRef.current('Watchdog stall'); }
+      } else {
+        stallStartRef.current = null;
+        if (isMountedRef.current) setStreamState('playing');
+      }
+    }, WATCHDOG_INTERVAL_MS);
+  }, []);
+
+  // ── Load URL ─────────────────────────────────────────────────────
+  const loadUrl = useCallback(async (streamUrl: string, urlIdx: number, retry: number) => {
+    console.log(`🔥 loadUrl called: urlIdx=${urlIdx}, retry=${retry}, hasStarted=${hasStartedRef.current}, tsInit=${tsInitializingRef.current}`);
+    
+    const video = videoRef.current;
+    if (!video || !isMountedRef.current) return;
+
+    const fmt = detectFormat(streamUrl);
+
+    // 🔥 BLOKADA RELOAD LOOP - dla wszystkich formatów
+    if (hasStartedRef.current && retry === 0 && !tsInitializingRef.current) {
+      console.log('⛔ Preventing reload loop - already playing');
+      return;
+    }
+    
+    // 🔥 Dodatkowa blokada dla MPEG-TS - nie restartuj jeśli player działa
+    if (fmt === 'mpegts' && mpegtsRef.current && !retry) {
+      console.log('⛔ mpegts already active, skipping reload');
+      return;
+    }
+
+    clearWatchdog(); clearRetryTimer();
+    if (retry === 0) {
+      destroyPlayers();
+    }
+
+    setFormatBadge(fmt.toUpperCase());
+    setStreamState('connecting');
+    setStatusMsg(
+      retry > 0
+        ? `Retry ${retry}/${MAX_RETRIES_PER_URL}${urlIdx > 0 ? ` (fallback ${urlIdx})` : ''}…`
+        : urlIdx > 0 ? `Fallback ${urlIdx} [${fmt}]…`
+        : `Connecting [${fmt}]…`
+    );
+    setErrorMsg(null);
+
+    // For MPEG-TS streams, don't call video.load() as it interferes with mpegts.js
+    if (fmt !== 'mpegts') {
+      video.pause(); video.removeAttribute('src'); video.load(); lastTimeRef.current = 0; stallStartRef.current = null;
+    } else {
+      video.pause(); lastTimeRef.current = 0; stallStartRef.current = null;
+    }
+
+    const onSuccess = () => {
+      if (!isMountedRef.current) return;
+      clearTimeout(connectionTimeout); // Clear timeout on success
+      hasStartedRef.current = true;
+      useStreamStore.getState().success(streamUrl);
+      setStreamState('playing'); setStatusMsg(''); retryCountRef.current = 0; startWatchdog();
+    };
+
+    const onFail = (err?: Error) => {
+      if (!isMountedRef.current) return;
+      clearTimeout(connectionTimeout); // Clear timeout on failure
+      if (err?.name === 'AbortError') return;
+      if (err?.name === 'NotAllowedError') { setStreamState('dead'); setErrorMsg('Autoplay blocked — press play manually.'); return; }
+      triggerRetryRef.current(err?.message ?? 'play() failed');
+    };
+
+    // 🔥 TIMEOUT - jeśli strumień nie zacznie się w czasie 25s, retry
+    const connectionTimeout = setTimeout(() => {
+      if (!isMountedRef.current || hasStartedRef.current) return;
+      console.log('⏱️ Connection timeout - stream did not start in 25s');
+      triggerRetryRef.current('Connection timeout');
+    }, 25000);
+
+    // Handle MPEG-TS format
+    if (fmt === 'mpegts') {
+      // Check support for various audio codecs
+      const videoCodec = 'avc1.420028';
+      const audioCodecs = [
+        'mp4a.40.5',  // AAC LC (most common)
+        'mp4a.40.2',  // AAC Main
+        'mp4a.40.29', // AAC HEv2
+        'ac-3',       // Dolby Digital
+        'ec-3',       // Dolby Digital Plus
+      ];
+      
+      let supportedAudioCodec = null;
+      for (const audioCodec of audioCodecs) {
+        if (MediaSource.isTypeSupported(`video/mp4; codecs="${videoCodec}, ${audioCodec}"`)) {
+          supportedAudioCodec = audioCodec;
+          break;
+        }
+      }
+      
+      if (!supportedAudioCodec) {
+        console.warn('⚠️ No supported audio codec found for MPEG-TS');
+        // Try fallback to AAC only
+        if (!MediaSource.isTypeSupported('audio/mp4; codecs="mp4a.40.5"')) {
+          setStreamState('dead');
+          setErrorMsg('Browser does not support AAC audio for MPEG-TS');
+          return;
+        }
+      }
+      
+      console.log(`✅ Using audio codec: ${supportedAudioCodec || 'mp4a.40.5 (fallback)'}`);
+
+      if(tsInitializingRef.current) return;
+      tsInitializingRef.current = true;
+
+      try {
+        startTSStream(streamUrl, video, onSuccess, onFail);
+        return;
+      } catch (err) {
+        tsInitializingRef.current = false;
+        triggerRetryRef.current('MSE init failed');
+        return;
+      }
+    }
+
+    // Use HLS.js for HLS streams
+    if (fmt==='hls' && Hls.isSupported()) {
+      const hls = createHls(video, streamUrl, ()=>{ if(isMountedRef.current) triggerRetryRef.current('HLS fatal error'); });
+      hlsRef.current = hls;
+      hls.on(Hls.Events.MANIFEST_PARSED, ()=>{ video.play().then(onSuccess).catch(onFail); });
+      return;
+    }
+
+    // For native format, use HTML5 video element directly
+    video.src = streamUrl; video.load(); video.play().then(onSuccess).catch(onFail);
+  }, [startWatchdog]);
+
+  const triggerRetry = useCallback((reason: string) => {
+    if (!isMountedRef.current) return;
+    clearWatchdog(); clearRetryTimer();
+
+    const next = retryCountRef.current + 1; retryCountRef.current = next;
+    setTotalRetries(t => t + 1);
+
+    if (next > MAX_RETRIES_PER_URL) { triggerNextFallbackRef.current(reason); return; }
+
+    const delay = BACKOFF_BASE_MS * Math.pow(2, next-1);
+    setStreamState('retrying'); setStatusMsg(`Retrying in ${delay/1000}s… (${next}/${MAX_RETRIES_PER_URL})`);
+
+    retryTimerRef.current = setTimeout(()=>{ if(!isMountedRef.current) return;
+      loadUrlRef.current(allUrls.current[currentIdxRef.current], currentIdxRef.current, next);
+    }, delay);
+  }, []);
+
+  // ── Trigger Next Fallback ─────────────────────────────────────────
+  const triggerNextFallback = useCallback((reason:string)=>{
+    if(!isMountedRef.current) return;
+    clearWatchdog(); clearRetryTimer();
+
+    tsInitializingRef.current = false; // reset TS lock on fallback
+
+    allUrls.current = getRankedUrls();
+    const nextIdx = currentIdxRef.current+1;
+
+    if(nextIdx >= allUrls.current.length){ setStreamState('dead'); setStatusMsg(''); setErrorMsg(`All streams exhausted. ${reason}`); return; }
+
+    currentIdxRef.current = nextIdx; setCurrentUrlIdx(nextIdx); retryCountRef.current = 0;
+
+    // Reset flags for new URL
+    hasStartedRef.current = false;
+    tsInitializingRef.current = false;
+    errorHandledRef.current = false;
+
+    setTotalRetries(t=>t+1);
+    loadUrlRef.current(allUrls.current[nextIdx], nextIdx,0);
+  }, [getRankedUrls]);
+
+  // ── Wire refs ─────────────────────────────────────────────────────
+  useEffect(()=>{ loadUrlRef.current = loadUrl; },[loadUrl]);
+  useEffect(()=>{ triggerRetryRef.current = triggerRetry; },[triggerRetry]);
+  useEffect(()=>{ triggerNextFallbackRef.current = triggerNextFallback; },[triggerNextFallback]);
+
+  // ── Initial load / URL change ──────────────────────────────────────
+  useEffect(()=>{
+    console.log('🔥 Initial load useEffect triggered by url change');
+    destroyPlayers(); clearWatchdog(); clearRetryTimer();
+    allUrls.current = getRankedUrls(); currentIdxRef.current=0; retryCountRef.current=0;
+    setCurrentUrlIdx(0); setTotalRetries(0);
+
+    // Reset TS / start flags
+    hasStartedRef.current = false;  // 🔑 important
+    tsInitializingRef.current = false;
+    errorHandledRef.current = false;
+
+    loadUrl(allUrls.current[0],0,0);
+  },[url]); // Only depend on url, not getRankedUrls
+
+  // ── Native video error ─────────────────────────────────────────────
+  const handleVideoError = useCallback(()=>{
+    if(!isMountedRef.current||hlsRef.current||mpegtsRef.current||errorHandledRef.current) return;
+
+    const videoError = videoRef.current?.error;
+    const msg = videoError?.message ?? 'Video error';
+    console.error('Native video error:', msg, videoError);
+    console.log('Debug - videoError.code:', videoError?.code, 'type:', typeof videoError?.code);
+
+    // Stop immediately for format not supported errors
+    if (videoError?.code === 4) {
+      console.log('Debug: Code 4 detected - stopping retry');
+      errorHandledRef.current = true;
+      setStreamState('dead');
+      setErrorMsg('MPEG-TS format not supported by browser. Try using VLC or external player.');
+      return;
+    }
+
+    // Add limit to prevent infinite retry loops
+    if (totalRetries >= MAX_RETRIES_PER_URL * 2) {
+      setStreamState('dead');
+      setErrorMsg('Stream format not supported by browser. Try using VLC or external player.');
+      return;
+    }
+    triggerRetryRef.current(msg);
+  },[totalRetries]);
+
+  const handleManualRetry = () => {
+    hasStartedRef.current = false; // reset flag
+    tsInitializingRef.current = false; // reset TS lock
+    errorHandledRef.current = false; // Reset error flag for manual retry
+    retryCountRef.current = 0; // reset retry count
+    setTotalRetries(0); // reset total retries state
+    allUrls.current = getRankedUrls(); currentIdxRef.current=0; retryCountRef.current=0;
+    setCurrentUrlIdx(0); loadUrl(allUrls.current[0],0,0);
+  };
+
+  const handleKeyDown = (e:React.KeyboardEvent) => { if(e.key==='Escape') onClose(); };
+  const isLoading = streamState==='connecting'||streamState==='retrying'||streamState==='stalled';
+
+  const stateColor:Record<StreamState,string> = {
+    connecting:'#888780', playing:'#1D9E75', stalled:'#BA7517', retrying:'#D85A30', dead:'#A32D2D'
+  };
+  const stateLabel:Record<StreamState,string> = {
+    connecting:'Connecting', playing:'Live', stalled:'Stalled', retrying:'Retrying', dead:'Dead'
+  };
+
+  const store = useStreamStore.getState();
+
+  return (
+    <main className="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center"
+      onKeyDown={handleKeyDown} aria-modal="true" aria-labelledby="player-title" tabIndex={0}>
+      <div className="relative w-full h-full max-w-6xl max-h-[90vh] bg-black rounded-lg overflow-hidden flex flex-col">
+
+        {/* Header */}
+        <div className="flex-shrink-0 px-4 py-3 z-10" style={{background:'linear-gradient(to bottom, #000, transparent)'}}>
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3 min-w-0">
+              <span style={{
+                display:'inline-block', width:8, height:8, borderRadius:'50%', flexShrink:0,
+                background:stateColor[streamState],
+                boxShadow:streamState==='playing'?`0 0 0 3px ${stateColor.playing}44`:'none',
+                transition:'background 0.3s'
+              }} />
+              <h2 id="player-title" className="text-white text-base font-medium truncate">{name}</h2>
+              {currentProgram ? (
+                <span className="text-xs text-gray-400 truncate max-w-[200px]" title={currentProgram.name}>
+                  • {currentProgram.name}
+                </span>
+              ) : (
+                <span className="text-xs text-gray-500 italic">
+                  • Brak EPG
+                </span>
+              )}
+              <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{
+                background:`${stateColor[streamState]}22`, color:stateColor[streamState],
+                border:`1px solid ${stateColor[streamState]}55`
+              }}>{stateLabel[streamState]}</span>
+              {formatBadge && <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0"
+                style={{background:'#ffffff10', color:'#aaa', border:'1px solid #ffffff20'}}>{formatBadge}</span>}
+            </div>
+
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {totalRetries>0 && <span className="text-xs text-gray-500">{totalRetries} retry{totalRetries!==1?'s':''}</span>}
+              {currentUrlIdx>0 && <span className="text-xs text-yellow-500">fallback {currentUrlIdx}/{allUrls.current.length-1}</span>}
+              <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-white transition-colors text-xl leading-none">✕</button>
+            </div>
+          </div>
+          {(buffering||isLoading) && statusMsg && <p className="mt-1.5 text-gray-400 text-xs">{statusMsg}</p>}
+        </div>
+
+        {/* Video / error area */}
+        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+
+          {isLoading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-60 z-10 gap-3">
+              <svg className="animate-spin" style={{width:36,height:36}} viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="#333" strokeWidth="2" />
+                <path d="M12 2 A10 10 0 0 1 22 12" stroke="#1D9E75" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              <p className="text-gray-300 text-sm">{statusMsg}</p>
+            </div>
+          )}
+
+          {streamState==='dead' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-8 text-center gap-4">
+              <span className="text-red-400" style={{fontSize:40}}>⊘</span>
+              <p className="text-white text-lg font-medium">Stream unavailable</p>
+              {errorMsg && <p className="text-gray-400 text-sm max-w-sm">{errorMsg}</p>}
+
+              {/* Show ranked fallback URLs */}
+              <div className="text-gray-500 text-xs max-w-md mt-2">
+                {allUrls.current.map(u => (
+                  <p key={u}>
+                    {u} → successRate: {(store.streams[u]?.successRate ?? 0).toFixed(2)}
+                  </p>
+                ))}
+              </div>
+
+              <div className="flex gap-3 mt-2">
+                <button onClick={handleManualRetry}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors">
+                  Try again
+                </button>
+                <button onClick={onClose}
+                  className="px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors">
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+
+          <video
+            ref={videoRef}
+            className="w-full h-full object-contain"
+            controls autoPlay playsInline
+            onError={handleVideoError}
+            onPlaying={()=>{if(isMountedRef.current){setStreamState('playing'); setStatusMsg('');}}}
+            onWaiting={()=>{if(isMountedRef.current)setStatusMsg('Buffering…');}}
+            onStalled={()=>{if(isMountedRef.current){setStreamState('stalled'); setStatusMsg('Stalled…');}}}
+            onCanPlay={()=>{if(isMountedRef.current&&streamState!=='playing'){setStreamState('playing'); setStatusMsg('');}}}
+          />
+        </div>
+      </div>
+    </main>
+  );
+};

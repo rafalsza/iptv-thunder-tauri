@@ -1,0 +1,775 @@
+import axios, { AxiosInstance } from 'axios';
+import { TauriHttpClient } from './tauriHttp';
+import { StalkerAccount, HandshakeResponse, StalkerProfile, StalkerChannel, StalkerGenre, StalkerVOD, StalkerEPG } from '@/types';
+import { createLogger, createDebugRequestContext, logDebugRequest, logDebugSuccess, logDebugError } from './logger';
+
+// Re-export types for consumers
+export type { StalkerAccount, StalkerProfile, StalkerChannel, StalkerGenre, StalkerVOD, StalkerEPG };
+
+// Import Tauri API to ensure it's available
+import '@tauri-apps/api';
+
+// Extend Window interface for TypeScript
+declare global {
+  interface Window {
+    __STALKER_CLIENT_LOGGED__?: boolean;
+  }
+}
+
+const USER_AGENT = 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG250 Safari/533.3';
+
+export class StalkerClient {
+  private readonly axios: AxiosInstance;
+  private readonly tauriHttp: TauriHttpClient | null;
+  private readonly account: StalkerAccount;
+  private readonly logger = createLogger('StalkerClient');
+  readonly useTauri: boolean;
+  token: string | null = null;
+  private tokenExpiresAt: Date | null = null;
+
+  constructor(account: StalkerAccount) {
+    this.account = account;
+    
+    // Multiple detection methods for Tauri environment
+    const hasTauriAPI = globalThis.window !== undefined && '__TAURI__' in globalThis.window;
+    const isTauriBuild = import.meta.env.TAURI === 'true';
+    const isLocalhost = globalThis.window !== undefined && 
+                       (globalThis.window.location.hostname === 'localhost' || 
+                        globalThis.window.location.hostname === '127.0.0.1' ||
+                        globalThis.window.location.protocol === 'tauri:');
+    
+    // Use Tauri HTTP if any indicator suggests we're in Tauri
+    this.useTauri = hasTauriAPI || isTauriBuild || isLocalhost;
+
+    const baseURL = account.portalUrl.endsWith('/') 
+      ? account.portalUrl 
+      : account.portalUrl + '/';
+
+    // Log only once per session to avoid spam
+    if (!globalThis.window.__STALKER_CLIENT_LOGGED__) {
+      console.log('StalkerClient environment detection:', { 
+        useTauri: this.useTauri, 
+        hasTauriAPI,
+        isTauriBuild,
+        isLocalhost,
+        hostname: globalThis.window.location.hostname,
+        protocol: globalThis.window.location.protocol,
+        tauriEnv: import.meta.env.TAURI 
+      });
+      globalThis.window.__STALKER_CLIENT_LOGGED__ = true;
+    }
+
+    if (this.useTauri) {
+      // Use Tauri HTTP client - no CORS issues!
+      this.tauriHttp = new TauriHttpClient(baseURL, {
+        'User-Agent': USER_AGENT,
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+      });
+      this.axios = {} as AxiosInstance; // Placeholder - won't be used
+    } else {
+      // Use Axios for browser development - will have CORS issues
+      this.axios = axios.create({
+        baseURL,
+        timeout: 15000,
+        withCredentials: true,
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Accept': '*/*',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      });
+      this.tauriHttp = null;
+    }
+  }
+
+  /**
+   * Główny handshake – zwraca token
+   */
+  async handshake(): Promise<string> {
+    const params = {
+      type: 'stb',
+      action: 'handshake',
+      mac: this.account.mac,
+      JsHttpRequest: '1-xml',
+    };
+
+    // Request debug tracking
+    const ctx = createDebugRequestContext('handshake', params);
+    logDebugRequest(ctx);
+
+    let response: any;
+    
+    try {
+      if (this.useTauri && this.tauriHttp) {
+        response = await this.tauriHttp.get('portal.php', params);
+      } else {
+        response = await this.axios.get('portal.php', { params });
+      }
+
+      const data = this.useTauri ? response : response.data as HandshakeResponse;
+
+      if (!data?.js?.token) {
+        throw new Error('Handshake failed - no token received');
+      }
+
+      this.token = data.js.token;
+      this.tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      
+      try {
+        (this.account as any).token = data.js.token;
+        (this.account as any).expiresAt = this.tokenExpiresAt;
+      } catch (e) {
+        // Account is frozen, ignore
+      }
+
+      if (!this.useTauri && this.axios.defaults) {
+        this.axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`;
+      } else if (this.useTauri && this.tauriHttp) {
+        this.tauriHttp.setHeader('Authorization', `Bearer ${this.token}`);
+      }
+
+      if (!this.token) {
+        throw new Error('Handshake failed - token is null');
+      }
+
+      logDebugSuccess(ctx, { token: this.token.substring(0, 10) + '...' });
+      this.logger.info('Handshake successful');
+      return this.token;
+
+    } catch (error) {
+      logDebugError(ctx, error);
+      this.logger.error('Handshake failed', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Pobranie profilu użytkownika (ważne – potwierdza aktywne konto)
+   */
+  async getProfileAndAuth(): Promise<StalkerProfile> {
+    if (!this.token) {
+      await this.handshake();
+    }
+
+    const params = {
+      type: 'stb',
+      action: 'get_profile',
+      mac: this.account.mac,
+      hd: '1',
+      ver: 'ImageDescription:0.2.18-r14-pub-250; ImageDate:Fri Jan 15 15:20:44 EET 2016; PORTAL version:5.3.0; API Version:JS API version:328; STB API version:134; Player Engine version:0x566',
+      JsHttpRequest: '1-xml',
+    };
+
+    let response: any;
+    
+    if (this.useTauri && this.tauriHttp) {
+      response = await this.tauriHttp.get('portal.php', params);
+    } else {
+      response = await this.axios.get('portal.php', { params });
+    }
+
+    const profile = this.useTauri ? response?.js : response.data?.js;
+
+    if (!profile) {
+      throw new Error('Get profile failed');
+    }
+    
+    console.log(`✅ Profile loaded | Status: ${profile.status} | Name: ${profile.login || 'Unknown'} | MAC: ${this.account.mac}`);
+
+    return profile;
+  }
+
+  /**
+   * Pełne logowanie (handshake + get_profile)
+   */
+  async login(): Promise<StalkerAccount> {
+    await this.handshake();
+    await this.getProfileAndAuth();
+    return this.account;
+  }
+
+  /**
+   * Pobieranie listy VOD z informacjami o paginacji
+   */
+  async getVODListWithPagination(categoryId: string = '', page: number = 1): Promise<{items: StalkerVOD[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
+    if (!this.token) {
+      await this.handshake();
+    }
+
+    console.log(`🎬 getVODListWithPagination called with categoryId: "${categoryId}"`);
+
+    const params: any = {
+      type: 'vod',
+      action: 'get_ordered_list',
+      p: page.toString(),
+      sortby: 'added',
+      hd: '0',
+      mac: this.account.mac,
+      JsHttpRequest: '1-xml',
+      max_page_items: '30',
+    };
+
+    if (categoryId && categoryId !== '*' && categoryId !== '') {
+      // Użyj 'category' według dokumentacji API VOD
+      params.category = categoryId;
+      console.log(`🎬 Added category param: ${categoryId}`);
+      console.log(`🎬 Full params:`, params);
+    } else {
+      console.log(`🎬 No category filter applied - getting all VODs`);
+      console.log(`🎬 Full params:`, params);
+    }
+
+    console.log(`🎬 Making request to: portal.php`);
+    console.log(`🎬 Request params:`, params);
+
+    const response = await this._makeRequest(params);
+
+    console.log(`🎬 API Response:`, response);
+
+    const vods = this.useTauri ? 
+      (response?.js?.data || response?.js || []) : 
+      (response.data?.js?.data || response.data?.js || []);
+    
+    console.log(`🎬 Extracted VODs:`, vods);
+    console.log(`🎬 VODs count:`, vods.length);
+    
+    // Debug: Check first VOD item structure
+    if (vods.length > 0 && page === 1) {
+      console.log('🎬 Processing VOD items, count:', vods.length);
+    }
+    
+    const totalItems = this.useTauri ? 
+      response?.js?.total_items : 
+      response.data?.js?.total_items || 0;
+    const maxPageItems = this.useTauri ? 
+      response?.js?.max_page_items : 
+      response.data?.js?.max_page_items;
+    const currentPage = this.useTauri ? 
+      response?.js?.cur_page : 
+      response.data?.js?.cur_page || page;
+
+    const totalPages = Math.ceil(totalItems / maxPageItems);
+    const hasMore = currentPage < totalPages - 1; // 0-based indexing
+
+    return {
+      items: vods.map((vod: StalkerVOD) => ({
+        ...vod,
+        logo: this.resolveLogoUrl(vod.logo),
+        poster: this.resolvePosterUrl(vod),
+      })),
+      totalItems,
+      maxPageItems,
+      currentPage,
+      hasMore
+    };
+  }
+
+  /**
+   * Pobieranie listy VOD
+   */
+  async getVODList(categoryId: string = '', page: number = 1): Promise<StalkerVOD[]> {
+    if (!this.token) {
+      await this.handshake();
+    }
+
+    const params: any = {
+      type: 'vod',
+      action: 'get_ordered_list',
+      p: page.toString(),
+      sortby: 'added',
+      hd: '0',
+      mac: this.account.mac,
+      JsHttpRequest: '1-xml',
+    };
+
+    if (categoryId && categoryId !== '*' && categoryId !== '') {
+    params.category = categoryId;
+    }
+
+    const response = await this._makeRequest(params);
+
+    const vods = this.useTauri ? 
+      (response?.js?.data || response?.js || []) : 
+      (response.data?.js?.data || response.data?.js || []);
+    
+    return vods.map((vod: StalkerVOD) => ({
+      ...vod,
+      logo: this.resolveLogoUrl(vod.logo),
+      poster: this.resolvePosterUrl(vod),
+    }));
+  }
+
+  /**
+   * Pobieranie kategorii VOD
+   */
+  async getVODCategories(): Promise<StalkerGenre[]> {
+    console.log('🎬 getVODCategories called!');
+    
+    if (!this.token) {
+      console.log('🎬 No token, calling handshake...');
+      await this.handshake();
+    }
+    
+    // Wywołaj getProfileAndAuth aby aktywować sesję - to może być wymagane aby dostać pełną listę kategorii
+    console.log('🎬 Calling getProfileAndAuth...');
+    await this.getProfileAndAuth();
+    console.log('🎬 getProfileAndAuth done, proceeding to get_categories');
+
+    const params = {
+      type: 'vod',
+      action: 'get_categories',
+      mac: this.account.mac,
+      JsHttpRequest: '1-xml',
+    };
+
+    console.log(`🎬 Fetching VOD categories with params:`, params);
+    const response = await this._makeRequest(params);
+    const categories = this.useTauri ? (response?.js || []) : (response.data?.js || []);
+    
+    console.log(`✅ VOD Categories: ${categories.length} items`);
+    
+    return categories;
+  }
+
+  /**
+ * Pobieranie szczegółów pojedynczego VOD
+ */
+async getVODDetails(vodId: string): Promise<StalkerVOD> {
+  if (!this.account.token) await this.handshake();
+
+  const params = {
+    type: 'vod',
+    action: 'get_details',
+    vod_id: vodId,
+    mac: this.account.mac,
+    JsHttpRequest: '1-xml',
+  };
+
+  const response = await this._makeRequest(params);
+  return this.useTauri ? response?.js : response.data?.js;
+}
+
+  async _makeRequest(params: any, signal?: AbortSignal): Promise<any> {
+    return this._makeGenericRequest('portal.php', params, signal);
+  }
+
+  private async _makeGenericRequest(endpoint: string, params: any, signal?: AbortSignal): Promise<any> {
+    if (signal?.aborted) {
+      throw new Error('Request aborted');
+    }
+
+    // Debug tracking
+    const ctx = createDebugRequestContext(params.action || endpoint, { endpoint, params });
+    logDebugRequest(ctx);
+    
+    let response: any;
+    try {
+      if (this.useTauri && this.tauriHttp) {
+        if (this.token) {
+          this.tauriHttp.setHeader('Authorization', `Bearer ${this.token}`);
+        }
+        response = await this.tauriHttp.get(endpoint, params);
+      } else {
+        response = await this.axios.get(endpoint, { params, signal });
+      }
+      
+      logDebugSuccess(ctx, this.useTauri ? response : response.data);
+      return response;
+      
+    } catch (error) {
+      logDebugError(ctx, error);
+      this.logger.error(`Request failed: ${params.action || endpoint}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * @deprecated Używaj getVODList(categoryId, page) z Infinite Scroll zamiast tej metody
+   * Pobieranie WSZYSTKICH VOD items (bez pagination) - używa paginacji
+   */
+  async getAllVOD(genre?: string): Promise<StalkerVOD[]> {
+    if (!this.token) {
+      await this.handshake();
+    }
+
+    let allVods: StalkerVOD[] = [];
+    let currentPage = 1;
+    let hasMore = true;
+
+    // Dla kategorii "All" ograniczamy do 1000 filmów (zamiast 200)
+    const isAllCategory = !genre || genre === '*';
+    const maxItems = isAllCategory ? 1000 : Infinity;
+
+    while (hasMore && allVods.length < maxItems) {
+      const params: any = {
+        type: 'vod',
+        action: 'get_ordered_list',
+        hd: '1',
+        p: currentPage.toString(),
+        mac: this.account.mac,
+        JsHttpRequest: '1-xml',
+      };
+
+      if (genre && genre !== '*') {
+        params.genre = genre;
+      }
+
+      console.log(`🔍 get_all_vod params (page ${currentPage}):`, params);
+
+      let response: any;
+
+      if (this.useTauri && this.tauriHttp) {
+        try {
+          console.log(`📡 Calling TauriHttp.get for VOD page ${currentPage}...`);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          response = await this.tauriHttp.get('portal.php', params);
+        } catch (error) {
+          console.error('❌ TauriHttp VOD error:', error);
+          throw error;
+        }
+      } else {
+        try {
+          console.log(`📡 Calling axios.get for VOD page ${currentPage}...`);
+          response = await this.axios.get('portal.php', { params });
+        } catch (error) {
+          console.error('❌ Axios VOD error:', error);
+          throw error;
+        }
+      }
+
+      const vods = this.useTauri ?
+        (response?.js?.data || response?.js || []) :
+        (response.data?.js?.data || response.data?.js || []);
+
+      const totalItems = this.useTauri ?
+        response?.js?.total_items :
+        response.data?.js?.total_items || 0;
+      const maxPageItems = this.useTauri ?
+        response?.js?.max_page_items :
+        response.data?.js?.max_page_items;
+
+      console.log(`✅ Loaded ${vods.length} VOD items from page ${currentPage}`);
+      console.log(`📊 Total items: ${totalItems}, Max per page: ${maxPageItems}`);
+
+      allVods = allVods.concat(vods.map((vod: StalkerVOD) => ({
+      ...vod,
+      logo: this.resolveLogoUrl(vod.logo),
+      poster: this.resolvePosterUrl(vod),
+    })));
+
+      // Check if we have more pages
+      hasMore = vods.length === maxPageItems && allVods.length < totalItems && allVods.length < maxItems;
+      currentPage++;
+
+      // Safety break to prevent infinite loops
+      if (currentPage > 1000) {
+        console.warn('⚠️ Safety break: Too many pages requested');
+        break;
+      }
+    }
+
+    console.log(`✅ Total loaded ${allVods.length} VOD items${isAllCategory ? ' (limited to 200 for All category)' : ''}`);
+    return allVods;
+  }
+
+  /**
+   * Pobranie linku do strumienia VOD
+   */
+  async getVODUrl(vodCmd: string): Promise<string> {
+    await this.ensureAuthenticated();
+
+    const response = await this._makeRequest({
+      type: 'vod',
+      action: 'create_link',
+      cmd: vodCmd,
+      mac: this.account.mac,
+      JsHttpRequest: '1-xml',
+    });
+
+    const url = this.useTauri ? response?.js?.cmd : response.data?.js?.cmd;
+    if (!url) {
+      throw new Error(`Failed to get VOD stream URL`);
+    }
+
+    console.log(`✅ VOD stream URL: ${url.substring(0, 50)}...`);
+    return url;
+  }
+
+  /**
+   * Pobranie EPG dla kanału
+   */
+  async getEPG(channelId: number, from?: number, to?: number): Promise<StalkerEPG[]> {
+    if (!this.token) {
+      await this.handshake();
+    }
+
+    const params: any = {
+      type: 'itv',
+      action: 'get_short_epg',
+      ch_id: channelId.toString(),
+      JsHttpRequest: '1-xml',
+    };
+
+    if (from) params.from = from.toString();
+    if (to) params.to = to.toString();
+
+    const response = await this._makeRequest(params);
+    console.log('🔥 EPG Raw Response:', response);
+    const epg = this.useTauri ? (response?.js || []) : (response.data?.js || []);
+    console.log(`✅ Loaded ${epg.length} EPG entries for channel ${channelId}`);
+    return epg;
+  }
+
+  /**
+   * Test połączenia (quick handshake check)
+   */
+  async testConnection(): Promise<boolean> {
+    try {
+      await this.handshake();
+      return true;
+    } catch (error) {
+      console.error('❌ Connection test failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Pobranie aktualnego konta z danymi
+   */
+  getAccount(): StalkerAccount {
+    return this.account;
+  }
+
+  // ==================== AUTH & HTTP HELPERS ====================
+
+  /**
+   * Ensure we have a valid token (handshake if needed)
+   */
+  async ensureAuthenticated(): Promise<void> {
+    if (!this.token) {
+      console.log('🔐 No token, calling handshake...');
+      await this.handshake();
+      console.log('🔐 Handshake completed, token exists:', !!this.token);
+    } else {
+      console.log('🔐 Using existing token');
+    }
+  }
+
+  /**
+   * Execute operation with automatic retry on 403/auth errors
+   */
+  private async withAuthRetry<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error: any) {
+      if (error?.message?.includes('403') || error?.message?.includes('Access denied')) {
+        console.log('🔄 Token expired, re-handshaking...');
+        await this.handshake();
+        return await operation();
+      }
+      throw error;
+    }
+  }
+  // ==================== URL RESOLVERS ====================
+
+  /**
+   * Resolve logo URL - handles both absolute and relative logo paths
+   */
+  resolveLogoUrl(logo: string | undefined): string | undefined {
+    if (!logo) return undefined;
+    if (logo.startsWith('http')) return logo;
+    return `${this.account.portalUrl}misc/logos/${logo}`;
+  }
+
+  /**
+   * Resolve poster URL - handles different field names for VOD posters
+   */
+  resolvePosterUrl(vod: any): string | undefined {
+
+    // Check for common poster field names - screenshot_uri often contains external URLs like TMDB
+    const posterFields = ['screenshot_uri', 'poster', 'screenshot', 'img', 'fname', 'cover', 'thumbnail', 'picture', 'image'];
+    
+    for (const field of posterFields) {
+      const value = vod[field];
+      if (value && typeof value === 'string' && value.trim() !== '') {
+        const fullValue = value.trim();
+        
+        // Construct URL based on the field value
+        if (fullValue.startsWith('http')) {
+          return fullValue;
+        }
+        
+        // Try different URL patterns for local paths
+        const baseUrl = this.account.portalUrl;
+        const possibleUrls = [
+          `${baseUrl}misc/posters/${fullValue}`,
+          `${baseUrl}misc/img/${fullValue}`,
+          `${baseUrl}misc/screenshots/${fullValue}`,
+          `${baseUrl}uploads/${fullValue}`,
+          `${baseUrl}${fullValue.startsWith('/') ? fullValue.substring(1) : fullValue}`,
+        ];
+        
+        console.log('🎬 Returning constructed URL:', possibleUrls[0]);
+        return possibleUrls[0];
+      }
+    }
+    
+    // If no poster field found, try to construct URL based on VOD ID
+    if (vod.id) {
+      const baseUrl = this.account.portalUrl;
+      const id = vod.id.toString();
+      
+      const idBasedUrl = `${baseUrl}misc/posters/${id}.jpg`;
+      console.log('🎬 No poster field found, using ID-based URL:', idBasedUrl);
+      return idBasedUrl;
+    }
+    
+    return undefined;
+  }
+
+  /**
+   * Pobieranie kategorii (genres) – Live TV
+   */
+  async getGenres(): Promise<StalkerGenre[]> {
+    await this.ensureAuthenticated();
+    
+    return this.withAuthRetry(async () => {
+      const response = await this._makeRequest({
+        type: 'itv',
+        action: 'get_genres',
+        mac: this.account.mac,
+        JsHttpRequest: '1-xml',
+      });
+      
+      const genres: StalkerGenre[] = this.useTauri ? response?.js : response.data?.js || [];
+      
+      if (!genres.some(g => g.id === '*')) {
+        const allGenre: StalkerGenre = { id: '*', title: 'Wszystkie kanały' };
+        return [allGenre, ...genres];
+      }
+      return genres;
+    });
+  }
+
+  // Nowa metoda do pobierania kanałów z informacjami o paginacji
+  async getChannelsWithPagination(genreId: string = '*', page: number = 1): Promise<{channels: StalkerChannel[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
+    await this.ensureAuthenticated();
+    
+    return this.withAuthRetry(async () => {
+      const result = await this._getChannelsInternal(genreId, page);
+      const totalPages = Math.ceil(result.totalItems / result.maxPageItems);
+      const currentPageZeroBased = page - 1;
+      const hasMore = currentPageZeroBased < totalPages - 1 && result.channels.length > 0;
+      console.log('📊 Pagination calc - page:', page, 'currentPageZeroBased:', currentPageZeroBased, 'totalPages:', totalPages, 'hasMore:', hasMore, 'channels.length:', result.channels.length);
+      return {
+        ...result,
+        hasMore
+      };
+    });
+  }
+
+  private async _getChannelsInternal(genreId: string, page: number): Promise<{channels: StalkerChannel[], totalItems: number, maxPageItems: number, currentPage: number}> {
+    const params: any = {
+      type: 'itv',
+      action: 'get_ordered_list',
+      mac: this.account.mac,
+      p: page.toString(),
+      sortby: 'number',
+      hd: '0',
+      fav: '0',
+      JsHttpRequest: '1-xml',
+      max_page_items: '30',
+    };
+
+    if (genreId !== '*') {
+      params.genre = genreId;
+    }
+
+    console.log('🔍 Request params:', params);
+
+    const response = await this._makeRequest(params);
+
+    const data = this.useTauri ? response?.js?.data : response.data?.js?.data as StalkerChannel[] || [];
+    const totalItems = this.useTauri ? response?.js?.total_items : response.data?.js?.total_items || 0;
+    const maxPageItems = this.useTauri ? response?.js?.max_page_items : response.data?.js?.max_page_items;
+    const currentPage = this.useTauri ? response?.js?.cur_page : response.data?.js?.cur_page || page;
+    
+    console.log('📊 Parsed channels data:', data.length, 'items');
+    console.log('📊 Pagination info:', { totalItems, maxPageItems, currentPage });
+    if (data.length > 0) {
+      console.log('📊 First channel sample:', data[0]);
+    }
+
+    return {
+      channels: data.map((ch: StalkerChannel) => ({
+        ...ch,
+        logo: this.resolveLogoUrl(ch.logo),
+      })),
+      totalItems,
+      maxPageItems,
+      currentPage
+    };
+  }
+
+  /**
+   * Pobieranie WSZYSTKICH kanałów przez get_all_channels action
+   */
+  async getAllChannels(): Promise<StalkerChannel[]> {
+    await this.ensureAuthenticated();
+    
+    const params = {
+      type: 'itv',
+      action: 'get_all_channels',
+      mac: this.account.mac,
+      JsHttpRequest: '1-xml',
+    };
+
+    const response = await this._makeGenericRequest('server/load.php', params);
+
+    const data = this.useTauri ? 
+      (response?.js?.data || response?.data?.js?.data || response?.js || []) : 
+      (response.data?.js?.data || response.data?.js || []);
+    
+    console.log('📊 get_all_channels response:', data.length, 'channels');
+
+    return data.map((ch: StalkerChannel) => ({
+      ...ch,
+      logo: this.resolveLogoUrl(ch.logo),
+    }));
+  }
+
+  /**
+   * Pobieranie linku do odtwarzania (cmd → pełny URL strumienia)
+   */
+  async getStreamUrl(cmd: string): Promise<string> {
+    await this.ensureAuthenticated();
+
+    // Replace MAC in cmd with current account MAC
+    const currentMac = this.account.mac;
+    const cmdWithCorrectMac = cmd.replace(/mac=([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}/, `mac=${currentMac}`);
+
+    // Wyciągnij stream ID z cmd (e.g., stream=1929427)
+    const streamMatch = /stream[=:](\d+)/.exec(cmdWithCorrectMac);
+    const streamId = streamMatch ? streamMatch[1] : null;
+
+    const params: any = {
+      type: cmdWithCorrectMac.startsWith('eyJ') ? 'vod' : 'itv',
+      action: 'create_link',
+      cmd: cmdWithCorrectMac,
+      mac: currentMac,
+      JsHttpRequest: '1-xml',
+    };
+    if (streamId) params.stream = streamId;
+
+    const response = await this._makeRequest(params);
+    const streamUrl = this.useTauri ? response?.js?.cmd : response.data?.js?.cmd;
+
+    if (!streamUrl) {
+      throw new Error('Portal returned empty stream URL');
+    }
+
+    return streamUrl.replace(/^ffmpeg\s+/, '');
+  }
+
+}

@@ -1,0 +1,210 @@
+// =========================
+// 🪝 INFINITE SCROLL MOVIES HOOKS
+// =========================
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import React from 'react';
+import { StalkerClient } from '@/lib/stalkerAPI_new';
+import { StalkerVOD } from '@/types';
+import { usePortalCacheStore } from '@/store/portalCache.store';
+import { saveVod } from '@/hooks/useDatabase';
+import { useCategories } from '@/hooks/useCategories';
+
+// Page result type
+interface MoviesPage {
+  items: StalkerVOD[];
+  nextPage: number | undefined;
+  currentPage: number;
+}
+
+// Infinite scroll - load movies page by page
+export const useMoviesInfinite = (client: StalkerClient, categoryId?: string) => {
+  const queryClient = useQueryClient();
+  // Use selectors to get stable references to store actions
+  const clearVODForCategory = usePortalCacheStore(s => s.clearVODForCategory);
+  const appendVODPage = usePortalCacheStore(s => s.appendVODPage);
+
+  const accountId = client?.getAccount()?.id ?? 'default';
+  
+  // Track SQLite save errors for monitoring
+  const [sqliteError, setSqliteError] = React.useState<Error | null>(null);
+
+  // Track previous category to avoid race condition when clearing cache
+  const prevCategoryRef = React.useRef<string | undefined>(undefined);
+  // Track loading generation to prevent stale results from being processed
+  const loadingGenRef = React.useRef(0);
+
+  React.useEffect(() => {
+    if (prevCategoryRef.current && prevCategoryRef.current !== categoryId) {
+      console.log('🎬 Clearing cache for previous category:', prevCategoryRef.current);
+      // Cancel any in-flight queries for the previous category to prevent race condition
+      queryClient.cancelQueries({ 
+        queryKey: ['movies-infinite', accountId, prevCategoryRef.current, { type: 'vod' }] 
+      });
+      clearVODForCategory(accountId, prevCategoryRef.current);
+    }
+    prevCategoryRef.current = categoryId;
+    // Increment generation when category changes
+    loadingGenRef.current += 1;
+  }, [categoryId, accountId, clearVODForCategory, queryClient]);
+
+  const query = useInfiniteQuery<MoviesPage, Error>({
+    queryKey: ['movies-infinite', accountId, categoryId, { type: 'vod' }],
+    queryFn: async ({ pageParam = 1 }) => {
+      if (!categoryId) return { items: [], nextPage: undefined, currentPage: 1 };
+
+      console.log('🎬 useMoviesInfinite - loading page', pageParam, 'for category:', categoryId);
+      
+      const result = await client.getVODListWithPagination(categoryId, pageParam as number);
+      
+      // Save this page to cache
+      if (result.items.length > 0) {
+        appendVODPage(accountId, categoryId, pageParam as number, result.items);
+      }
+      
+      // Save this page to SQLite (non-blocking) with error tracking
+      const currentGen = loadingGenRef.current;
+      saveVod(result.items.map(vod => ({
+        id: vod.id?.toString() || '',
+        name: vod.name || '',
+        description: vod.description || '',
+        posterUrl: vod.logo || vod.poster || '',
+        streamUrl: vod.cmd || '',
+        year: vod.year,
+        rating: vod.rating_imdb || vod.rating_kinopoisk,
+        duration: vod.length,
+        genre: categoryId,
+        director: vod.director,
+        actors: vod.actors,
+        added: vod.added ? Number(vod.added) : undefined,
+      })), accountId)
+        .then(() => {
+          // Only clear error if this is still the current generation
+          if (loadingGenRef.current === currentGen) {
+            setSqliteError(null);
+          }
+        })
+        .catch(err => {
+          console.error('[DB] Failed to save VOD page:', err);
+          // Only set error if this is still the current generation
+          if (loadingGenRef.current === currentGen) {
+            setSqliteError(err instanceof Error ? err : new Error(String(err)));
+          }
+        });
+      
+      console.log('🎬 useMoviesInfinite - page', pageParam, 'loaded:', result.items.length, 'movies');
+
+      return {
+        items: result.items,
+        nextPage: result.hasMore && result.items.length > 0 ? (pageParam as number) + 1 : undefined,
+        currentPage: pageParam as number,
+      };
+    },
+    getNextPageParam: (lastPage) => lastPage.nextPage,
+    initialPageParam: 1,
+    enabled: !!categoryId && !!accountId && accountId !== 'default',
+    placeholderData: (prev) => prev,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
+
+  // Flatten all pages into single array with deduplication
+  // Note: items are already sorted by added date in the store (appendVODPage maintains order)
+  const allMovies = React.useMemo(() => {
+    const map = new Map<string, StalkerVOD>();
+    
+    query.data?.pages.forEach(page => {
+      page.items.forEach(item => {
+        map.set(item.id.toString(), item);
+      });
+    });
+    
+    // Return deduplicated items (sorting already done in store)
+    return Array.from(map.values());
+  }, [query.data]);
+
+  // Returns flattened movies array as `data` (overrides React Query's InfiniteData)
+  // Original InfiniteData available via `query.data` if needed
+  return {
+    ...query,
+    data: allMovies,      // Flattened StalkerVOD[] - overrides query.data (InfiniteData<MoviesPage>)
+    movies: allMovies,    // Alias for clarity
+    sqliteError,          // SQLite persistence error (null if OK)
+  };
+};
+
+// Legacy hook - now uses infinite query internally (paginated, not all data at once)
+// WARNING: Returns paginated data. Use hasNextPage/fetchNextPage for infinite scroll
+// or useMoviesInfinite for full control. For eager loading all pages, implement manually.
+export const useMovies = (client: StalkerClient, categoryId?: string) => {
+  const { 
+    data, 
+    isLoading, 
+    isFetching, 
+    error, 
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useMoviesInfinite(client, categoryId);
+  
+  return {
+    data: data || [],
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+    // Infinite scroll controls
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+    isLoadingMore: isFetchingNextPage,
+  };
+};
+
+// Pobierz kategorie filmów (z SQLite lub API)
+export const useMovieCategories = (client: StalkerClient) => {
+  const portalId = client?.getAccount()?.id || 'default';
+  
+  const { categories, isLoading, refresh, isRefreshing } = useCategories('vod', portalId, async () => {
+    console.log('🎬 Fetching VOD categories from API...');
+    const result = await client.getVODCategories();
+    console.log('🎬 Got', result.length, 'VOD categories');
+    return result;
+  });
+
+  return {
+    data: categories,
+    isLoading,
+    refetch: refresh,
+    isRefetching: isRefreshing,
+    error: null,
+  };
+};
+
+// Pobierz szczegóły filmu
+export const useMovieDetails = (client: StalkerClient, movieId?: string) => {
+  return useQuery({
+    queryKey: ['movie', movieId],
+    queryFn: () => client.getVODDetails(movieId!),
+    enabled: !!movieId,
+    staleTime: 60 * 60 * 1000,
+    gcTime: 60 * 60 * 1000, // Match staleTime so fresh data isn't garbage collected
+  });
+};
+
+// Prefetch stream URL
+export const usePrefetchMovieStream = (client: StalkerClient) => {
+  const queryClient = useQueryClient();
+  
+  return React.useCallback((movie: StalkerVOD) => {
+    if (movie.cmd) {
+      queryClient.prefetchQuery({
+        queryKey: ['movie-stream', movie.id],
+        queryFn: () => client.getVODUrl(movie.cmd),
+      });
+    }
+  }, [queryClient, client]);
+};
