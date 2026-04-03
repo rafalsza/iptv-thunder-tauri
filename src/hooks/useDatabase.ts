@@ -510,33 +510,19 @@ export async function clearAllDataForPortal(portalId: string): Promise<void> {
       SELECT 'epg', COUNT(*) FROM epg WHERE portal_id = ?
     `, [portalId, portalId, portalId, portalId, portalId, portalId]);
     
-    await db.execute('BEGIN TRANSACTION');
-    try {
+    await withTransaction(async (db) => {
       await db.execute('DELETE FROM channels WHERE portal_id = ?', [portalId]);
       await db.execute('DELETE FROM vod WHERE portal_id = ?', [portalId]);
       await db.execute('DELETE FROM series WHERE portal_id = ?', [portalId]);
       await db.execute('DELETE FROM series_seasons WHERE portal_id = ?', [portalId]);
       await db.execute('DELETE FROM series_episodes WHERE portal_id = ?', [portalId]);
       await db.execute('DELETE FROM epg WHERE portal_id = ?', [portalId]);
-      await db.execute('COMMIT');
-      
-      const totalDeleted = counts.reduce((sum, c) => sum + c.count, 0);
-      console.log(`[Database] Cleared ${totalDeleted} total rows for portal ${portalId}:`, 
-        counts.filter(c => c.count > 0).map(c => `${c.name}: ${c.count}`).join(', ') || 'no data'
-      );
-    } catch (error: any) {
-      const errorMsg = error?.message?.toLowerCase() || '';
-      const isTransactionClosedError = errorMsg.includes('cannot rollback') || errorMsg.includes('no transaction is active');
-      
-      if (!isTransactionClosedError) {
-        try {
-          await db.execute('ROLLBACK');
-        } catch (rollbackError) {
-          // Ignore - transaction already closed
-        }
-      }
-      throw error;
-    }
+    });
+    
+    const totalDeleted = counts.reduce((sum, c) => sum + c.count, 0);
+    console.log(`[Database] Cleared ${totalDeleted} total rows for portal ${portalId}:`, 
+      counts.filter(c => c.count > 0).map(c => `${c.name}: ${c.count}`).join(', ') || 'no data'
+    );
   } catch (error: any) {
     const errMsg = String(error?.message || error || '');
     if (errMsg.includes('no such column') || errMsg.includes('no such table')) {
@@ -560,16 +546,12 @@ export async function clearChannelsForPortal(portalId: string): Promise<void> {
       [portalId]
     );
     
-    await db.execute('BEGIN TRANSACTION');
-    try {
+    await withTransaction(async (db) => {
       await db.execute('DELETE FROM channels WHERE portal_id = ?', [portalId]);
       await db.execute('DELETE FROM epg WHERE portal_id = ?', [portalId]);
-      await db.execute('COMMIT');
-      console.log(`[Database] Cleared ${countBefore[0]?.count || 0} channels and ${epgCountBefore[0]?.count || 0} EPG entries for portal ${portalId}`);
-    } catch (error) {
-      await db.execute('ROLLBACK');
-      throw error;
-    }
+    });
+    
+    console.log(`[Database] Cleared ${countBefore[0]?.count || 0} channels and ${epgCountBefore[0]?.count || 0} EPG entries for portal ${portalId}`);
   } catch (error: any) {
     const errMsg = String(error?.message || error || '');
     if (errMsg.includes('no such column') || errMsg.includes('no such table')) {
@@ -615,26 +597,13 @@ export async function clearSeriesForPortal(portalId: string): Promise<void> {
       'SELECT COUNT(*) as count FROM series_episodes WHERE portal_id = ?', [portalId]
     );
     
-    await db.execute('BEGIN TRANSACTION');
-    try {
+    await withTransaction(async (db) => {
       await db.execute('DELETE FROM series_episodes WHERE portal_id = ?', [portalId]);
       await db.execute('DELETE FROM series_seasons WHERE portal_id = ?', [portalId]);
       await db.execute('DELETE FROM series WHERE portal_id = ?', [portalId]);
-      await db.execute('COMMIT');
-      console.log(`[Database] Cleared ${seriesBefore[0]?.count || 0} series, ${seasonsBefore[0]?.count || 0} seasons, ${episodesBefore[0]?.count || 0} episodes for portal ${portalId}`);
-    } catch (error: any) {
-      const errorMsg = error?.message?.toLowerCase() || '';
-      const isTransactionClosedError = errorMsg.includes('cannot rollback') || errorMsg.includes('no transaction is active');
-      
-      if (!isTransactionClosedError) {
-        try {
-          await db.execute('ROLLBACK');
-        } catch (rollbackError) {
-          // Ignore - transaction already closed
-        }
-      }
-      throw error;
-    }
+    });
+    
+    console.log(`[Database] Cleared ${seriesBefore[0]?.count || 0} series, ${seasonsBefore[0]?.count || 0} seasons, ${episodesBefore[0]?.count || 0} episodes for portal ${portalId}`);
   } catch (error: any) {
     const errMsg = String(error?.message || error || '');
     if (errMsg.includes('no such column') || errMsg.includes('no such table')) {
