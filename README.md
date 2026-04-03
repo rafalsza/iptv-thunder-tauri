@@ -1,5 +1,7 @@
 # IPTV Thunder - Modern IPTV Client
 
+[![GitHub](https://img.shields.io/badge/GitHub-iptv--thunder--tauri-blue?logo=github)](https://github.com/rafalsza/iptv-thunder-tauri)
+
 A modern, feature-rich IPTV client built with Tauri 2, React 19, and TypeScript. Supports Stalker Middleware portals with integrated video player and comprehensive VOD (Movies/Series) support.
 
 ## Features
@@ -50,8 +52,8 @@ A modern, feature-rich IPTV client built with Tauri 2, React 19, and TypeScript.
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd iptv-thunder-tauri-netflix
+git clone https://github.com/rafalsza/iptv-thunder-tauri.git
+cd iptv-thunder-tauri
 ```
 
 2. Install dependencies:
@@ -212,7 +214,7 @@ npm run test:watch    # Run tests in watch mode
 
 ## License
 
-[Your License Here]
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Support
 
