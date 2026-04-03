@@ -463,7 +463,7 @@ function AppInner({ }: AppProps) {
   const currentPlayer = getCurrentPlayer();
 
   return (
-    <div className={`flex h-full ${currentPlayer.current ? 'bg-black' : 'bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900'}`}>
+    <div className={`flex h-full ${currentPlayer.current ? 'bg-transparent' : 'bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900'}`}>
       {/* Navigation - hidden when player active */}
       {!currentPlayer.current && (
         <Navigation 

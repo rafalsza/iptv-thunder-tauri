@@ -15,6 +15,7 @@ export interface EpgService {
 
 export const PREDEFINED_EPG_SERVICES: EpgService[] = [
   { id: 'auto', name: 'Automatyczny (z serwera IPTV)', url: '', description: 'Używa EPG dostarczonego przez Twój serwer IPTV' },
+  { id: 'epg_ovh_pl', name: 'EPG OVH (Polska)', url: 'https://epg.ovh/pl.xml', description: 'EPG dla polskich kanałów TV' },
   { id: 'epg_share', name: 'EPG Share (epg-share.com)', url: 'https://epgshare01.online/epg_ripper_US_LOCALS2.xml.gz', description: 'Darmowy EPG głównie dla kanałów USA' },
   { id: 'github_epg', name: 'IPTV Org EPG', url: 'https://epg.pw/xmltv.xml.gz', description: 'EPG z iptv-org.github.io - globalne kanały' },
   { id: 'custom', name: 'Własny URL', url: '', description: 'Wprowadź własny adres URL do pliku XMLTV' },

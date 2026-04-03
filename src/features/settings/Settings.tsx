@@ -90,6 +90,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     setExternalEpgUrl(null);
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
       <div className="bg-slate-800 rounded-xl w-full max-w-2xl mx-4 border border-slate-600 flex flex-col max-h-[85vh]">
