@@ -385,95 +385,6 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
   }
 
   /**
-   * @deprecated Używaj getVODList(categoryId, page) z Infinite Scroll zamiast tej metody
-   * Pobieranie WSZYSTKICH VOD items (bez pagination) - używa paginacji
-   */
-  async getAllVOD(genre?: string): Promise<StalkerVOD[]> {
-    if (!this.token) {
-      await this.handshake();
-    }
-
-    let allVods: StalkerVOD[] = [];
-    let currentPage = 1;
-    let hasMore = true;
-
-    // Dla kategorii "All" ograniczamy do 1000 filmów (zamiast 200)
-    const isAllCategory = !genre || genre === '*';
-    const maxItems = isAllCategory ? 1000 : Infinity;
-
-    while (hasMore && allVods.length < maxItems) {
-      const params: any = {
-        type: 'vod',
-        action: 'get_ordered_list',
-        hd: '1',
-        p: currentPage.toString(),
-        mac: this.account.mac,
-        JsHttpRequest: '1-xml',
-      };
-
-      if (genre && genre !== '*') {
-        params.genre = genre;
-      }
-
-      console.log(`🔍 get_all_vod params (page ${currentPage}):`, params);
-
-      let response: any;
-
-      if (this.useTauri && this.tauriHttp) {
-        try {
-          console.log(`📡 Calling TauriHttp.get for VOD page ${currentPage}...`);
-          await new Promise(resolve => setTimeout(resolve, 100));
-          response = await this.tauriHttp.get('portal.php', params);
-        } catch (error) {
-          console.error('❌ TauriHttp VOD error:', error);
-          throw error;
-        }
-      } else {
-        try {
-          console.log(`📡 Calling axios.get for VOD page ${currentPage}...`);
-          response = await this.axios.get('portal.php', { params });
-        } catch (error) {
-          console.error('❌ Axios VOD error:', error);
-          throw error;
-        }
-      }
-
-      const vods = this.useTauri ?
-        (response?.js?.data || response?.js || []) :
-        (response.data?.js?.data || response.data?.js || []);
-
-      const totalItems = this.useTauri ?
-        response?.js?.total_items :
-        response.data?.js?.total_items || 0;
-      const maxPageItems = this.useTauri ?
-        response?.js?.max_page_items :
-        response.data?.js?.max_page_items;
-
-      console.log(`✅ Loaded ${vods.length} VOD items from page ${currentPage}`);
-      console.log(`📊 Total items: ${totalItems}, Max per page: ${maxPageItems}`);
-
-      allVods = allVods.concat(vods.map((vod: StalkerVOD) => ({
-      ...vod,
-      logo: this.resolveLogoUrl(vod.logo),
-      poster: this.resolvePosterUrl(vod),
-    })));
-
-      // Check if we have more pages
-      hasMore = vods.length === maxPageItems && allVods.length < totalItems && allVods.length < maxItems;
-      currentPage++;
-
-      // Safety break to prevent infinite loops
-      if (currentPage > 1000) {
-        console.warn('⚠️ Safety break: Too many pages requested');
-        break;
-      }
-    }
-
-    console.log(`✅ Total loaded ${allVods.length} VOD items${isAllCategory ? ' (limited to 200 for All category)' : ''}`);
-    return allVods;
-  }
-
-  /**
    * Pobranie linku do strumienia VOD
    */
   async getVODUrl(vodCmd: string): Promise<string> {
@@ -497,9 +408,9 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
   }
 
   /**
-   * Pobranie EPG dla kanału
+   * Pobranie short EPG dla kanału (bez parametrów from/to - te są tylko dla pełnego EPG)
    */
-  async getEPG(channelId: number, from?: number, to?: number): Promise<StalkerEPG[]> {
+  async getEPG(channelId: number, size: number = 10): Promise<StalkerEPG[]> {
     if (!this.token) {
       await this.handshake();
     }
@@ -508,16 +419,36 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
       type: 'itv',
       action: 'get_short_epg',
       ch_id: channelId.toString(),
+      size: size.toString(),
       JsHttpRequest: '1-xml',
     };
 
-    if (from) params.from = from.toString();
-    if (to) params.to = to.toString();
-
     const response = await this._makeRequest(params);
-    console.log('🔥 EPG Raw Response:', response);
     const epg = this.useTauri ? (response?.js || []) : (response.data?.js || []);
     console.log(`✅ Loaded ${epg.length} EPG entries for channel ${channelId}`);
+    return epg;
+  }
+
+  /**
+   * Pobranie pełnego EPG dla kanału z zakresem czasowym (get_epg z from/to)
+   */
+  async getFullEPG(channelId: number, from: number, to: number): Promise<StalkerEPG[]> {
+    if (!this.token) {
+      await this.handshake();
+    }
+
+    const params: any = {
+      type: 'itv',
+      action: 'get_epg',
+      ch_id: channelId.toString(),
+      from: from.toString(),
+      to: to.toString(),
+      JsHttpRequest: '1-xml',
+    };
+
+    const response = await this._makeRequest(params);
+    const epg = this.useTauri ? (response?.js || []) : (response.data?.js || []);
+    console.log(`✅ Loaded ${epg.length} full EPG entries for channel ${channelId}`);
     return epg;
   }
 
@@ -547,13 +478,12 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
    * Ensure we have a valid token (handshake if needed)
    */
   async ensureAuthenticated(): Promise<void> {
-    if (!this.token) {
-      console.log('🔐 No token, calling handshake...');
-      await this.handshake();
-      console.log('🔐 Handshake completed, token exists:', !!this.token);
-    } else {
-      console.log('🔐 Using existing token');
+    if (this.token) {
+      return;
     }
+    console.log('🔐 No token, calling handshake...');
+    await this.handshake();
+    console.log('🔐 Handshake completed, token exists:', !!this.token);
   }
 
   /**
@@ -653,15 +583,14 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
   }
 
   // Nowa metoda do pobierania kanałów z informacjami o paginacji
-  async getChannelsWithPagination(genreId: string = '*', page: number = 1): Promise<{channels: StalkerChannel[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
+  async getChannelsWithPagination(genreId: string = '*', page: number = 1, signal?: AbortSignal): Promise<{channels: StalkerChannel[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
     await this.ensureAuthenticated();
     
     return this.withAuthRetry(async () => {
-      const result = await this._getChannelsInternal(genreId, page);
+      const result = await this._getChannelsInternal(genreId, page, signal);
       const totalPages = Math.ceil(result.totalItems / result.maxPageItems);
       const currentPageZeroBased = page - 1;
       const hasMore = currentPageZeroBased < totalPages - 1 && result.channels.length > 0;
-      console.log('📊 Pagination calc - page:', page, 'currentPageZeroBased:', currentPageZeroBased, 'totalPages:', totalPages, 'hasMore:', hasMore, 'channels.length:', result.channels.length);
       return {
         ...result,
         hasMore
@@ -669,7 +598,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     });
   }
 
-  private async _getChannelsInternal(genreId: string, page: number): Promise<{channels: StalkerChannel[], totalItems: number, maxPageItems: number, currentPage: number}> {
+  private async _getChannelsInternal(genreId: string, page: number, signal?: AbortSignal): Promise<{channels: StalkerChannel[], totalItems: number, maxPageItems: number, currentPage: number}> {
     const params: any = {
       type: 'itv',
       action: 'get_ordered_list',
@@ -686,20 +615,12 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
       params.genre = genreId;
     }
 
-    console.log('🔍 Request params:', params);
-
-    const response = await this._makeRequest(params);
+    const response = await this._makeRequest(params, signal);
 
     const data = this.useTauri ? response?.js?.data : response.data?.js?.data as StalkerChannel[] || [];
     const totalItems = this.useTauri ? response?.js?.total_items : response.data?.js?.total_items || 0;
     const maxPageItems = this.useTauri ? response?.js?.max_page_items : response.data?.js?.max_page_items;
     const currentPage = this.useTauri ? response?.js?.cur_page : response.data?.js?.cur_page || page;
-    
-    console.log('📊 Parsed channels data:', data.length, 'items');
-    console.log('📊 Pagination info:', { totalItems, maxPageItems, currentPage });
-    if (data.length > 0) {
-      console.log('📊 First channel sample:', data[0]);
-    }
 
     return {
       channels: data.map((ch: StalkerChannel) => ({
@@ -731,8 +652,6 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
       (response?.js?.data || response?.data?.js?.data || response?.js || []) : 
       (response.data?.js?.data || response.data?.js || []);
     
-    console.log('📊 get_all_channels response:', data.length, 'channels');
-
     return data.map((ch: StalkerChannel) => ({
       ...ch,
       logo: this.resolveLogoUrl(ch.logo),

@@ -3,11 +3,9 @@
 // =========================
 import React, { useMemo } from 'react';
 import { useFavorites } from '@/hooks/useFavorites';
-import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerVOD } from '@/types';
 
 interface FavoriteSeriesListProps {
-  client: StalkerClient;
   accountId: string;
   search: string;
   onSeriesSelect: (series: StalkerVOD) => void;
@@ -19,23 +17,27 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
   onSeriesSelect,
 }) => {
   // Use SQLite for favorites with full metadata
-  const { favorites: dbFavorites, isItemFavorite, toggleItemFavorite, isLoading } = useFavorites(accountId);
+  const { favorites: dbFavorites, toggleItemFavorite, isLoading } = useFavorites(accountId);
   
   // Convert favorites to StalkerVOD format - NO API CALLS NEEDED!
-  const favoriteSeries = useMemo(() => {
-    const series = dbFavorites
+  const favoriteSeries = useMemo(() =>
+    dbFavorites
       .filter(f => f.type === 'series')
       .map(f => ({
-        id: f.item_id,
+        id: Number.parseInt(f.item_id, 10) || 0,
         name: f.name || `Serial ${f.item_id}`,
         logo: f.poster,
         poster: f.poster,
-        cmd: f.cmd,
+        cmd: f.cmd || '',
         series: f.name || '',
-      } as StalkerVOD));
-    console.log('[FavoriteSeries] Loaded from SQLite:', series.length, 'series');
-    return series;
-  }, [dbFavorites]);
+        description: '',
+        added: '',
+        censored: false,
+      } as StalkerVOD))
+      .filter((s, index, self) => // deduplicate by id
+        index === self.findIndex(t => t.id === s.id)
+      ),
+  [dbFavorites]);
 
   // Apply search filter
   const filtered = useMemo(() =>
@@ -102,15 +104,16 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    toggleItemFavorite('series', series.id, {
+                    toggleItemFavorite('series', String(series.id), {
                       name: series.name,
                       poster: series.poster,
                       cmd: series.cmd
                     });
                   }}
                   className="ml-2 text-lg hover:scale-110 transition-transform"
+                  title="Usuń z ulubionych"
                 >
-                  {isItemFavorite('series', series.id) ? '❤️' : '🤍'}
+                  ❤️
                 </button>
               </div>
               {(series.logo || series.poster) && (

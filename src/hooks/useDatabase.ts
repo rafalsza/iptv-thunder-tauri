@@ -776,7 +776,7 @@ export async function clearAllStorage(): Promise<void> {
   const sessionKeysToRemove: string[] = [];
   for (let i = 0; i < sessionStorage.length; i++) {
     const key = sessionStorage.key(i);
-    if (key && key.startsWith(STORAGE_PREFIX)) {
+    if (key?.startsWith(STORAGE_PREFIX)) {
       sessionKeysToRemove.push(key);
     }
   }

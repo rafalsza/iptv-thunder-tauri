@@ -162,10 +162,14 @@ export async function removeFavorite(
 ): Promise<void> {
   try {
     const db = await getDB();
+    // Normalize: remove .0 suffix for comparison since item_id may be stored with or without it
+    const normalizedId = itemId.replace(/\.0$/, '');
+    // Delete where item_id matches either format (with or without .0)
     await db.execute(
-      "DELETE FROM favorites WHERE account_id = ? AND kind = 'item' AND type = ? AND item_id = ?",
-      [accountId, type, itemId]
+      "DELETE FROM favorites WHERE account_id = ? AND kind = 'item' AND type = ? AND (item_id = ? OR item_id = ? || '.0')",
+      [accountId, type, normalizedId, normalizedId]
     );
+    logger.info('Removed favorite:', { accountId, type, itemId: normalizedId });
   } catch (error) {
     logger.error('Error removing favorite:', error);
     throw error;
@@ -349,12 +353,13 @@ export function useFavorites(accountId: string) {
     return new Set(
       favorites
         .filter(f => f.kind === 'item')
-        .map(f => `${f.type}:${f.item_id}`)
+        .map(f => `${f.type}:${f.item_id.replace(/\.0$/, '')}`) // Normalize: remove .0 suffix
     );
   }, [favorites]);
 
   const isItemFavorite = (type: 'live' | 'vod' | 'series', itemId: string): boolean => {
-    return favoriteSet.has(`${type}:${itemId}`);
+    const key = `${type}:${itemId.replace(/\.0$/, '')}`; // Normalize the lookup key too
+    return favoriteSet.has(key);
   };
 
   const toggleMutation = useMutation({
@@ -364,8 +369,8 @@ export function useFavorites(accountId: string) {
       isFavorite: boolean; 
       metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any };
     }) => {
-      // Ensure itemId is string
-      await toggleFavorite(accountId, type, String(itemId), isFavorite, metadata);
+      // Pass itemId as-is to database (it may have .0 suffix stored)
+      await toggleFavorite(accountId, type, itemId, isFavorite, metadata);
     },
     // Optimistic update
     onMutate: async (vars) => {
@@ -375,6 +380,9 @@ export function useFavorites(accountId: string) {
       queryClient.setQueryData(['favorites', accountId], (old: FavoriteItem[] = []) => {
         const itemIdStr = String(vars.itemId);
         if (vars.isFavorite) {
+          // Check if already exists to avoid duplicates (compare normalized)
+          const exists = old.some(f => f.type === vars.type && String(f.item_id).replace(/\.0$/, '') === itemIdStr.replace(/\.0$/, ''));
+          if (exists) return old;
           return [...old, {
             id: Date.now(), // temp id
             account_id: accountId,
@@ -391,7 +399,8 @@ export function useFavorites(accountId: string) {
             created_at: Date.now(),
           }];
         } else {
-          return old.filter(f => !(f.type === vars.type && String(f.item_id) === itemIdStr));
+          // Remove matching item (compare normalized)
+          return old.filter(f => !(f.type === vars.type && String(f.item_id).replace(/\.0$/, '') === itemIdStr.replace(/\.0$/, '')));
         }
       });
       
@@ -413,7 +422,11 @@ export function useFavorites(accountId: string) {
   };
 
   return {
-    favorites: favorites.filter(f => f.kind === 'item'), // exclude categories
+    favorites: favorites
+      .filter(f => f.kind === 'item') // exclude categories
+      .filter((f, index, self) => // deduplicate by type+item_id (normalized)
+        index === self.findIndex(t => t.type === f.type && t.item_id.replace(/\.0$/, '') === f.item_id.replace(/\.0$/, ''))
+      ),
     isLoading,
     isItemFavorite,
     toggleItemFavorite,

@@ -219,7 +219,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               >
                 {isFavorite ? (
                   <>
-                    <span>❤️</span> Dodaj do ulubionych
+                    <span>❤️</span> Usuń z ulubionych
                   </>
                 ) : (
                   <>

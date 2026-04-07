@@ -11,7 +11,11 @@ export const getChannelEPG = async (
   from?: number, 
   to?: number
 ): Promise<StalkerEPG[]> => {
-  return client.getEPG(channelId, from, to);
+  // Use full EPG with time range if from/to provided, otherwise short EPG
+  if (from && to) {
+    return client.getFullEPG(channelId, from, to);
+  }
+  return client.getEPG(channelId);
 };
 
 export const getChannelsEPG = async (
@@ -25,7 +29,10 @@ export const getChannelsEPG = async (
   // Fetch EPG for each channel in parallel
   const promises = channelIds.map(async (channelId) => {
     try {
-      const epg = await client.getEPG(channelId, from, to);
+      // Use full EPG with time range if from/to provided, otherwise short EPG
+      const epg = (from && to) 
+        ? await client.getFullEPG(channelId, from, to)
+        : await client.getEPG(channelId);
       return { channelId, epg };
     } catch (error) {
       console.error(`Failed to fetch EPG for channel ${channelId}:`, error);
@@ -44,18 +51,20 @@ export const getChannelsEPG = async (
 export const getCurrentProgram = (epg: StalkerEPG[]): StalkerEPG | null => {
   const now = Math.floor(Date.now() / 1000);
   
-  return epg.find(program => {
-    const startTime = parseInt(program.start_time);
-    const endTime = parseInt(program.end_time);
+  const result = epg.find(program => {
+    const startTime = Number.parseInt(program.start_time);
+    const endTime = Number.parseInt(program.end_time);
     return startTime <= now && endTime > now;
   }) || null;
+  
+  return result;
 };
 
 export const getNextProgram = (epg: StalkerEPG[]): StalkerEPG | null => {
   const now = Math.floor(Date.now() / 1000);
   
   return epg.find(program => {
-    const startTime = parseInt(program.start_time);
+    const startTime = Number.parseInt(program.start_time);
     return startTime > now;
   }) || null;
 };
@@ -66,8 +75,8 @@ export const getProgramsForTimeRange = (
   to: number
 ): StalkerEPG[] => {
   return epg.filter(program => {
-    const startTime = parseInt(program.start_time);
-    const endTime = parseInt(program.end_time);
+    const startTime = Number.parseInt(program.start_time);
+    const endTime = Number.parseInt(program.end_time);
     return (startTime >= from && startTime < to) || 
            (endTime > from && endTime <= to) ||
            (startTime <= from && endTime >= to);
@@ -75,7 +84,7 @@ export const getProgramsForTimeRange = (
 };
 
 export const formatEPGTime = (timestamp: string | number): string => {
-  const date = new Date(parseInt(timestamp.toString()) * 1000);
+  const date = new Date(Number.parseInt(timestamp.toString()) * 1000);
   return date.toLocaleTimeString('en-US', { 
     hour: '2-digit', 
     minute: '2-digit',
@@ -84,7 +93,7 @@ export const formatEPGTime = (timestamp: string | number): string => {
 };
 
 export const formatEPGDate = (timestamp: string | number): string => {
-  const date = new Date(parseInt(timestamp.toString()) * 1000);
+  const date = new Date(Number.parseInt(timestamp.toString()) * 1000);
   return date.toLocaleDateString('en-US', { 
     weekday: 'short',
     month: 'short', 
@@ -112,8 +121,8 @@ const getCacheKey = (url: string, channelId: number): string => `${url}_${channe
 const cleanChannelName = (name: string): string => {
   return name
     .replace(/^[^a-zA-Z0-9]+/, '') // Remove leading non-alphanumeric (like "JOYN|")
-    .replace(/[ᴿᴬᵂᴴᴰᵁ]+/g, '') // Remove superscript chars (ᴿᴬᵂ etc.)
-    .replace(/\s+/g, ' ') // Normalize whitespace
+    .replaceAll(/[ᴿᴬᵂᴴᴰᵁ]+/g, '') // Remove superscript chars (ᴿᴬᵂ etc.)
+    .replaceAll(/\s+/g, ' ') // Normalize whitespace
     .trim()
     .toLowerCase();
 };
@@ -134,7 +143,7 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
     let bestMatchScore = 0;
     
     const cleanedIptvName = channelName ? cleanChannelName(channelName) : '';
-    const iptvWords = cleanedIptvName.split(' ').filter(w => w.length > 2 && !GENERIC_TERMS.has(w));
+    const iptvWords = new Set(cleanedIptvName.split(' ').filter(w => w.length > 2 && !GENERIC_TERMS.has(w)));
     
     channels.forEach((ch) => {
       const id = ch.getAttribute('id');
@@ -142,7 +151,7 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
       
       // Clean XMLTV name too
       const cleanedXmltvName = cleanChannelName(displayName);
-      const xmltvWords = cleanedXmltvName.split(' ').filter(w => w.length > 2 && !GENERIC_TERMS.has(w));
+      const xmltvWords = new Set(cleanedXmltvName.split(' ').filter(w => w.length > 2 && !GENERIC_TERMS.has(w)));
       
       // Match by cleaned channel name
       if (id && cleanedIptvName && cleanedXmltvName) {
@@ -159,8 +168,8 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
         }
         // Word-by-word match for non-generic terms
         else {
-          const matchingWords = iptvWords.filter(word => xmltvWords.includes(word));
-          if (matchingWords.length >= 2 || (matchingWords.length === 1 && iptvWords.length === 1)) {
+          const matchingWords = Array.from(iptvWords).filter(word => xmltvWords.has(word));
+          if (matchingWords.length >= 2 || (matchingWords.length === 1 && iptvWords.size === 1)) {
             // Score by number of matching specific words
             score = matchingWords.length * 10;
           }
@@ -174,7 +183,6 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
         if (score > bestMatchScore) {
           bestMatchScore = score;
           targetChannelId = id;
-          console.log(`✅ Matched channel: "${channelName}" -> "${displayName}" (ID: ${id}, score: ${score.toFixed(1)})`);
         }
       }
     });
@@ -182,7 +190,6 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
     // If no channel name match, try direct ID match
     if (!targetChannelId) {
       targetChannelId = channelId.toString();
-      console.log(`⚠️ No name match for "${channelName}", using ID: ${targetChannelId}`);
     }
     
     // Find programme elements for this channel only
@@ -216,7 +223,6 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
       }
     });
     
-    console.log(`📺 Filtered ${programs.length} programs for channel "${channelName || channelId}" (matched XMLTV channel: ${targetChannelId})`);
   } catch (error) {
     console.error('Failed to parse external EPG:', error);
   }
@@ -235,7 +241,9 @@ const parseXMLTVTime = (timeStr: string): number => {
   const minute = Number.parseInt(cleaned.substring(10, 12));
   const second = Number.parseInt(cleaned.substring(12, 14));
   
-  return Math.floor(new Date(year, month, day, hour, minute, second).getTime() / 1000);
+  const timestamp = Math.floor(new Date(year, month, day, hour, minute, second).getTime() / 1000);
+  
+  return timestamp;
 };
 
 export const fetchExternalEPG = async (
@@ -254,16 +262,13 @@ export const fetchExternalEPG = async (
     let programs: StalkerEPG[];
     
     if (cached && (now - cached.timestamp) < CACHE_TTL_MS) {
-      console.log(`💾 Using cached EPG for channel ${channelId} (age: ${Math.round((now - cached.timestamp) / 1000)}s)`);
       programs = cached.data;
     } else {
-      console.log(`🌍 Fetching external EPG from: ${url}`);
-      
       // Use Tauri HTTP to bypass CORS
       const response = await invoke<string>('stalker_request', {
         url: url,
         method: 'GET',
-        headers: ['Accept: application/xml', 'Accept-Encoding: gzip, deflate'],
+        headers: ['Accept: application/xml'],
         body: null,
       });
       
@@ -277,7 +282,6 @@ export const fetchExternalEPG = async (
       
       // Cache the results
       epgCache.set(cacheKey, { data: programs, timestamp: now });
-      console.log(`✅ Cached ${programs.length} programs for channel ${channelId}`);
     }
     
     // Filter by time range if provided
