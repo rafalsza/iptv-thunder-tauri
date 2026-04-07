@@ -17,8 +17,11 @@ export const usePlayer = (client: StalkerClient) => {
   const abortRef = useRef<AbortController | null>(null);
 
   const play = async (channel: StalkerChannel, queryClient: QueryClient, vodFlag: boolean = false, resumePos: number = 0, movieId?: string) => {
+    console.log('🎬 play() called for channel:', channel.id, channel.name);
+    
     // Cancel any previous request
     if (abortRef.current) {
+      console.log('🎬 Aborting previous request');
       abortRef.current.abort();
     }
     abortRef.current = new AbortController();
@@ -38,7 +41,7 @@ export const usePlayer = (client: StalkerClient) => {
       const url = await queryClient.fetchQuery({
         queryKey: ['stream', channel.id, accountId],
         queryFn: () => client.getStreamUrl(channel.cmd),
-        staleTime: 0, // Always get fresh URL
+        staleTime: 2 * 60 * 1000, // Use cache for 2 minutes (allows prefetch to work)
       });
 
       setCurrent({ 

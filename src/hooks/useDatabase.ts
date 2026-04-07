@@ -224,20 +224,41 @@ export async function getVodCount(portalId: string, genre?: string): Promise<num
   return result[0]?.count || 0;
 }
 
-// Series API (with transaction support)
+// Series API (with transaction support + diffing)
 export async function saveSeries(seriesList: Series[], portalId: string, categoryId?: string): Promise<void> {
   const now = Date.now();
 
   if (seriesList.length === 0) return;
 
+  // 🛡️ Get existing items for this category to avoid unnecessary writes
+  const existingItems = await getSeries(portalId, categoryId, 10000);
+  const existingMap = new Map(existingItems.map(s => [s.id, s]));
+
+  // Filter only new or changed items
+  const itemsToSave = seriesList.filter(s => {
+    const existing = existingMap.get(s.id);
+    if (!existing) return true; // New item
+    // Changed if name or added date differs (quick check)
+    const addedChanged = s.added !== existing.added;
+    const nameChanged = s.name !== existing.name;
+    return addedChanged || nameChanged;
+  });
+
+  if (itemsToSave.length === 0) {
+    console.log('[DB] No series changes, skipping save');
+    return;
+  }
+
+  console.log(`[DB] Saving ${itemsToSave.length}/${seriesList.length} series (diff)`);
+
   await withTransaction(async (db) => {
-    for (let i = 0; i < seriesList.length; i += BATCH_SIZE) {
-      const chunk = seriesList.slice(i, i + BATCH_SIZE);
-      const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+    for (let i = 0; i < itemsToSave.length; i += BATCH_SIZE) {
+      const chunk = itemsToSave.slice(i, i + BATCH_SIZE);
+      const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
 
       const query = `
         INSERT INTO series
-          (id, portal_id, name, description, poster_url, year, rating, genre, category_id, added, updated_at)
+          (id, portal_id, name, description, poster_url, year, rating, genre, category_id, cmd, added, updated_at)
         VALUES ${placeholders}
         ON CONFLICT(id, portal_id) DO UPDATE SET
           name = excluded.name,
@@ -247,6 +268,7 @@ export async function saveSeries(seriesList: Series[], portalId: string, categor
           rating = excluded.rating,
           genre = excluded.genre,
           category_id = excluded.category_id,
+          cmd = excluded.cmd,
           added = excluded.added,
           updated_at = excluded.updated_at
       `;
@@ -266,6 +288,7 @@ export async function saveSeries(seriesList: Series[], portalId: string, categor
           s.rating || null,
           s.genre || null,
           categoryId || s.categoryId || null,
+          s.cmd || null,
           s.added ? Number(s.added) : null,
           now
         ];
@@ -309,6 +332,7 @@ export async function getSeries(portalId: string, categoryId?: string, limit?: n
     genre: row.genre,
     categoryId: row.category_id,
     added: row.added,
+    cmd: row.cmd,
   }));
 }
 export async function saveEpg(epgData: EpgEntry[], portalId: string): Promise<void> {
@@ -702,6 +726,7 @@ export interface Series {
   genre?: string;
   categoryId?: string;
   added?: number;
+  cmd?: string;
 }
 
 interface DbSeries {
@@ -714,6 +739,7 @@ interface DbSeries {
   rating: number;
   genre: string;
   category_id: string;
+  cmd: string;
   added: number;
   updated_at: number;
 }

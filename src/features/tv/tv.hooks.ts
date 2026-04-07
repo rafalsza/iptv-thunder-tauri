@@ -1,7 +1,7 @@
 // =========================
 // 🪝 MODERN TV HOOKS with Cache
 // =========================
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel } from '@/types';
@@ -13,17 +13,11 @@ import { getChannelEPG, getEPGTimeRange } from '@/features/epg/epg.api';
 export const useChannels = (client: StalkerClient, genreId?: string) => {
   const accountId = client?.['account']?.id || 'default';
   
-  const isEnabled = !!client && !!genreId;
-  console.log('📺 useChannels - genreId:', genreId, 'client exists:', !!client, 'isEnabled:', isEnabled);
-  
   const query = useQuery({
     queryKey: ['channels', accountId, genreId],
     queryFn: async () => {
-      console.log('📺 Fetching channels for genre:', genreId);
       if (!genreId || genreId === '*') {
-        const result = await client.getAllChannels();
-        console.log('📺 Got all channels:', result.length);
-        return result;
+        return await client.getAllChannels();
       }
       
       const allChannels: StalkerChannel[] = [];
@@ -37,8 +31,7 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
         hasMore = result.hasMore;
         page++;
       }
-      
-      console.log('📺 Total channels fetched:', allChannels.length);
+
       return allChannels;
     },
     staleTime: 5 * 60 * 1000,
@@ -97,8 +90,6 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
 
     prefetchBatch();
   }, [query.data, client, accountId, cacheStore]);
-
-  console.log('📺 useChannels - query.data:', query.data?.length, 'isLoading:', query.isLoading);
   
   return {
     ...query,
@@ -114,17 +105,12 @@ export const useChannelCategories = (client: StalkerClient) => {
   const cachedData = cacheStore.getPortalData(accountId)?.channelCategories;
   const isCacheReady = cacheStore.isHydrated;
   
-  console.log('📺 useChannelCategories - client:', !!client, 'accountId:', accountId, 'cachedData:', cachedData?.length, 'isCacheReady:', isCacheReady);
-  
   const enabled = !!client && (!isCacheReady || !cachedData || cachedData.length === 0);
-  console.log('📺 useChannelCategories - enabled:', enabled);
   
   const query = useQuery({
     queryKey: ['channel-categories', accountId],
     queryFn: async () => {
-      console.log('📺 useChannelCategories - fetching from API...');
       const result = await client.getGenres();
-      console.log('📺 useChannelCategories - got:', result.length, 'categories');
       cacheStore.setChannelCategories(accountId, result);
       return result;
     },
@@ -133,8 +119,6 @@ export const useChannelCategories = (client: StalkerClient) => {
     enabled: enabled,
     placeholderData: cachedData, // Use as placeholder, not initial
   });
-  
-  console.log('📺 useChannelCategories - query.data:', query.data?.length, 'query.isLoading:', query.isLoading, 'query.error:', query.error);
   
   return {
     ...query,
@@ -146,13 +130,33 @@ export const useChannelCategories = (client: StalkerClient) => {
 // Prefetch stream URL
 export const usePrefetchStream = (client: StalkerClient) => {
   const queryClient = useQueryClient();
+  const prefetchedRef = useRef<Set<string>>(new Set());
+  const accountId = client?.['account']?.id || 'default';
   
   return (channel: StalkerChannel) => {
-    if (channel.cmd) {
-      queryClient.prefetchQuery({
-        queryKey: ['stream', channel.id],
-        queryFn: () => client.getStreamUrl(channel.cmd),
-      });
+    if (!channel.cmd) return;
+    
+    const channelId = String(channel.id);
+    const queryKey = ['stream', channel.id, accountId];
+    
+    // Skip if already prefetched this channel
+    if (prefetchedRef.current.has(channelId)) {
+      return;
     }
+    
+    // Check if already cached in queryClient
+    const cached = queryClient.getQueryData(queryKey);
+    if (cached) {
+      prefetchedRef.current.add(channelId);
+      return;
+    }
+    
+    console.log('📥 Prefetching stream for:', channel.name);
+    prefetchedRef.current.add(channelId);
+    
+    queryClient.prefetchQuery({
+      queryKey,
+      queryFn: () => client.getStreamUrl(channel.cmd),
+    });
   };
 };

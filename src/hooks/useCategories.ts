@@ -160,7 +160,6 @@ export async function clearAllCategoriesCache(): Promise<void> {
   try {
     const db = await getDB();
     await db.execute(`DELETE FROM categories`);
-    console.log('[Categories] All cache cleared');
   } catch (error) {
     console.error('[Categories] Error clearing cache:', error);
     throw error;

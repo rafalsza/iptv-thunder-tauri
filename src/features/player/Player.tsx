@@ -84,6 +84,7 @@ export const Player: React.FC<PlayerProps> = ({
   const allUrlsRef        = useRef<string[]>([url, ...fallbackUrls]);
   const connTimeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLoadingRef      = useRef(false); // Guard against concurrent loadUrl calls
 
   // Forward refs — allow timer callbacks to call latest function versions
   // without those functions being in any dep array.
@@ -174,7 +175,17 @@ export const Player: React.FC<PlayerProps> = ({
 
   // ── Core load function ────────────────────────────────────────────────────────
   const loadUrl = useCallback(async (streamUrl: string, urlIdx: number, retry: number) => {
-    if (!isMountedRef.current) return;
+    // Guard against concurrent calls
+    if (isLoadingRef.current) {
+      console.log('⏭️ loadUrl skipped - already loading');
+      return;
+    }
+    isLoadingRef.current = true;
+
+    if (!isMountedRef.current) {
+      isLoadingRef.current = false;
+      return;
+    }
 
     clearAllTimers();
     await safeDestroyMpv();
@@ -264,6 +275,8 @@ export const Player: React.FC<PlayerProps> = ({
       setUsingMpv(false);
       setStreamState('dead');
       setErrorMsg('MPV initialization failed. Native player required.');
+    } finally {
+      isLoadingRef.current = false;
     }
 
   }, []); // ← intentionally empty — uses only refs, never stale
@@ -316,7 +329,12 @@ export const Player: React.FC<PlayerProps> = ({
   // ── Initial load — fires ONCE per url change ──────────────────────────────────
   // loadUrl is called via ref so it's not a dependency.
   useEffect(() => {
-    console.log('🔁 url changed →', url.substring(0, 60));
+    // Skip if already loading (prevents duplicate calls from StrictMode or rapid url changes)
+    if (isLoadingRef.current) {
+      console.log('⏭️ Initial load skipped - already loading');
+      return;
+    }
+    
     allUrlsRef.current = getRankedUrls();
     currentIdxRef.current = 0;
     retryCountRef.current = 0;
@@ -325,6 +343,11 @@ export const Player: React.FC<PlayerProps> = ({
     setTimeout(() => {
       loadUrlRef.current?.(allUrlsRef.current[0], 0, 0);
     }, 50);
+    
+    // Cleanup: reset loading flag when URL changes (unmount or new url)
+    return () => {
+      isLoadingRef.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
@@ -525,7 +548,12 @@ export const Player: React.FC<PlayerProps> = ({
               {videoParams?.width && videoParams?.height && (
                 <span className="text-sm px-3 py-1 rounded-full flex-shrink-0"
                   style={{ background: '#3b82f622', color: '#3b82f6', border: '1px solid #3b82f644' }}>
-                  {videoParams.width}x{videoParams.height}{videoParams.fps ? ` @ ${Math.round(videoParams.fps)}fps` : ''}
+                  {videoParams.height >= 4320 ? '8K' :
+                    videoParams.height >= 2160 ? '4K' :
+                    videoParams.height >= 1440 ? 'QHD' :
+                    videoParams.height >= 1080 ? 'FHD' :
+                    videoParams.height >= 720 ? 'HD' :
+                    `${videoParams.width}x${videoParams.height}`}
                 </span>
               )}
             </div>

@@ -11,7 +11,7 @@ let initPromise: Promise<Database> | null = null;
 let writeQueue: Promise<unknown> = Promise.resolve();
 
 export const DB_PATH = 'sqlite:iptv_data.db';
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 /**
  * Queue a write operation with retry logic
@@ -139,10 +139,31 @@ async function runMigrations(db: Database): Promise<void> {
     await migrateToV2(db);
   }
   
+  if (currentVersion < 3) {
+    await migrateToV3(db);
+  }
+  
   // Update version
   await db.execute('DELETE FROM schema_version');
   await db.execute('INSERT INTO schema_version (version) VALUES (?)', [CURRENT_SCHEMA_VERSION]);
   console.log(`[DB] Schema updated to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
+async function migrateToV3(db: Database): Promise<void> {
+  console.log('[DB] Running migration to v3...');
+  
+  // Add cmd column to series table for stream URL caching
+  try {
+    const tableInfo = await db.select<{name: string}[]>(`PRAGMA table_info(series)`);
+    const columns = new Set(tableInfo.map(c => c.name));
+    
+    if (!columns.has('cmd')) {
+      console.log('[DB] Migration: Adding cmd to series');
+      await db.execute(`ALTER TABLE series ADD COLUMN cmd TEXT`);
+    }
+  } catch (e) {
+    console.log('[DB] Migration skip series cmd:', e);
+  }
 }
 
 async function migrateToV1(_db: Database): Promise<void> {
@@ -280,6 +301,7 @@ async function initSeriesTables(db: Database): Promise<void> {
       rating TEXT,
       genre TEXT,
       category_id TEXT,
+      cmd TEXT,
       added INTEGER,
       updated_at INTEGER,
       PRIMARY KEY (id, portal_id)

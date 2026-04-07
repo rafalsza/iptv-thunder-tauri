@@ -1,7 +1,7 @@
 // =========================
 // 📺 TV LIST (UI)
 // =========================
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useCallback } from 'react';
 import { useChannels, usePrefetchStream } from './tv.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
@@ -30,6 +30,33 @@ export const TVList: React.FC<TVListProps> = ({
   const preload = usePrefetchStream(client);
   const { isItemFavorite, toggleItemFavorite } = useFavorites(accountId);
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'live');
+
+  // Debounce refs
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPreloadedRef = useRef<string | null>(null);
+  const prefetchCountRef = useRef(0);
+  const MAX_PREFETCHES = 10;
+
+  // Debounced prefetch - waits 300ms and limits total prefetches
+  const debouncedPreload = useCallback((channel: StalkerChannel) => {
+    const channelId = String(channel.id);
+    
+    // Skip if already preloaded this channel
+    if (lastPreloadedRef.current === channelId) return;
+    
+    // Skip if reached max prefetches (prevents spamming server)
+    if (prefetchCountRef.current >= MAX_PREFETCHES) return;
+
+    // Clear previous timeout
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+    // Set new timeout (300ms debounce)
+    timeoutRef.current = setTimeout(() => {
+      preload(channel);
+      lastPreloadedRef.current = channelId;
+      prefetchCountRef.current++;
+    }, 300);
+  }, [preload]);
 
   const filtered = useMemo(() =>
     allChannels.filter((c: StalkerChannel) => 
@@ -91,7 +118,7 @@ export const TVList: React.FC<TVListProps> = ({
           {filtered.map((channel: StalkerChannel) => (
           <div
             key={channel.id}
-            onMouseEnter={() => preload(channel)}
+            onMouseEnter={() => debouncedPreload(channel)}
             onClick={() => onChannelSelect(channel)}
             className="p-3 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700 hover:border-blue-500 transition-all"
           >
@@ -107,11 +134,11 @@ export const TVList: React.FC<TVListProps> = ({
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
-                  toggleItemFavorite('live', channel.id);
+                  toggleItemFavorite('live', String(channel.id));
                 }}
                 className="ml-2 text-lg hover:scale-110 transition-transform"
               >
-                {isItemFavorite('live', channel.id) ? '❤️' : '🤍'}
+                {isItemFavorite('live', String(channel.id)) ? '❤️' : '🤍'}
               </button>
             </div>
             {!!channel.logo && (

@@ -53,6 +53,15 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     (f) => f.type === 'series' && String(f.item_id) === String(series.id)
   );
 
+  // Dodaj useEffect do śledzenia zmian w ulubionych
+  useEffect(() => {
+    console.log('💙 Favorites updated:', favorites.length, 'items');
+    const found = favorites.find(f => f.type === 'series' && String(f.item_id) === String(series.id));
+    if (found) {
+      console.log('💙 Series is favorite:', found);
+    }
+  }, [favorites, series.id]);
+
   // Grupowanie odcinków według sezonu
   const episodesBySeason = useMemo(() => {
     const grouped: Record<string, StalkerVOD[]> = {};
@@ -114,7 +123,9 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
   const handleToggleFavorite = () => {
     const posterUrl = series.poster || series.logo || '';
-    toggleItemFavorite('series', series.id, {
+    const seriesId = String(series.id);
+    console.log('💙 Toggling favorite for series:', seriesId, 'Current isFavorite:', isFavorite);
+    toggleItemFavorite('series', seriesId, {
       name: series.name,
       poster: posterUrl,
       cmd: series.cmd,
@@ -166,7 +177,11 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
             {/* Tagi */}
             <div className="flex flex-wrap gap-3 mb-6">
               {series.year && <span className="px-4 py-1 bg-slate-700 rounded-lg text-sm text-white">{series.year}</span>}
-              {series.genre && <span className="px-4 py-1 bg-slate-700 rounded-lg text-sm text-white">{series.genre}</span>}
+              {(series.genre || seriesInfo?.series?.genre) && (
+                <span className="px-4 py-1 bg-slate-700 rounded-lg text-sm text-white">
+                  {series.genre || seriesInfo?.series?.genre}
+                </span>
+              )}
               {seasons.length > 0 && (
                 <span className="px-4 py-1 bg-blue-600/80 rounded-lg text-sm text-white">
                   {seasons.length} {seasons.length === 1 ? 'Sezon' : 'Sezony'}
@@ -180,31 +195,35 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
             </div>
 
             {/* Opis */}
-            {(series.description || series.genres_str) && (
+            {(series.description || series.genres_str || seriesInfo?.series?.genres_str) && (
               <div className="mb-8">
-                {series.genres_str && (
+                {(series.genres_str || seriesInfo?.series?.genres_str) && (
                   <p className="text-slate-400 text-sm mb-2">
-                    <span className="text-slate-300 font-medium">Gatunek:</span> {series.genres_str}
+                    <span className="text-slate-300 font-medium">Gatunek:</span> {series.genres_str || seriesInfo?.series?.genres_str}
                   </p>
                 )}
-                {series.description && (
-                  <p className="text-slate-300 leading-relaxed">{series.description}</p>
+                {(series.description || seriesInfo?.series?.description) && (
+                  <p className="text-slate-300 leading-relaxed">{series.description || seriesInfo?.series?.description}</p>
                 )}
               </div>
             )}
 
             {/* Aktorzy i Reżyser */}
-            {actorsList.length > 0 && (
+            {(actorsList.length > 0 || seriesInfo?.series?.actors) && (
               <div className="mb-6">
                 <p className="text-slate-400 text-sm mb-1">Obsada</p>
-                <p className="text-slate-200">{actorsList.join(', ')}</p>
+                <p className="text-slate-200">
+                  {actorsList.length > 0 ? actorsList.join(', ') : seriesInfo?.series?.actors}
+                </p>
               </div>
             )}
 
-            {directorsList.length > 0 && (
+            {(directorsList.length > 0 || seriesInfo?.series?.director) && (
               <div className="mb-8">
                 <p className="text-slate-400 text-sm mb-1">Reżyseria</p>
-                <p className="text-slate-200">{directorsList.join(', ')}</p>
+                <p className="text-slate-200">
+                  {directorsList.length > 0 ? directorsList.join(', ') : seriesInfo?.series?.director}
+                </p>
               </div>
             )}
 
@@ -229,7 +248,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors"
               >
                 <Heart className={isFavorite ? 'fill-red-500 text-red-500' : 'text-white'} />
-                {isFavorite ? '' : 'Dodaj do ulubionych'}
+                {isFavorite ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
               </button>
             </div>
           </div>

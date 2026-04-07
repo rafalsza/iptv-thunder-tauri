@@ -35,12 +35,10 @@ export const FavoriteCategoriesList: React.FC<FavoriteCategoriesListProps> = ({
     retry: 2,
   });
 
-  // Filtrowanie tylko ulubionych kategorii
   const favoriteCategoriesList = useMemo(() =>
     categories.filter(category => favoriteCategories.includes(String(category.id))),
   [categories, favoriteCategories]);
 
-  // Dodatkowe filtrowanie na podstawie wyszukiwania
   const filteredCategories = useMemo(() =>
     favoriteCategoriesList.filter(category =>
       category.title.toLowerCase().includes(search.toLowerCase())

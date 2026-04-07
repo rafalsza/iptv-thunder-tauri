@@ -364,7 +364,8 @@ export function useFavorites(accountId: string) {
       isFavorite: boolean; 
       metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any };
     }) => {
-      await toggleFavorite(accountId, type, itemId, isFavorite, metadata);
+      // Ensure itemId is string
+      await toggleFavorite(accountId, type, String(itemId), isFavorite, metadata);
     },
     // Optimistic update
     onMutate: async (vars) => {
@@ -372,13 +373,14 @@ export function useFavorites(accountId: string) {
       const prev = queryClient.getQueryData<FavoriteItem[]>(['favorites', accountId]);
       
       queryClient.setQueryData(['favorites', accountId], (old: FavoriteItem[] = []) => {
+        const itemIdStr = String(vars.itemId);
         if (vars.isFavorite) {
           return [...old, {
             id: Date.now(), // temp id
             account_id: accountId,
             kind: 'item',
             type: vars.type,
-            item_id: vars.itemId,
+            item_id: itemIdStr,
             parent_id: vars.metadata?.parent_id,
             name: vars.metadata?.name || 'Unknown',
             poster: vars.metadata?.poster,
@@ -389,7 +391,7 @@ export function useFavorites(accountId: string) {
             created_at: Date.now(),
           }];
         } else {
-          return old.filter(f => !(f.type === vars.type && f.item_id === vars.itemId));
+          return old.filter(f => !(f.type === vars.type && String(f.item_id) === itemIdStr));
         }
       });
       

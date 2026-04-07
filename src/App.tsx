@@ -108,11 +108,10 @@ function AppInner({ }: AppProps) {
         queryKey: ['series', episode.cmd, episode.episode],
         queryFn: async () => {
           const response = await client._makeRequest({
-            type: 'vod',
             action: 'create_link',
             cmd: episode.cmd,
-            series: '1',
-            episode: String(episode.episode || '1'),
+            type: 'vod',
+            series: String(episode.episode || '1'),
             disable_ad: '0',
             download: '0',
             mac: client.getAccount().mac,
@@ -120,28 +119,24 @@ function AppInner({ }: AppProps) {
           });
           const streamUrl = response?.js?.cmd || response.data?.js?.cmd;
           if (!streamUrl) throw new Error('No stream URL in response');
-          return streamUrl;
+          return streamUrl.replace(/^ffmpeg\s+/, '');
         },
         staleTime: 0,
       });
-      
-      console.log('✅ Got stream URL:', url?.substring(0, 100));
       
       if (url?.includes('stream=.')) {
         console.error('❌ Invalid stream URL');
         throw new Error('Invalid stream URL from server');
       }
       
-      // Prefetch stream (HEAD request) to warm up connection before MPV
-      try {
-        await fetch(url, { method: 'HEAD', mode: 'no-cors' });
-      } catch (e) {
-        console.log('⚠️ Prefetch failed (non-critical):', e);
-      }
+      // Build full episode name: "Gra o Tron - Season 7 - Odcinek 3"
+      const seriesName = selectedSeries?.name || '';
+      const episodeName = episode.episodeName || episode.name || `Odcinek ${episode.episode}`;
+      const fullName = seriesName ? `${seriesName} - ${episodeName}` : episodeName;
       
       seriesPlayer.setMedia({
         url,
-        name: episode.name || `Odcinek ${episode.episode}`,
+        name: fullName,
         channelId: Number.parseInt(String(episode.id)),
         isVod: true,
         resumePosition: resumePosition || 0
@@ -431,7 +426,7 @@ function AppInner({ }: AppProps) {
               client={client!}
               accountId={activePortal.id}
               search={search}
-              onSeriesSelect={handleEpisodeSelect}
+              onSeriesSelect={handleSeriesSelect}
             />
           </Suspense>
         );
