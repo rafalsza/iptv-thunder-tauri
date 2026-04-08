@@ -174,8 +174,6 @@ export class StalkerClient {
     if (!profile) {
       throw new Error('Get profile failed');
     }
-    
-    console.log(`✅ Profile loaded | Status: ${profile.status} | Name: ${profile.login || 'Unknown'} | MAC: ${this.account.mac}`);
 
     return profile;
   }
@@ -197,8 +195,6 @@ export class StalkerClient {
       await this.handshake();
     }
 
-    console.log(`🎬 getVODListWithPagination called with categoryId: "${categoryId}"`);
-
     const params: any = {
       type: 'vod',
       action: 'get_ordered_list',
@@ -211,46 +207,26 @@ export class StalkerClient {
     };
 
     if (categoryId && categoryId !== '*' && categoryId !== '') {
-      // Użyj 'category' według dokumentacji API VOD
       params.category = categoryId;
-      console.log(`🎬 Added category param: ${categoryId}`);
-      console.log(`🎬 Full params:`, params);
-    } else {
-      console.log(`🎬 No category filter applied - getting all VODs`);
-      console.log(`🎬 Full params:`, params);
     }
-
-    console.log(`🎬 Making request to: portal.php`);
-    console.log(`🎬 Request params:`, params);
 
     const response = await this._makeRequest(params);
 
-    console.log(`🎬 API Response:`, response);
-
-    const vods = this.useTauri ? 
-      (response?.js?.data || response?.js || []) : 
+    const vods = this.useTauri ?
+      (response?.js?.data || response?.js || []) :
       (response.data?.js?.data || response.data?.js || []);
-    
-    console.log(`🎬 Extracted VODs:`, vods);
-    console.log(`🎬 VODs count:`, vods.length);
-    
-    // Debug: Check first VOD item structure
-    if (vods.length > 0 && page === 1) {
-      console.log('🎬 Processing VOD items, count:', vods.length);
-    }
-    
-    const totalItems = this.useTauri ? 
-      response?.js?.total_items : 
+
+    const totalItems = this.useTauri ?
+      response?.js?.total_items :
       response.data?.js?.total_items || 0;
-    const maxPageItems = this.useTauri ? 
-      response?.js?.max_page_items : 
-      response.data?.js?.max_page_items;
-    const currentPage = this.useTauri ? 
-      response?.js?.cur_page : 
-      response.data?.js?.cur_page || page;
+    const maxPageItems = this.useTauri ?
+      response?.js?.max_page_items :
+      response.data?.js?.max_page_items || 30;
+    // API returns cur_page: 0 for all pages, so we calculate currentPage ourselves
+    const currentPage = page - 1; // 0-based indexing
 
     const totalPages = Math.ceil(totalItems / maxPageItems);
-    const hasMore = currentPage < totalPages - 1; // 0-based indexing
+    const hasMore = currentPage < totalPages - 1 && vods.length > 0;
 
     return {
       items: vods.map((vod: StalkerVOD) => ({
@@ -322,8 +298,6 @@ export class StalkerClient {
       mac: this.account.mac,
       JsHttpRequest: '1-xml',
     };
-
-    console.log(`🎬 Fetching VOD categories with params:`, params);
     const response = await this._makeRequest(params);
     const categories = this.useTauri ? (response?.js || []) : (response.data?.js || []);
     

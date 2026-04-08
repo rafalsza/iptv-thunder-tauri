@@ -5,7 +5,7 @@ import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-quer
 import React from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerVOD } from '@/types';
-import { saveVod } from '@/hooks/useDatabase';
+import { saveVod, getVod } from '@/hooks/useDatabase';
 import { useCategories } from '@/hooks/useCategories';
 
 async function fetchAllMovies(
@@ -46,60 +46,108 @@ async function fetchAllMovies(
   for (const item of allItems) {
     map.set(String(item.id), item);
   }
-  return Array.from(map.values());
+  const uniqueItems = Array.from(map.values());
+
+  // Sort by added date - newest first
+  uniqueItems.sort((a, b) => {
+    const dateA = a.added ? new Date(a.added).getTime() : 0;
+    const dateB = b.added ? new Date(b.added).getTime() : 0;
+    return dateB - dateA;
+  });
+
+  return uniqueItems;
 }
 
 // ─── Main hook ────────────────────────────────────────────────────────────────
 
 export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
   const accountId = client?.getAccount()?.id ?? 'default';
+  const queryClient = useQueryClient();
+  const enabled = !!categoryId && !!accountId && accountId !== 'default';
+  // Clear stale cache on category change
+  React.useEffect(() => {
+    if (categoryId && accountId) {
+      const key = ['movies-all', accountId, categoryId];
+      const cached = queryClient.getQueryData(key);
+      if (cached !== undefined) {
+        queryClient.removeQueries({ queryKey: key, exact: true });
+      }
+    }
+  }, [categoryId, accountId, queryClient]);
 
   const query = useQuery({
     queryKey: ['movies-all', accountId, categoryId],
     queryFn: async () => {
       if (!categoryId) return [];
 
-      console.log('🎬 Fetching all movies for category:', categoryId);
+      // Try SQLite cache first
+      const cached = await getVod(accountId, categoryId);
+
+      if (cached.length > 0) {
+        // Return cached data immediately, sorted by added date
+        return cached
+          .map(v => ({
+            id: Number(v.id),
+            name: v.name,
+            description: v.description,
+            logo: v.posterUrl,
+            poster: v.posterUrl,
+            cmd: v.streamUrl,
+            year: v.year,
+            rating_imdb: v.rating,
+            rating_kinopoisk: undefined,
+            length: v.duration,
+            genre: v.genre,
+            director: v.director,
+            actors: v.actors,
+            added: v.added ? new Date(v.added).toISOString() : undefined,
+            censored: false,
+          } as StalkerVOD))
+          .sort((a, b) => {
+            const dateA = a.added ? new Date(a.added).getTime() : 0;
+            const dateB = b.added ? new Date(b.added).getTime() : 0;
+            return dateB - dateA;
+          });
+      }
+
+      // No cache - fetch from API
       const items = await fetchAllMovies(client, categoryId);
-      console.log('🎬 Total movies loaded:', items.length);
+
+      // Save to SQLite for future use
+      if (items.length > 0) {
+        saveVod(
+          items.map(vod => ({
+            id: vod.id?.toString() || '',
+            name: vod.name || '',
+            description: vod.description || '',
+            posterUrl: vod.logo || vod.poster || '',
+            streamUrl: vod.cmd || '',
+            year: vod.year,
+            rating: vod.rating_imdb || vod.rating_kinopoisk,
+            duration: vod.length,
+            genre: vod.genres_str || '',
+            director: vod.director,
+            actors: vod.actors,
+            added: vod.added ? new Date(vod.added).getTime() : undefined,
+          })),
+          accountId,
+        ).catch(err => console.error('[DB] Failed to save VOD:', err));
+      }
 
       return items;
     },
-    enabled: !!categoryId && !!accountId && accountId !== 'default',
-    staleTime: 10 * 60 * 1000,
-    gcTime:    30 * 60 * 1000,
+    enabled,
+    staleTime: 30 * 60 * 1000, // 30 min - cache considered fresh
+    gcTime: 24 * 60 * 60 * 1000,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
+    refetchOnMount: true, // Background refresh on mount if stale
   });
-
-  // Persist to SQLite when data successfully loads
-  React.useEffect(() => {
-    if (query.data && categoryId) {
-      saveVod(
-        query.data.map(vod => ({
-          id: vod.id?.toString() || '',
-          name: vod.name || '',
-          description: vod.description || '',
-          posterUrl: vod.logo || vod.poster || '',
-          streamUrl: vod.cmd || '',
-          year: vod.year,
-          rating: vod.rating_imdb || vod.rating_kinopoisk,
-          duration: vod.length,
-          genre: categoryId,
-          director: vod.director,
-          actors: vod.actors,
-          added: vod.added ? new Date(vod.added).getTime() : undefined,
-        })),
-        accountId,
-      ).catch(err => console.error('[DB] Failed to save VOD:', err));
-    }
-  }, [query.data, categoryId, accountId]);
 
   return {
     ...query,
-    movies: query.data ?? [],
+    movies: query.data || [],
   };
 };
 
@@ -112,9 +160,7 @@ export const useMovieCategories = (client: StalkerClient) => {
     'vod',
     portalId,
     async () => {
-      console.log('🎬 Fetching VOD categories from API…');
       const result = await client.getVODCategories();
-      console.log('🎬 Got', result.length, 'VOD categories');
       return result;
     },
   );

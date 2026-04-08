@@ -228,6 +228,17 @@ export const MovieList: React.FC<MovieListProps> = ({
       name: movie.name,
       poster: posterUrl,
       cmd: movie.cmd,
+      extra: {
+        description: movie.description,
+        year: movie.year,
+        genre: movie.genres_str,
+        actors: movie.actors,
+        director: movie.director,
+        country: movie.country,
+        length: movie.length,
+        rating_imdb: movie.rating_imdb,
+        rating_kinopoisk: movie.rating_kinopoisk,
+      },
     });
   }, [toggleItemFavorite]);
 

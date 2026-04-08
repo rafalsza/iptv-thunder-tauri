@@ -133,9 +133,9 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                   {movie.year}
                 </span>
               )}
-              {movie.genre && (
+              {movie.genres_str && movie.genres_str.trim() && (
                 <span className="px-3 py-1 bg-slate-700/80 rounded-md text-sm">
-                  {movie.genre}
+                  {movie.genres_str}
                 </span>
               )}
               {movie.rating_imdb && (
@@ -214,6 +214,17 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                   name: movie.name,
                   poster: movie.poster,
                   cmd: movie.cmd,
+                  extra: {
+                    description: movie.description,
+                    year: movie.year,
+                    genre: movie.genres_str,
+                    actors: movie.actors,
+                    director: movie.director,
+                    country: movie.country,
+                    length: movie.length,
+                    rating_imdb: movie.rating_imdb,
+                    rating_kinopoisk: movie.rating_kinopoisk,
+                  },
                 })}
                 className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-lg font-semibold hover:bg-slate-600 transition-colors"
               >

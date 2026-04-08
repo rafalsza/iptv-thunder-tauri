@@ -1,7 +1,7 @@
 // =========================
 // 🧠 COMPLETE APP WITH ALL FEATURES
 // =========================
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, useRef, Suspense, lazy } from 'react';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
@@ -60,6 +60,9 @@ function AppInner({ }: AppProps) {
   const [selectedMovie, setSelectedMovie] = useState<StalkerVOD | null>(null);
   const [selectedSeries, setSelectedSeries] = useState<StalkerVOD | null>(null);
   
+  // Track previous view for back navigation
+  const previousViewRef = useRef<ActiveView>('movies');
+  
   const activePortal = usePortalsStore(s =>
     s.portals.find(p => p.id === s.activePortalId) ?? null
   );
@@ -77,6 +80,7 @@ function AppInner({ }: AppProps) {
   };
 
   const handleMovieSelect = (movie: StalkerVOD) => {
+    previousViewRef.current = activeView;
     setSelectedMovie(movie);
     setActiveView('movie-details');
   };
@@ -87,17 +91,18 @@ function AppInner({ }: AppProps) {
 
   const handleMovieBack = () => {
     setSelectedMovie(null);
-    setActiveView('movies');
+    setActiveView(previousViewRef.current);
   };
 
   const handleSeriesSelect = (series: StalkerVOD) => {
+    previousViewRef.current = activeView;
     setSelectedSeries(series);
     setActiveView('series-details');
   };
 
   const handleSeriesBack = () => {
     setSelectedSeries(null);
-    setActiveView('series');
+    setActiveView(previousViewRef.current);
   };
 
   const handleEpisodeSelect = async (episode: StalkerVOD, resumePosition?: number) => {
@@ -365,7 +370,6 @@ function AppInner({ }: AppProps) {
         return (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Movies...</div>}>
             <FavoriteMoviesList
-              client={client!}
               accountId={activePortal.id}
               search={search}
               onMovieSelect={handleMovieSelect}
@@ -423,7 +427,6 @@ function AppInner({ }: AppProps) {
         return (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Series...</div>}>
             <FavoriteSeriesList
-              client={client!}
               accountId={activePortal.id}
               search={search}
               onSeriesSelect={handleSeriesSelect}

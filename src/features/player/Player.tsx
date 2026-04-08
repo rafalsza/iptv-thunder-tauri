@@ -4,7 +4,6 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useStreamStore } from '@/store/stream.store';
-import { rankUrls } from './ranking';
 import { useCurrentProgram, useChannelEPG } from '@/features/epg/epg.hooks';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
@@ -17,7 +16,7 @@ import {
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const MAX_RETRIES_PER_URL = 3;
-const DEAD_TIMEOUT_MS = 25_000;
+const DEAD_TIMEOUT_MS = 12_000;
 
 const OBSERVED_PROPERTIES = [
   ['pause', 'flag'],
@@ -57,18 +56,22 @@ interface PlayerProps {
 
 interface UseMpvPlayerReturn {
   streamState: StreamState;
+  setStreamState: (state: StreamState) => void;
   currentUrlIdx: number;
   totalRetries: number;
   statusMsg: string;
+  setStatusMsg: (msg: string) => void;
   errorMsg: string | null;
   usingMpv: boolean;
   videoParams: { width?: number; height?: number; fps?: number } | null;
   currentTime: number;
   duration: number;
+  isPaused: boolean;
   isLoading: boolean;
-  handleManualRetry: () => void;
+  handleManualRetry: (preserveIndex?: boolean) => void;
   loadUrl: (streamUrl: string, urlIdx: number, retry: number) => Promise<void>;
-  cleanup: () => void;
+  cleanup: () => Promise<void>;
+  getRankedUrls: () => string[];
 }
 
 function useMpvPlayer(
@@ -87,6 +90,22 @@ function useMpvPlayer(
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLoadingRef = useRef(false);
   const currentTimeRef = useRef(0);
+  const lastTimeUpdateRef = useRef(Date.now());
+  const unobserveRef = useRef<(() => void) | null>(null);
+  const requestIdRef = useRef(0);
+  const lastRetryRef = useRef(0);
+  const lastManualRetryRef = useRef(0);
+
+  // Smart retry metrics per URL
+  interface UrlMetrics {
+    latency: number;      // avg latency in ms
+    lastSuccess: number;  // timestamp of last success
+    errorCount: number;   // consecutive errors
+    successCount: number; // total successes
+    lastUsed: number;     // last attempt timestamp
+  }
+  const urlMetricsRef = useRef<Map<string, UrlMetrics>>(new Map());
+  const urlStartTimeRef = useRef<Map<string, number>>(new Map());
 
   const [streamState, setStreamState] = useState<StreamState>('connecting');
   const [currentUrlIdx, setCurrentUrlIdx] = useState(0);
@@ -97,13 +116,89 @@ function useMpvPlayer(
   const [videoParams, setVideoParams] = useState<{ width?: number; height?: number; fps?: number } | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
-  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
 
+  // Smart URL ranking based on metrics + stream store
   const getRankedUrls = useCallback(() => {
-    const store = useStreamStore.getState();
-    return rankUrls([url, ...fallbackUrls], store.streams);
+    const urls = [url, ...fallbackUrls];
+    const now = Date.now();
+
+    // Calculate score for each URL (lower = better)
+    const scored = urls.map(u => {
+      const metrics = urlMetricsRef.current.get(u);
+      if (!metrics) {
+        // New URL - give it a chance with medium score
+        return { url: u, score: 100 };
+      }
+
+      // Factors (lower score = better priority)
+      const latencyScore = Math.min(metrics.latency / 100, 500); // 0-500ms
+      // Logarithmic decay - less aggressive than linear, more natural
+      const recencyPenalty = Math.log1p((now - metrics.lastSuccess) / 60000);
+      const errorPenalty = metrics.errorCount * 50; // 50 points per consecutive error
+      const successBonus = metrics.successCount > 0 ? -20 : 0; // bonus for proven URLs
+
+      const score = latencyScore + recencyPenalty + errorPenalty + successBonus;
+      return { url: u, score };
+    });
+
+    // Sort by score (ascending)
+    scored.sort((a, b) => a.score - b.score);
+    return scored.map(s => s.url);
   }, [url, fallbackUrls]);
+
+  // Update metrics on URL attempt start
+  const recordUrlStart = useCallback((streamUrl: string) => {
+    urlStartTimeRef.current.set(streamUrl, Date.now());
+  }, []);
+
+  // Update metrics on success
+  const recordUrlSuccess = useCallback((streamUrl: string) => {
+    const startTime = urlStartTimeRef.current.get(streamUrl);
+    const latency = startTime ? Date.now() - startTime : 0;
+
+    const existing = urlMetricsRef.current.get(streamUrl);
+    if (existing) {
+      // Exponential moving average for latency
+      const newLatency = existing.latency * 0.7 + latency * 0.3;
+      urlMetricsRef.current.set(streamUrl, {
+        latency: newLatency,
+        lastSuccess: Date.now(),
+        errorCount: 0,
+        successCount: existing.successCount + 1,
+        lastUsed: Date.now(),
+      });
+    } else {
+      urlMetricsRef.current.set(streamUrl, {
+        latency,
+        lastSuccess: Date.now(),
+        errorCount: 0,
+        successCount: 1,
+        lastUsed: Date.now(),
+      });
+    }
+  }, []);
+
+  // Update metrics on failure
+  const recordUrlFailure = useCallback((streamUrl: string) => {
+    const existing = urlMetricsRef.current.get(streamUrl);
+    if (existing) {
+      urlMetricsRef.current.set(streamUrl, {
+        ...existing,
+        errorCount: existing.errorCount + 1,
+        lastUsed: Date.now(),
+      });
+    } else {
+      urlMetricsRef.current.set(streamUrl, {
+        latency: 5000, // assume high latency
+        lastSuccess: 0,
+        errorCount: 1,
+        successCount: 0,
+        lastUsed: Date.now(),
+      });
+    }
+  }, []);
 
   const clearAllTimers = useCallback(() => {
     if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
@@ -117,36 +212,69 @@ function useMpvPlayer(
     console.log('🛑 MPV destroyed');
   }, []);
 
-  const cleanup = useCallback(() => {
-    isMountedRef.current = false;
+  const cleanup = useCallback(async () => {
     if (isVod && movieId && currentTimeRef.current > 30) {
       setPosition(movieId, currentTimeRef.current);
     }
-    clearAllTimers();
-    if (mpvRunningRef.current) {
-      destroy().catch(() => {});
-      mpvRunningRef.current = false;
+    if (unobserveRef.current) {
+      unobserveRef.current();
+      unobserveRef.current = null;
     }
-  }, [isVod, movieId, setPosition, clearAllTimers]);
+    clearAllTimers();
+    isLoadingRef.current = false;
+    await safeDestroyMpv();
+  }, [isVod, movieId, setPosition, clearAllTimers, safeDestroyMpv]);
 
 
   const streamStateRef = useRef(streamState);
   useEffect(() => { streamStateRef.current = streamState; }, [streamState]);
 
   const loadUrl = useCallback(async (streamUrl: string, urlIdx: number, retry: number) => {
+    const requestId = ++requestIdRef.current;
+
     if (isLoadingRef.current) {
       console.log('⏭️ loadUrl skipped - already loading');
       return;
     }
     isLoadingRef.current = true;
 
-    if (!isMountedRef.current) {
+    // Guard against double/unordered resets
+    const finishLoading = () => {
+      if (!isLoadingRef.current) return false;
       isLoadingRef.current = false;
+      return true;
+    };
+
+    // Track if onSuccess was already called for this request (avoids stale ref issues)
+    const successCalledRef = { current: false };
+
+    if (!isMountedRef.current) {
+      finishLoading();
       return;
     }
 
+    // Capture requestId before async operations
+    const localRequestId = requestId;
+
     clearAllTimers();
+    if (unobserveRef.current) {
+      unobserveRef.current();
+      unobserveRef.current = null;
+    }
+
+    // Check before destroy - newer request may have started
+    if (localRequestId !== requestIdRef.current) {
+      finishLoading();
+      return;
+    }
+
     await safeDestroyMpv();
+
+    // Check after destroy - newer request may have started MPV
+    if (localRequestId !== requestIdRef.current) {
+      finishLoading();
+      return;
+    }
 
     setStreamState('connecting');
     setStatusMsg(
@@ -157,16 +285,57 @@ function useMpvPlayer(
     );
     setErrorMsg(null);
 
+    recordUrlStart(streamUrl);
+
     connTimeoutRef.current = setTimeout(() => {
       if (!isMountedRef.current) return;
+      if (requestId !== requestIdRef.current) return;
+
       console.warn('⏱ Connection timeout');
+      recordUrlFailure(streamUrl);
+
+      finishLoading();
+      retryCountRef.current++;
+      setTotalRetries(prev => prev + 1);
+
+      if (retryCountRef.current < MAX_RETRIES_PER_URL) {
+        console.log('🔄 Retrying same URL, attempt:', retryCountRef.current);
+        setStreamState('retrying');
+        loadUrl(streamUrl, urlIdx, retryCountRef.current);
+      } else {
+        currentIdxRef.current++;
+
+        if (currentIdxRef.current < allUrlsRef.current.length) {
+          setStatusMsg(`Switching to fallback ${currentIdxRef.current}…`);
+          retryCountRef.current = 0;
+          setCurrentUrlIdx(currentIdxRef.current);
+
+          loadUrl(
+            allUrlsRef.current[currentIdxRef.current],
+            currentIdxRef.current,
+            0
+          );
+        } else {
+          console.log('💀 All URLs exhausted');
+          finishLoading();
+          setStreamState('dead');
+          setErrorMsg('All streams failed');
+        }
+      }
     }, DEAD_TIMEOUT_MS);
 
     const onSuccess = () => {
       if (!isMountedRef.current) return;
-      clearTimeout(connTimeoutRef.current!);
-      connTimeoutRef.current = null;
+      if (requestId !== requestIdRef.current) return;
+      if (successCalledRef.current) return; // already succeeded
+      successCalledRef.current = true;
+
+      if (connTimeoutRef.current) {
+        clearTimeout(connTimeoutRef.current);
+        connTimeoutRef.current = null;
+      }
       useStreamStore.getState().success(streamUrl);
+      recordUrlSuccess(streamUrl);
       retryCountRef.current = 0;
       setStreamState('playing');
       setStatusMsg('');
@@ -186,6 +355,8 @@ function useMpvPlayer(
           'demuxer-readahead-secs': '2',
           'demuxer-max-bytes': '50MiB',
           'demuxer-max-back-bytes': '20MiB',
+          'network-timeout': '10',
+          'stream-buffer-size': '4M',
           'stream-lavf-o': [
             'reconnect=1',
             'reconnect_streamed=1',
@@ -201,21 +372,49 @@ function useMpvPlayer(
       mpvRunningRef.current = true;
       console.log('✅ MPV init done');
 
-      await observeProperties(OBSERVED_PROPERTIES, ({ name, data }) => {
-        if (name === 'time-pos' && typeof data === 'number') {
-          setCurrentTime(data);
-          if (data > 0 && streamStateRef.current === 'connecting') {
-            if (isMountedRef.current) onSuccess();
+      // Guard: new request may have started during init
+      if (localRequestId !== requestIdRef.current) {
+        console.log('⏭️ Request changed during init, destroying fresh MPV');
+        await safeDestroyMpv();
+        finishLoading();
+        return;
+      }
+
+      let unobserve: (() => void) | null = null;
+
+      try {
+        unobserve = await observeProperties(OBSERVED_PROPERTIES, ({ name, data }) => {
+          if (!isMountedRef.current) return;
+
+          if (name === 'time-pos' && typeof data === 'number') {
+            setCurrentTime(data);
+            currentTimeRef.current = data;
+            lastTimeUpdateRef.current = Date.now();
           }
-        }
-        if (name === 'duration' && typeof data === 'number') {
-          setDuration(data);
-        }
-        if (name === 'video-params' && data && typeof data === 'object') {
-          const params = data as { w?: number; h?: number; fps?: number };
-          setVideoParams({ width: params.w, height: params.h, fps: params.fps });
-        }
-      });
+          if (name === 'duration' && typeof data === 'number') {
+            setDuration(data);
+          }
+          if (name === 'video-params' && data && typeof data === 'object') {
+            const params = data as { w?: number; h?: number; fps?: number };
+            setVideoParams(prev => {
+              if (prev?.width === params.w && prev?.height === params.h && prev?.fps === params.fps) return prev;
+              return { width: params.w, height: params.h, fps: Math.round(params.fps ?? 0) };
+            });
+            // Video actually started rendering - success!
+            if (!successCalledRef.current) {
+              onSuccess();
+            }
+          }
+          if (name === 'pause' && typeof data === 'boolean') {
+            setIsPaused(data);
+          }
+        });
+        unobserveRef.current = unobserve;
+      } catch (e) {
+        if (unobserve) unobserve();
+        console.error('❌ observeProperties failed:', e);
+        unobserveRef.current = null;
+      }
 
       await command('loadfile', [streamUrl]);
       await setProperty('volume', 80);
@@ -223,53 +422,88 @@ function useMpvPlayer(
 
     } catch (err) {
       console.error('❌ MPV failed:', err);
+      if (requestId !== requestIdRef.current) return;
+      recordUrlFailure(streamUrl);
       mpvRunningRef.current = false;
       setUsingMpv(false);
       setStreamState('dead');
       setErrorMsg('MPV initialization failed. Native player required.');
     } finally {
-      isLoadingRef.current = false;
+      finishLoading();
     }
   }, [clearAllTimers, safeDestroyMpv]);
 
-  const handleManualRetry = useCallback(() => {
+  const handleManualRetry = useCallback((preserveIndex = false) => {
+    // Throttle manual retries to prevent chaos
+    if (Date.now() - lastManualRetryRef.current < 2000) return;
+    lastManualRetryRef.current = Date.now();
+
     allUrlsRef.current = getRankedUrls();
-    currentIdxRef.current = 0;
-    retryCountRef.current = 0;
-    setCurrentUrlIdx(0);
+
+    if (!preserveIndex) {
+      currentIdxRef.current = 0;
+      retryCountRef.current = 0;
+      setCurrentUrlIdx(0);
+    }
+
     setTotalRetries(0);
-    loadUrl(allUrlsRef.current[0], 0, 0);
+    loadUrl(allUrlsRef.current[currentIdxRef.current], currentIdxRef.current, 0);
   }, [getRankedUrls, loadUrl]);
 
   const isLoading = streamState === 'connecting' || streamState === 'retrying' || streamState === 'stalled';
 
+  // Stall detection watchdog
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (streamStateRef.current !== 'playing') return;
+      if (isLoadingRef.current) return; // still loading, don't trigger stall
+      if (!mpvRunningRef.current) return; // MPV not initialized yet
+
+      const now = Date.now();
+      if (now - lastTimeUpdateRef.current > 8000) {
+        // Debounce: prevent spam retry loop (min 10s between stall retries)
+        if (now - lastRetryRef.current < 10000) return;
+        lastRetryRef.current = now;
+
+        console.warn('⚠️ Stream stalled - no time update for 8s');
+        setStreamState('stalled');
+        handleManualRetry(true); // soft retry - preserve current URL index
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [handleManualRetry]);
+
   return {
     streamState,
+    setStreamState,
     currentUrlIdx,
     totalRetries,
     statusMsg,
+    setStatusMsg,
     errorMsg,
     usingMpv,
     videoParams,
     currentTime,
     duration,
+    isPaused,
     isLoading,
     handleManualRetry,
     loadUrl,
     cleanup,
+    getRankedUrls,
   };
 }
 
 // ─── Hook: usePlayerControls ──────────────────────────────────────────────────
 
 interface UsePlayerControlsReturn {
-  isPaused: boolean;
   volume: number;
   isFullscreen: boolean;
   showUi: boolean;
   handleMouseMove: () => void;
   handlePlayPause: () => Promise<void>;
-  handleStop: (onClose: () => void, isVod: boolean, movieId: string | undefined, currentTime: number) => Promise<void>;
+  handleStop: (onClose: () => void) => Promise<void>;
   handleFullscreen: () => Promise<void>;
   handleClose: (onClose: () => void) => Promise<void>;
   handleVolumeChange: (newVol: number) => Promise<void>;
@@ -279,12 +513,12 @@ interface UsePlayerControlsReturn {
 }
 
 function usePlayerControls(): UsePlayerControlsReturn {
-  const [isPaused, setIsPaused] = useState(false);
   const [volume, setVolume] = useState(80);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showUi, setShowUi] = useState(true);
   const uiHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
+  const lastMoveRef = useRef(0);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -292,13 +526,16 @@ function usePlayerControls(): UsePlayerControlsReturn {
   }, []);
 
   const handleMouseMove = useCallback(() => {
-    if (!isFullscreen) return;
+    const now = Date.now();
+    if (now - lastMoveRef.current < 100) return;
+    lastMoveRef.current = now;
+
     setShowUi(true);
     if (uiHideTimerRef.current) clearTimeout(uiHideTimerRef.current);
     uiHideTimerRef.current = setTimeout(() => {
       if (isMountedRef.current) setShowUi(false);
     }, 3000);
-  }, [isFullscreen]);
+  }, []);
 
   const handleFullscreen = useCallback(async () => {
     try {
@@ -328,22 +565,14 @@ function usePlayerControls(): UsePlayerControlsReturn {
   const handlePlayPause = useCallback(async () => {
     try {
       await command('cycle', ['pause']);
-      setIsPaused(p => !p);
     } catch (e) { console.error('Play/Pause failed:', e); }
   }, []);
 
   const handleStop = useCallback(async (
-    onClose: () => void,
-    isVod: boolean,
-    movieId: string | undefined,
-    currentTime: number
+    onClose: () => void
   ) => {
     try {
       await command('stop', []);
-      if (isVod && movieId && currentTime > 30) {
-        const { setPosition } = useResumeStore.getState();
-        setPosition(movieId, currentTime);
-      }
       await exitFullscreen();
       onClose();
     } catch (e) { console.error('Stop failed:', e); }
@@ -370,7 +599,6 @@ function usePlayerControls(): UsePlayerControlsReturn {
   }, []);
 
   return {
-    isPaused,
     volume,
     isFullscreen,
     showUi,
@@ -905,29 +1133,61 @@ export const Player: React.FC<PlayerProps> = ({
   );
 
   const [showEPGModal, setShowEPGModal] = useState(false);
+  const hasResumedRef = useRef(false);
 
   const { data: channelEPG, isLoading: epgLoading } = useChannelEPG(
     client ?? placeholderClient.current, channelId ?? 0, name, 24, !isVod && !!channelId
   );
 
-  // Cleanup on unmount
+  // Cleanup on unmount and before page unload
   useEffect(() => {
-    return () => { mpv.cleanup(); };
+    const handleBeforeUnload = () => {
+      void mpv.cleanup();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      void mpv.cleanup();
+    };
   }, [mpv.cleanup]);
 
   // Initial load on URL change
   useEffect(() => {
-    const ranked = [url, ...fallbackUrls];
-    setTimeout(() => { void mpv.loadUrl(ranked[0], 0, 0); }, 50);
+    hasResumedRef.current = false;
+
+    let cancelled = false;
+
+    // Cleanup old MPV before loading new URL
+    void mpv.cleanup().then(() => {
+      if (cancelled) return;
+
+      // Reset state for new stream
+      mpv.setStreamState('connecting');
+      mpv.setStatusMsg('Connecting…');
+      // Use ranked URLs for smart priority ordering
+      const ranked = mpv.getRankedUrls ? mpv.getRankedUrls() : [url, ...fallbackUrls];
+      void mpv.loadUrl(ranked[0], 0, 0);
+    });
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
-  // Seek to resume position when playing
+  // Seek to resume position when playing and duration is available
+  const { seekTo } = controls;
   useEffect(() => {
-    if (isVod && resumePosition > 0 && mpv.streamState === 'playing') {
-      void controls.seekTo(resumePosition, mpv.duration);
+    if (isVod && resumePosition > 0 && mpv.streamState === 'playing' && mpv.duration > 0 && !hasResumedRef.current) {
+      console.log('▶️ Resume seeking to:', resumePosition, 'duration:', mpv.duration);
+      hasResumedRef.current = true;
+      // Small delay to ensure MPV is fully ready
+      const timer = setTimeout(() => {
+        void seekTo(resumePosition, mpv.duration);
+      }, 500);
+      return () => clearTimeout(timer);
     }
-  }, [isVod, resumePosition, mpv.streamState, mpv.duration, controls]);
+  }, [isVod, resumePosition, mpv.streamState, mpv.duration, seekTo]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -960,7 +1220,7 @@ export const Player: React.FC<PlayerProps> = ({
   };
 
   const handleStop = () => {
-    void controls.handleStop(onClose, isVod, movieId, mpv.currentTime);
+    void controls.handleStop(onClose);
   };
 
   const handleShowEPG = () => {
@@ -999,7 +1259,7 @@ export const Player: React.FC<PlayerProps> = ({
         />
 
         <div className="flex-1 relative overflow-hidden" style={{ background: 'transparent' }}>
-          {(mpv.isLoading || buffering) && (
+          {(mpv.isLoading || buffering) && mpv.streamState !== 'playing' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10 gap-3"
               style={{ background: 'rgba(0,0,0,0.6)' }}>
               <svg className="animate-spin" style={{ width: 36, height: 36 }} viewBox="0 0 24 24" fill="none">
@@ -1024,7 +1284,7 @@ export const Player: React.FC<PlayerProps> = ({
           streamState={mpv.streamState}
           isFullscreen={controls.isFullscreen}
           showUi={controls.showUi}
-          isPaused={controls.isPaused}
+          isPaused={mpv.isPaused}
           volume={controls.volume}
           currentTime={mpv.currentTime}
           duration={mpv.duration}
