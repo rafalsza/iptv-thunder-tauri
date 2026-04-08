@@ -11,8 +11,14 @@ import { useCategories } from '@/hooks/useCategories';
 async function fetchAllMovies(
   client: StalkerClient,
   categoryId: string,
+  signal?: AbortSignal,
 ): Promise<StalkerVOD[]> {
-  const first = await client.getVODListWithPagination(categoryId, 1);
+  // Check if aborted before starting
+  if (signal?.aborted) {
+    throw new Error('Request cancelled');
+  }
+
+  const first = await client.getVODListWithPagination(categoryId, 1, { signal });
 
   if (!first.hasMore || first.items.length === 0) {
     return first.items;
@@ -29,12 +35,15 @@ async function fetchAllMovies(
     // Fast path — parallel fetch of known page range
     const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
     const rest = await Promise.all(
-      pageNums.map(p =>
-        client
-          .getVODListWithPagination(categoryId, p)
+      pageNums.map(p => {
+        if (signal?.aborted) {
+          return Promise.resolve([] as StalkerVOD[]);
+        }
+        return client
+          .getVODListWithPagination(categoryId, p, { signal })
           .then(r => r.items)
-          .catch(() => [] as StalkerVOD[]),
-      ),
+          .catch(() => [] as StalkerVOD[]);
+      }),
     );
     allItems = [...first.items, ...rest.flat()];
   } else {
@@ -77,7 +86,7 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
 
   const query = useQuery({
     queryKey: ['movies-all', accountId, categoryId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!categoryId) return [];
 
       // Try SQLite cache first
@@ -110,8 +119,8 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
           });
       }
 
-      // No cache - fetch from API
-      const items = await fetchAllMovies(client, categoryId);
+      // No cache - fetch from API with abort signal
+      const items = await fetchAllMovies(client, categoryId, signal);
 
       // Save to SQLite for future use
       if (items.length > 0) {
@@ -160,8 +169,7 @@ export const useMovieCategories = (client: StalkerClient) => {
     'vod',
     portalId,
     async () => {
-      const result = await client.getVODCategories();
-      return result;
+      return await client.getVODCategories();
     },
   );
 

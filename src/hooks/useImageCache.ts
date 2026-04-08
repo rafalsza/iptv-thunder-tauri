@@ -328,6 +328,10 @@ export async function fetchAndCacheImage(url: string, signal?: AbortSignal): Pro
     const response = await fetchWithRetry(url, FETCH_TIMEOUT_MS, MAX_RETRIES, signal);
 
     if (!response.ok) {
+      // Don't throw for 404s - they're expected when images don't exist
+      if (response.status === 404) {
+        throw new Error('NOT_FOUND');
+      }
       throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
     }
 
@@ -427,7 +431,11 @@ export async function getImageUrl(url: string, fallbackUrl: string = '/fallback/
       return await fileToDataUrl(await getFilePath(url));
     }
   } catch (e) {
-    console.error('[getImageUrl] Error:', e);
+    // Only log errors that aren't 404s (404s are expected when images don't exist)
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    if (errorMessage !== 'NOT_FOUND' && !errorMessage.includes('404')) {
+      console.error('[getImageUrl] Error:', e);
+    }
     return fallbackUrl;
   }
 }
@@ -593,9 +601,6 @@ export function useImageCache() {
     getCacheStats: useCallback(getCacheStats, []),
     // Utility
     rebuildLruFromFs: useCallback(rebuildLruFromFs, []),
-    // Deprecated
-    /** @deprecated Use getImageUrl instead */
-    getImageBlobUrl: useCallback(getImageBlobUrl, []),
     isImageCached: useCallback(isImageCached, []),
   };
 }

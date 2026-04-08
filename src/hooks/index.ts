@@ -44,9 +44,6 @@ export {
   clearImageCache, getCacheSize, getCacheStats,
   // Utilities
   rebuildLruFromFs,
-  // Deprecated (use getImageUrl instead)
-  /** @deprecated Use getImageUrl instead */
-  getImageBlobUrl,
   /** @deprecated Use getCachedImage instead */
   isImageCached,
 } from './useImageCache';
@@ -59,6 +56,9 @@ export {
   resetSettings, clearSettings,
   type AppSettings
 } from './useSettings';
+
+// 🌐 TRANSLATIONS: Internationalization
+export { useTranslation } from './useTranslation';
 
 // ❤️ FAVORITES: User favorites (channels, movies, series, categories)
 export {

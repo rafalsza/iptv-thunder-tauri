@@ -76,15 +76,9 @@ async function fetchAllSeriesProgressive(
     allItems.push(...result.items);
 
     // 🛡️ Guard: only update if query still active (race condition protection)
-    if (signal?.aborted) {
-      console.log('[Series] Progressive loading aborted - signal');
-      break;
-    }
+    if (signal?.aborted) break;
     const currentData = queryClient.getQueryData(queryKey);
-    if (!currentData) {
-      console.log('[Series] Progressive loading stopped - query inactive');
-      break;
-    }
+    if (!currentData) break;
 
     // 🔥 Update cache progressively (UI updates as new pages arrive)
     queryClient.setQueryData(queryKey, sortAndDedupe(allItems));
@@ -128,27 +122,26 @@ export const useSeriesAll = (client: StalkerClient, categoryId?: string) => {
       const hasCache = cachedItems.length > 0;
 
       if (hasCache) {
-        console.log('✅ Using SQLite cache:', cachedItems.length, 'series for category', categoryId);
         // 🔥 Background refresh (SWR) - silent, no progressive UI updates
+        // Only run once per day (24 hours)
+        const needsRefresh = shouldBackgroundRefresh(accountId, categoryId);
         const queryKey = ['series-all', accountId, categoryId];
-        setIsRefreshing(true);
-        fetchAllSeriesSilent(client, categoryId, signal)
-          .then(items => {
-            // 🛡️ Guard: don't update if user switched category (race condition)
-            if (signal?.aborted) {
-              console.log('[Series] Background refresh aborted, category changed');
-              return;
-            }
-            const currentData = queryClient.getQueryData(queryKey);
-            if (!currentData) {
-              console.log('[Series] Query no longer active, skipping cache update');
-              return;
-            }
-            saveSeriesToDb(items, categoryId, accountId);
-            queryClient.setQueryData(queryKey, items);
-          })
-          .catch(() => {})
-          .finally(() => setIsRefreshing(false));
+
+        if (needsRefresh) {
+          setIsRefreshing(true);
+          fetchAllSeriesSilent(client, categoryId, signal)
+            .then(items => {
+              // 🛡️ Guard: don't update if user switched category (race condition)
+              if (signal?.aborted) return;
+              const currentData = queryClient.getQueryData(queryKey);
+              if (!currentData) return;
+              saveSeriesToDb(items, categoryId, accountId);
+              queryClient.setQueryData(queryKey, items);
+              setLastFetchTime(accountId, categoryId);
+            })
+            .catch(() => {})
+            .finally(() => setIsRefreshing(false));
+        }
         
         // Return cached data mapped to StalkerVOD format
         const sortedItems = [...cachedItems].sort((a, b) => (b.added || 0) - (a.added || 0));
@@ -170,6 +163,7 @@ export const useSeriesAll = (client: StalkerClient, categoryId?: string) => {
       // 2. No cache - fetch with PROGRESSIVE loading (first page shows immediately)
       const items = await fetchAllSeriesProgressive(client, categoryId, accountId, queryClient, signal);
       saveSeriesToDb(items, categoryId, accountId);
+      setLastFetchTime(accountId, categoryId);
       return items;
     },
     enabled: !!categoryId && !!accountId && accountId !== 'default',
@@ -191,17 +185,43 @@ export const useSeriesAll = (client: StalkerClient, categoryId?: string) => {
 const lastSaveTime = new Map<string, number>();
 const SAVE_THROTTLE_MS = 30 * 1000; // 30 seconds
 
+// Background refresh - once per day (24 hours)
+const LAST_FETCH_KEY = 'series_last_fetch';
+const BACKGROUND_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function getLastFetchTime(accountId: string, categoryId: string): number {
+  try {
+    const key = `${LAST_FETCH_KEY}:${accountId}:${categoryId}`;
+    const stored = localStorage.getItem(key);
+    return stored ? Number.parseInt(stored, 10) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setLastFetchTime(accountId: string, categoryId: string): void {
+  try {
+    const key = `${LAST_FETCH_KEY}:${accountId}:${categoryId}`;
+    localStorage.setItem(key, Date.now().toString());
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function shouldBackgroundRefresh(accountId: string, categoryId: string): boolean {
+  const lastFetch = getLastFetchTime(accountId, categoryId);
+  const timeSinceLastFetch = Date.now() - lastFetch;
+  return timeSinceLastFetch >= BACKGROUND_REFRESH_INTERVAL_MS;
+}
+
 // Helper to save series to SQLite (throttled)
 function saveSeriesToDb(items: StalkerVOD[], categoryId: string, accountId: string) {
   const key = `${accountId}:${categoryId}`;
   const now = Date.now();
   const lastSave = lastSaveTime.get(key) || 0;
   
-  if (now - lastSave < SAVE_THROTTLE_MS) {
-    console.log('[DB] Skipping save, too recent:', key);
-    return;
-  }
-  
+  if (now - lastSave < SAVE_THROTTLE_MS) return;
+
   lastSaveTime.set(key, now);
   
   saveSeries(
@@ -219,7 +239,7 @@ function saveSeriesToDb(items: StalkerVOD[], categoryId: string, accountId: stri
     })),
     accountId,
     categoryId,
-  ).catch(err => console.error('[DB] Failed to save series:', err));
+  ).catch(() => {});
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -278,7 +298,12 @@ export const useSeriesInfo = (client: StalkerClient, seriesId: string) => {
 export const useSeriesDetails = (client: StalkerClient, seriesId: string) => {
   return useQuery({
     queryKey: ['series-details', seriesId],
-    queryFn: () => getSeriesDetails(client, seriesId),
+    queryFn: async () => {
+      if (!seriesId) return null;
+      const result = await getSeriesDetails(client, seriesId);
+      // Ensure we always return a value (not undefined) to avoid React Query warnings
+      return result ?? null;
+    },
     enabled: !!seriesId,
     staleTime: 60 * 60 * 1000,
     gcTime:    60 * 60 * 1000,

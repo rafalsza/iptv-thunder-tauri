@@ -30,6 +30,16 @@ let isTableReady = false;
 
 const logger = createLogger('Favorites');
 
+// Shared hook for table initialization
+function useTableReady() {
+  const [ready, setReady] = useState(isTableReady);
+  useEffect(() => {
+    if (isTableReady) return;
+    initFavoritesTable().then(() => setReady(true)).catch(err => logger.error('Error initializing table:', err));
+  }, []);
+  return ready;
+}
+
 // Note: getDB is imported from ./db - unified singleton
 
 // Initialize favorites table
@@ -101,7 +111,9 @@ export async function initFavoritesTable(): Promise<void> {
     } finally {
       isInitializing = false;
     }
-  })();
+  })().finally(() => {
+    initPromise = null;
+  });
 
   return initPromise;
 }
@@ -166,8 +178,8 @@ export async function removeFavorite(
     const normalizedId = itemId.replace(/\.0$/, '');
     // Delete where item_id matches either format (with or without .0)
     await db.execute(
-      "DELETE FROM favorites WHERE account_id = ? AND kind = 'item' AND type = ? AND (item_id = ? OR item_id = ? || '.0')",
-      [accountId, type, normalizedId, normalizedId]
+      "DELETE FROM favorites WHERE account_id = ? AND kind = 'item' AND type = ? AND item_id IN (?, ?)",
+      [accountId, type, normalizedId, `${normalizedId}.0`]
     );
     logger.info('Removed favorite:', { accountId, type, itemId: normalizedId });
   } catch (error) {
@@ -333,19 +345,13 @@ export async function isFavoriteCategory(
 // React Query hook
 export function useFavorites(accountId: string) {
   const queryClient = useQueryClient();
-  const [tableReady, setTableReady] = useState(isTableReady);
-
-  useEffect(() => {
-    initFavoritesTable()
-      .then(() => setTableReady(true))
-      .catch(err => logger.error('Error initializing table:', err));
-  }, []);
+  const tableReady = useTableReady();
 
   const { data: favorites = [], isLoading } = useQuery({
     queryKey: ['favorites', accountId],
     queryFn: () => loadFavorites(accountId),
     enabled: !!accountId && tableReady,
-    staleTime: 0,
+    staleTime: Infinity,
   });
 
   // O(1) lookup Set (items only - kind='item')
@@ -406,7 +412,9 @@ export function useFavorites(accountId: string) {
       
       return { prev };
     },
-    onError: (_, __, context) => {
+    onError: (error, _vars, context) => {
+      logger.error('Toggle mutation error:', error);
+      // Revert optimistic update on error
       if (context?.prev) {
         queryClient.setQueryData(['favorites', accountId], context.prev);
       }
@@ -451,19 +459,13 @@ export function useFavoriteIds(accountId: string, type: 'live' | 'vod' | 'series
 
 export function useFavoriteCategories(accountId: string, type: 'live' | 'vod' | 'series') {
   const queryClient = useQueryClient();
-  const [tableReady, setTableReady] = useState(isTableReady);
-
-  useEffect(() => {
-    initFavoritesTable()
-      .then(() => setTableReady(true))
-      .catch(err => logger.error('Error initializing table:', err));
-  }, []);
+  const tableReady = useTableReady();
 
   const { data: categoryIds = [], isLoading } = useQuery({
     queryKey: ['favorite-categories', accountId, type],
     queryFn: () => loadFavoriteCategories(accountId, type),
     enabled: !!accountId && tableReady,
-    staleTime: 0,
+    staleTime: Infinity,
   });
 
   const toggleCategoryMutation = useMutation({

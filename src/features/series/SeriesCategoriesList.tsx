@@ -5,10 +5,7 @@ import React, { useState, useMemo } from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
 import { useFavoriteCategories } from '@/hooks/useFavorites';
-import { usePortalCacheStore } from '@/store/portalCache.store';
 import { useSeriesCategories } from './series.hooks';
-import { useQueryClient } from '@tanstack/react-query';
-import { clearAllCategoriesCache } from '@/hooks/useCategories';
 
 interface SeriesCategoriesListProps {
   client: StalkerClient;
@@ -24,8 +21,6 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
   const accountId = client?.getAccount?.()?.id || 'default';
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'series');
-  const cacheStore = usePortalCacheStore();
-  const queryClient = useQueryClient();
 
   // Pobieranie kategorii seriali z cache
   const { 
@@ -34,17 +29,6 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
     error, 
     refetch 
   } = useSeriesCategories(client);
-
-  const handleClearCache = async () => {
-    console.log('🧹 Clearing all cache...');
-    cacheStore.clearAllCache();
-    queryClient.clear();
-    // Also clear SQLite categories cache
-    await clearAllCategoriesCache();
-    localStorage.removeItem('portal-data-cache');
-    localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
-    window.location.reload();
-  };
 
   // Filtrowanie kategorii na podstawie wyszukiwania
   const filteredCategories = useMemo(() =>
@@ -75,10 +59,25 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p>Ładowanie kategorii seriali...</p>
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
+        {/* Skeleton Header */}
+        <div className="bg-slate-800 border-b border-slate-700 p-4">
+          <div className="h-6 w-48 bg-slate-700 rounded animate-pulse mb-2"></div>
+          <div className="h-4 w-64 bg-slate-700 rounded animate-pulse"></div>
+        </div>
+        {/* Skeleton Grid */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-slate-700 rounded-lg animate-pulse"></div>
+                  <div className="w-6 h-6 bg-slate-700 rounded-full animate-pulse"></div>
+                </div>
+                <div className="h-5 bg-slate-700 rounded animate-pulse mb-2"></div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -129,13 +128,6 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
       <div className="bg-slate-800 border-b border-slate-700 p-4">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold text-white">Kategorie seriali</h1>
-          <button
-            onClick={handleClearCache}
-            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors"
-            title="Wyczyść cache i odśwież"
-          >
-            🧹 Wyczyść cache
-          </button>
         </div>
         <p className="text-sm text-slate-400">
           Wybierz kategorię, aby zobaczyć dostępne seriale ({filteredCategories.length} kategorii)
@@ -150,7 +142,7 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
       {/* Series Categories Grid */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-          {filteredCategories.map((category, index) => (
+          {filteredCategories.map((category) => (
             <div
               key={category.id}
               onClick={() => handleCategoryClick(category)}
@@ -163,8 +155,6 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
                 }
               `}
             >
-              {/* Index number for debugging */}
-              <div className="absolute top-1 left-1 text-xs text-slate-600">#{index + 1}</div>
               {/* Category Icon/Number */}
               <div className="flex items-center justify-between mb-3">
                 <div className={`
@@ -203,14 +193,6 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
               `}>
                 {category.title}
               </h3>
-
-              {/* Category Description */}
-              <p className="text-slate-400 text-sm mb-2">
-                {category.id === '*' 
-                  ? 'Wszystkie dostępne seriale' 
-                  : `Kategoria seriali #${category.id}`
-                }
-              </p>
 
               {/* Selection Indicator */}
               {selectedCategory?.id === category.id && (

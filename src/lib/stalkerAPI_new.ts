@@ -96,7 +96,6 @@ export class StalkerClient {
 
     // Request debug tracking
     const ctx = createDebugRequestContext('handshake', params);
-    logDebugRequest(ctx);
 
     let response: any;
     
@@ -190,7 +189,7 @@ export class StalkerClient {
   /**
    * Pobieranie listy VOD z informacjami o paginacji
    */
-  async getVODListWithPagination(categoryId: string = '', page: number = 1): Promise<{items: StalkerVOD[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
+  async getVODListWithPagination(categoryId: string = '', page: number = 1, options?: { signal?: AbortSignal }): Promise<{items: StalkerVOD[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
     if (!this.token) {
       await this.handshake();
     }
@@ -210,7 +209,7 @@ export class StalkerClient {
       params.category = categoryId;
     }
 
-    const response = await this._makeRequest(params);
+    const response = await this._makeRequest(params, options?.signal);
 
     const vods = this.useTauri ?
       (response?.js?.data || response?.js || []) :
@@ -242,48 +241,11 @@ export class StalkerClient {
   }
 
   /**
-   * Pobieranie listy VOD
-   */
-  async getVODList(categoryId: string = '', page: number = 1): Promise<StalkerVOD[]> {
-    if (!this.token) {
-      await this.handshake();
-    }
-
-    const params: any = {
-      type: 'vod',
-      action: 'get_ordered_list',
-      p: page.toString(),
-      sortby: 'added',
-      hd: '0',
-      mac: this.account.mac,
-      JsHttpRequest: '1-xml',
-    };
-
-    if (categoryId && categoryId !== '*' && categoryId !== '') {
-    params.category = categoryId;
-    }
-
-    const response = await this._makeRequest(params);
-
-    const vods = this.useTauri ? 
-      (response?.js?.data || response?.js || []) : 
-      (response.data?.js?.data || response.data?.js || []);
-    
-    return vods.map((vod: StalkerVOD) => ({
-      ...vod,
-      logo: this.resolveLogoUrl(vod.logo),
-      poster: this.resolvePosterUrl(vod),
-    }));
-  }
-
-  /**
    * Pobieranie kategorii VOD
    */
   async getVODCategories(): Promise<StalkerGenre[]> {
-    console.log('🎬 getVODCategories called!');
     
     if (!this.token) {
-      console.log('🎬 No token, calling handshake...');
       await this.handshake();
     }
     
@@ -299,11 +261,8 @@ export class StalkerClient {
       JsHttpRequest: '1-xml',
     };
     const response = await this._makeRequest(params);
-    const categories = this.useTauri ? (response?.js || []) : (response.data?.js || []);
     
-    console.log(`✅ VOD Categories: ${categories.length} items`);
-    
-    return categories;
+    return this.useTauri ? (response?.js || []) : (response.data?.js || []);
   }
 
   /**
@@ -377,7 +336,6 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
       throw new Error(`Failed to get VOD stream URL`);
     }
 
-    console.log(`✅ VOD stream URL: ${url.substring(0, 50)}...`);
     return url;
   }
 
@@ -455,9 +413,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     if (this.token) {
       return;
     }
-    console.log('🔐 No token, calling handshake...');
     await this.handshake();
-    console.log('🔐 Handshake completed, token exists:', !!this.token);
   }
 
   /**
@@ -468,7 +424,6 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
       return await operation();
     } catch (error: any) {
       if (error?.message?.includes('403') || error?.message?.includes('Access denied')) {
-        console.log('🔄 Token expired, re-handshaking...');
         await this.handshake();
         return await operation();
       }
@@ -513,8 +468,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
           `${baseUrl}uploads/${fullValue}`,
           `${baseUrl}${fullValue.startsWith('/') ? fullValue.substring(1) : fullValue}`,
         ];
-        
-        console.log('🎬 Returning constructed URL:', possibleUrls[0]);
+
         return possibleUrls[0];
       }
     }
@@ -524,9 +478,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
       const baseUrl = this.account.portalUrl;
       const id = vod.id.toString();
       
-      const idBasedUrl = `${baseUrl}misc/posters/${id}.jpg`;
-      console.log('🎬 No poster field found, using ID-based URL:', idBasedUrl);
-      return idBasedUrl;
+      return `${baseUrl}misc/posters/${id}.jpg`;
     }
     
     return undefined;
@@ -581,8 +533,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
       sortby: 'number',
       hd: '0',
       fav: '0',
-      JsHttpRequest: '1-xml',
-      max_page_items: '30',
+      JsHttpRequest: '1-xml'
     };
 
     if (genreId !== '*') {

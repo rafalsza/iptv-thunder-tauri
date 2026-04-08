@@ -4,6 +4,7 @@
 import React, { useMemo, useRef, useCallback } from 'react';
 import { useChannels, usePrefetchStream } from './tv.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
+import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel, StalkerGenre } from '@/types';
 
@@ -15,17 +16,18 @@ interface TVListProps {
   selectedCategory?: StalkerGenre | null;
 }
 
-export const TVList: React.FC<TVListProps> = ({ 
-  client, 
+export const TVList: React.FC<TVListProps> = ({
+  client,
   accountId,
-  search, 
+  search,
   onChannelSelect,
-  selectedCategory 
+  selectedCategory
 }) => {
-  const { 
+  const { t } = useTranslation();
+  const {
     data: allChannels = [],
     isLoading,
-    error 
+    error
   } = useChannels(client, selectedCategory?.id);
   const preload = usePrefetchStream(client);
   const { isItemFavorite, toggleItemFavorite } = useFavorites(accountId);
@@ -67,7 +69,7 @@ export const TVList: React.FC<TVListProps> = ({
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-lg text-white">Loading channels...</div>
+        <div className="text-lg text-white">{t('loading')}</div>
       </div>
     );
   }
@@ -75,7 +77,7 @@ export const TVList: React.FC<TVListProps> = ({
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-lg text-red-500">Error loading channels</div>
+        <div className="text-lg text-red-500">{t('error')}</div>
       </div>
     );
   }
@@ -92,7 +94,7 @@ export const TVList: React.FC<TVListProps> = ({
             <div className="flex-1">
               <h2 className="text-lg font-bold text-white">{selectedCategory.title}</h2>
               <p className="text-sm text-slate-400">
-                {allChannels.length} kanałów
+                {allChannels.length} {t('channels').toLowerCase()}
               </p>
             </div>
             {/* Favorite Category Button */}
@@ -104,7 +106,7 @@ export const TVList: React.FC<TVListProps> = ({
                 }
               }}
               className="text-xl hover:scale-110 transition-transform p-2 rounded-full hover:bg-slate-700"
-              title={isCategoryFavorite(String(selectedCategory.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+              title={isCategoryFavorite(String(selectedCategory.id)) ? t('removeFromFavorites') : t('addToFavorites')}
             >
               {isCategoryFavorite(String(selectedCategory.id)) ? '❤️' : '🤍'}
             </button>

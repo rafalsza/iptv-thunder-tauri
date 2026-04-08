@@ -1,10 +1,13 @@
-// =========================
-// ⚙️ SETTINGS COMPONENT
-// =========================
 import React, { useState, useEffect } from 'react';
 import { usePortalStore, PREDEFINED_EPG_SERVICES } from '@/store/usePortalStore';
 import { getSettings, setSetting, AppSettings } from '@/hooks/useSettings';
 import { getVersion } from '@tauri-apps/api/app';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Settings2, MonitorPlay, Tv, Wrench, Info, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -13,521 +16,283 @@ interface SettingsProps {
 
 type TabType = 'general' | 'player' | 'epg' | 'advanced' | 'about';
 
-const LANGUAGES = [
-  { code: 'pl', name: 'Polski' },
-  { code: 'en', name: 'English' },
-  { code: 'de', name: 'Deutsch' },
-];
-
-const VIDEO_QUALITIES = [
-  { value: 'auto', name: 'Automatyczna' },
-  { value: '1080p', name: '1080p (Full HD)' },
-  { value: '720p', name: '720p (HD)' },
-  { value: '480p', name: '480p (SD)' },
-];
+const useTabs = () => {
+  const { t } = useTranslation();
+  return [
+    { id: 'general' as const, label: t('general'), icon: <Settings2 className="w-4 h-4" /> },
+    { id: 'player' as const, label: t('player'), icon: <MonitorPlay className="w-4 h-4" /> },
+    { id: 'epg' as const, label: t('epg'), icon: <Tv className="w-4 h-4" /> },
+    { id: 'advanced' as const, label: t('advanced'), icon: <Wrench className="w-4 h-4" /> },
+    { id: 'about' as const, label: t('about'), icon: <Info className="w-4 h-4" /> },
+  ];
+};
 
 export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
+  const { t, currentLang, changeLanguage } = useTranslation();
+  const TABS = useTabs();
+
   const { 
     externalEpgUrl, 
     setExternalEpgUrl, 
     selectedEpgService, 
     setSelectedEpgService,
-    getEffectiveEpgUrl
+    getEffectiveEpgUrl 
   } = usePortalStore();
-  
+
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [version, setVersion] = useState<string>('');
-  
-  // App settings states
   const [settings, setSettings] = useState<AppSettings | null>(null);
+
   const [epgUrl, setEpgUrl] = useState(externalEpgUrl || '');
   const [selectedService, setSelectedService] = useState(selectedEpgService || 'auto');
 
-  // Load settings on open
+  // Load data when modal opens
   useEffect(() => {
     if (isOpen) {
       getSettings().then(setSettings);
       getVersion().then(setVersion);
+      setEpgUrl(externalEpgUrl || '');
+      setSelectedService(selectedEpgService || 'auto');
     }
-  }, [isOpen]);
+  }, [isOpen, externalEpgUrl, selectedEpgService]);
 
   const updateSetting = async <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     await setSetting(key, value);
     setSettings(prev => prev ? { ...prev, [key]: value } : null);
   };
 
-  const TabButton: React.FC<{ tab: TabType; label: string; icon: string }> = ({ tab, label, icon }) => (
-    <button
-      onClick={() => setActiveTab(tab)}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-        activeTab === tab
-          ? 'bg-blue-600 text-white'
-          : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-      }`}
-    >
-      <span>{icon}</span>
-      {label}
-    </button>
-  );
-
-  const selectedServiceObj = PREDEFINED_EPG_SERVICES.find(s => s.id === selectedService);
-  const showCustomUrl = selectedService === 'custom';
-  const effectiveEpgUrl = getEffectiveEpgUrl();
-
   const handleSave = () => {
     setSelectedEpgService(selectedService);
     if (selectedService === 'custom') {
-      const trimmed = epgUrl.trim();
-      setExternalEpgUrl(trimmed || null);
+      setExternalEpgUrl(epgUrl.trim() || null);
     }
     onClose();
   };
 
-  const handleClear = () => {
+  const handleResetEpg = () => {
     setSelectedService('auto');
     setEpgUrl('');
     setSelectedEpgService('auto');
     setExternalEpgUrl(null);
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !settings) return null;
+
+  const effectiveEpgUrl = getEffectiveEpgUrl();
+  const selectedServiceObj = PREDEFINED_EPG_SERVICES.find(s => s.id === selectedService);
+  const showCustomUrl = selectedService === 'custom';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
-      <div className="bg-slate-800 rounded-xl w-full max-w-2xl mx-4 border border-slate-600 flex flex-col max-h-[85vh]">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-600">
-          <h2 className="text-2xl font-semibold text-white">Ustawienia</h2>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-2 p-4 border-b border-slate-600 overflow-x-auto">
-          <TabButton tab="general" label="Ogólne" icon="⚙️" />
-          <TabButton tab="player" label="Player" icon="▶️" />
-          <TabButton tab="epg" label="EPG" icon="📺" />
-          <TabButton tab="advanced" label="Zaawansowane" icon="🔧" />
-          <TabButton tab="about" label="O aplikacji" icon="ℹ️" />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === 'general' && settings && (
-            <div className="space-y-6">
-              {/* Theme */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Motyw
-                </label>
-                <select
-                  value={settings.theme}
-                  onChange={(e) => updateSetting('theme', e.target.value as any)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="dark">Ciemny</option>
-                  <option value="light">Jasny</option>
-                  <option value="system">Systemowy</option>
-                </select>
-              </div>
-
-              {/* Language */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Język
-                </label>
-                <select
-                  value={settings.language}
-                  onChange={(e) => updateSetting('language', e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {LANGUAGES.map(lang => (
-                    <option key={lang.code} value={lang.code}>{lang.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Channel View Mode */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Widok kanałów
-                </label>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => updateSetting('channelViewMode', 'grid')}
-                    className={`flex-1 px-4 py-2 rounded font-medium transition-colors ${
-                      settings.channelViewMode === 'grid'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-                    }`}
-                  >
-                    Siatka
-                  </button>
-                  <button
-                    onClick={() => updateSetting('channelViewMode', 'list')}
-                    className={`flex-1 px-4 py-2 rounded font-medium transition-colors ${
-                      settings.channelViewMode === 'list'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-                    }`}
-                  >
-                    Lista
-                  </button>
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-hidden shadow-2xl"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-8 py-5 border-b border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-blue-600 rounded-2xl flex items-center justify-center">
+                  <Settings2 className="w-5 h-5 text-white" />
                 </div>
+                <h2 className="text-2xl font-semibold text-white">{t('settings')}</h2>
               </div>
-
-              {/* Sidebar Collapsed */}
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-300">
-                  Zwinięty pasek boczny
-                </label>
-                <button
-                  onClick={() => updateSetting('sidebarCollapsed', !settings.sidebarCollapsed)}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    settings.sidebarCollapsed ? 'bg-blue-600' : 'bg-slate-600'
-                  }`}
-                >
-                  <span className={`block w-5 h-5 bg-white rounded-full transition-transform ${
-                    settings.sidebarCollapsed ? 'translate-x-6' : 'translate-x-0.5'
-                  }`} />
-                </button>
-              </div>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-slate-800 rounded-xl transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
             </div>
-          )}
 
-          {activeTab === 'player' && settings && (
-            <div className="space-y-6">
-              {/* Auto Play */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-sm font-medium text-gray-300">
-                    Autoodtwarzanie
-                  </label>
-                  <p className="text-xs text-gray-400">Automatycznie odtwarzaj po wybraniu kanału</p>
-                </div>
-                <button
-                  onClick={() => updateSetting('autoPlay', !settings.autoPlay)}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    settings.autoPlay ? 'bg-blue-600' : 'bg-slate-600'
-                  }`}
-                >
-                  <span className={`block w-5 h-5 bg-white rounded-full transition-transform ${
-                    settings.autoPlay ? 'translate-x-6' : 'translate-x-0.5'
-                  }`} />
-                </button>
-              </div>
-
-              {/* Video Quality */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Jakość wideo
-                </label>
-                <select
-                  value={settings.videoQuality}
-                  onChange={(e) => updateSetting('videoQuality', e.target.value as any)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {VIDEO_QUALITIES.map(q => (
-                    <option key={q.value} value={q.value}>{q.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Volume */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Głośność domyślna: {Math.round(settings.volume * 100)}%
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={settings.volume}
-                  onChange={(e) => updateSetting('volume', parseFloat(e.target.value))}
-                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-              </div>
-
-              {/* Muted by default */}
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-300">
-                  Wyciszony domyślnie
-                </label>
-                <button
-                  onClick={() => updateSetting('muted', !settings.muted)}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    settings.muted ? 'bg-blue-600' : 'bg-slate-600'
-                  }`}
-                >
-                  <span className={`block w-5 h-5 bg-white rounded-full transition-transform ${
-                    settings.muted ? 'translate-x-6' : 'translate-x-0.5'
-                  }`} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'epg' && (
-            <div className="space-y-6">
-              {/* EPG Service Selection */}
-              <div>
-                <label htmlFor="epg-service" className="block text-sm font-medium text-gray-300 mb-2">
-                  Serwis EPG
-                </label>
-                <select
-                  id="epg-service"
-                  value={selectedService}
-                  onChange={(e) => setSelectedService(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {PREDEFINED_EPG_SERVICES.map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name}
-                    </option>
-                  ))}
-                </select>
-                {selectedServiceObj?.description && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    {selectedServiceObj.description}
-                  </p>
-                )}
-              </div>
-
-              {/* Custom URL Input (only for custom) */}
-              {showCustomUrl && (
-                <div>
-                  <label htmlFor="custom-epg-url" className="block text-sm font-medium text-gray-300 mb-2">
-                    Własny URL EPG (XMLTV)
-                  </label>
-                  <input
-                    id="custom-epg-url"
-                    type="url"
-                    value={epgUrl}
-                    onChange={(e) => setEpgUrl(e.target.value)}
-                    placeholder="https://example.com/epg.xml"
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">
-                    Wprowadź URL do pliku XMLTV z programem TV
-                  </p>
-                </div>
-              )}
-
-              {/* Current effective EPG display */}
-              <div className="pt-2 border-t border-slate-600">
-                {effectiveEpgUrl ? (
-                  <div className="text-xs">
-                    <span className="text-gray-400">Aktywny EPG: </span>
-                    <span className="text-green-400 break-all">{effectiveEpgUrl}</span>
-                  </div>
-                ) : (
-                  <div className="text-xs text-blue-400">
-                    Używany EPG z serwera IPTV (automatyczny)
-                  </div>
-                )}
-              </div>
-
-              {settings && (
-                <>
-                  {/* EPG Enabled */}
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-gray-300">
-                      EPG włączone
-                    </label>
+            <div className="flex h-[calc(92vh-73px)]">
+              {/* Sidebar Tabs */}
+              <div className="w-56 border-r border-slate-700 bg-slate-950 p-4 flex-shrink-0">
+                <div className="space-y-1">
+                  {TABS.map((tab) => (
                     <button
-                      onClick={() => updateSetting('epgEnabled', !settings.epgEnabled)}
-                      className={`w-12 h-6 rounded-full transition-colors ${
-                        settings.epgEnabled ? 'bg-blue-600' : 'bg-slate-600'
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all ${
+                        activeTab === tab.id
+                          ? 'bg-slate-800 text-white shadow-sm'
+                          : 'hover:bg-slate-800/50 text-slate-300'
                       }`}
                     >
-                      <span className={`block w-5 h-5 bg-white rounded-full transition-transform ${
-                        settings.epgEnabled ? 'translate-x-6' : 'translate-x-0.5'
-                      }`} />
+                      {tab.icon}
+                      <span className="font-medium">{tab.label as string}</span>
                     </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Content Area */}
+              <div className="flex-1 overflow-y-auto p-8">
+                {activeTab === 'general' && (
+                  <div className="max-w-md space-y-8">
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">{t('theme')}</label>
+                      <Select value={settings.theme} onValueChange={(v) => updateSetting('theme', v as any)}>
+                        <SelectTrigger className="bg-slate-800 border-slate-700">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="dark">{t('dark')}</SelectItem>
+                          <SelectItem value="light">{t('light')}</SelectItem>
+                          <SelectItem value="system">{t('system')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">{t('language')}</label>
+                      <Select value={currentLang} onValueChange={(v) => changeLanguage(v as 'pl' | 'en')}>
+                        <SelectTrigger className="bg-slate-800 border-slate-700">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pl">Polski</SelectItem>
+                          <SelectItem value="en">English</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+                )}
 
-                  {/* EPG Days to Load */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Dni EPG do załadowania: {settings.epgDaysToLoad}
-                    </label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="14"
-                      step="1"
-                      value={settings.epgDaysToLoad}
-                      onChange={(e) => updateSetting('epgDaysToLoad', parseInt(e.target.value))}
-                      className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">
-                      Więcej dni = więcej danych do pobrania
-                    </p>
+                {activeTab === 'player' && (
+                  <div className="max-w-md space-y-8">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-white">{t('autoPlay')}</p>
+                        <p className="text-sm text-slate-400">{t('autoPlayDescription')}</p>
+                      </div>
+                      <Switch checked={settings.autoPlay} onCheckedChange={(v) => updateSetting('autoPlay', v)} />
+                    </div>
+
+                    <div>
+                      <label className="text-sm text-slate-400 mb-3 block">
+                        {t('videoQuality')}
+                      </label>
+                      <Select value={settings.videoQuality} onValueChange={(v) => updateSetting('videoQuality', v as any)}>
+                        <SelectTrigger className="bg-slate-800 border-slate-700">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">{t('auto')}</SelectItem>
+                          <SelectItem value="1080p">{t('1080p')}</SelectItem>
+                          <SelectItem value="720p">{t('720p')}</SelectItem>
+                          <SelectItem value="480p">{t('480p')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="text-sm text-slate-400 mb-3 block">
+                        {t('defaultVolume')} — {Math.round(settings.volume * 100)}%
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={settings.volume}
+                        onChange={(e) => updateSetting('volume', parseFloat(e.target.value))}
+                        className="w-full accent-blue-500"
+                      />
+                    </div>
                   </div>
-                </>
-              )}
-            </div>
-          )}
+                )}
 
-          {activeTab === 'advanced' && settings && (
-            <div className="space-y-6">
-              {/* Request Timeout */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Timeout żądania: {settings.requestTimeout}ms
-                </label>
-                <input
-                  type="range"
-                  min="5000"
-                  max="60000"
-                  step="5000"
-                  value={settings.requestTimeout}
-                  onChange={(e) => updateSetting('requestTimeout', parseInt(e.target.value))}
-                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-              </div>
+                {activeTab === 'epg' && (
+                  <div className="max-w-lg space-y-8">
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">{t('epgSource')}</label>
+                      <Select value={selectedService} onValueChange={setSelectedService}>
+                        <SelectTrigger className="bg-slate-800 border-slate-700">
+                          <SelectValue>{selectedServiceObj?.name}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PREDEFINED_EPG_SERVICES.map(service => (
+                            <SelectItem key={service.id} value={service.id}>
+                              {service.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-              {/* Max Concurrent Requests */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Maksymalna liczba równoczesnych żądań: {settings.maxConcurrentRequests}
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="20"
-                  step="1"
-                  value={settings.maxConcurrentRequests}
-                  onChange={(e) => updateSetting('maxConcurrentRequests', parseInt(e.target.value))}
-                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-              </div>
+                    {showCustomUrl && (
+                      <div>
+                        <label className="text-sm text-slate-400 mb-2 block">{t('customEpgUrl')}</label>
+                        <input
+                          type="url"
+                          value={epgUrl}
+                          onChange={(e) => setEpgUrl(e.target.value)}
+                          placeholder="https://twoj-serwer.pl/epg.xml"
+                          className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-2xl focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    )}
 
-              {/* Image Cache */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-sm font-medium text-gray-300">
-                    Cache obrazów
-                  </label>
-                  <p className="text-xs text-gray-400">Przechowuj pliki graficzne lokalnie</p>
-                </div>
-                <button
-                  onClick={() => updateSetting('imageCacheEnabled', !settings.imageCacheEnabled)}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    settings.imageCacheEnabled ? 'bg-blue-600' : 'bg-slate-600'
-                  }`}
-                >
-                  <span className={`block w-5 h-5 bg-white rounded-full transition-transform ${
-                    settings.imageCacheEnabled ? 'translate-x-6' : 'translate-x-0.5'
-                  }`} />
-                </button>
-              </div>
+                    <div className="pt-4 border-t border-slate-700">
+                      <p className="text-xs text-slate-400 mb-1">Aktualnie używany EPG:</p>
+                      <p className="text-emerald-400 break-all text-sm font-mono">
+                        {effectiveEpgUrl || 'Automatyczny z portalu IPTV'}
+                      </p>
+                    </div>
 
-              {/* Image Cache Max Size */}
-              {settings.imageCacheEnabled && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Maksymalny rozmiar cache: {settings.imageCacheMaxSize} MB
-                  </label>
-                  <input
-                    type="range"
-                    min="100"
-                    max="2000"
-                    step="100"
-                    value={settings.imageCacheMaxSize}
-                    onChange={(e) => updateSetting('imageCacheMaxSize', parseInt(e.target.value))}
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
-                </div>
-              )}
+                    <div className="pt-2">
+                      <Button variant="outline" onClick={handleResetEpg}>
+                        {t('reset')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
-              {/* Hardware Acceleration */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-sm font-medium text-gray-300">
-                    Akceleracja sprzętowa
-                  </label>
-                  <p className="text-xs text-gray-400">Wymaga restartu aplikacji</p>
-                </div>
-                <button
-                  onClick={() => updateSetting('hardwareAcceleration', !settings.hardwareAcceleration)}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    settings.hardwareAcceleration ? 'bg-blue-600' : 'bg-slate-600'
-                  }`}
-                >
-                  <span className={`block w-5 h-5 bg-white rounded-full transition-transform ${
-                    settings.hardwareAcceleration ? 'translate-x-6' : 'translate-x-0.5'
-                  }`} />
-                </button>
-              </div>
+                {activeTab === 'advanced' && (
+                  <div className="max-w-md space-y-8">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Tryb debugowania</p>
+                        <p className="text-sm text-slate-400">Pokazuje szczegółowe logi w konsoli (Debug Mode)</p>
+                      </div>
+                      <Switch checked={settings.debugMode} onCheckedChange={(v) => updateSetting('debugMode', v)} />
+                    </div>
+                  </div>
+                )}
 
-              {/* Debug Mode */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-sm font-medium text-gray-300">
-                    Tryb debugowania
-                  </label>
-                  <p className="text-xs text-gray-400">Pokazuje dodatkowe informacje w konsoli</p>
-                </div>
-                <button
-                  onClick={() => updateSetting('debugMode', !settings.debugMode)}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    settings.debugMode ? 'bg-blue-600' : 'bg-slate-600'
-                  }`}
-                >
-                  <span className={`block w-5 h-5 bg-white rounded-full transition-transform ${
-                    settings.debugMode ? 'translate-x-6' : 'translate-x-0.5'
-                  }`} />
-                </button>
+                {activeTab === 'about' && (
+                  <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+                    <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl flex items-center justify-center text-6xl mb-6 shadow-xl">
+                      📺
+                    </div>
+                    <h3 className="text-3xl font-bold text-white mb-1">IPTV Thunder</h3>
+                    <p className="text-slate-400 mb-8">{t('version')} {version || '—'}</p>
+                    
+                    <div className="text-sm text-slate-500 max-w-xs">
+                      Nowoczesna aplikacja IPTV stworzona z użyciem Tauri + React
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
 
-          {activeTab === 'about' && (
-            <div className="space-y-6 text-center">
-              <div className="py-8">
-                <div className="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-4xl">
-                  📺
-                </div>
-                <h3 className="text-2xl font-bold text-white mb-2">IPTV Thunder</h3>
-                <p className="text-gray-400">Wersja {version || '...'}</p>
-              </div>
-
-              <div className="space-y-3 text-sm text-gray-400">
-                <p>Aplikacja IPTV dla systemu Tauri</p>
-                <p>Wsparcie dla protokołu Stalker Portal</p>
-              </div>
-
-              <div className="pt-4 border-t border-slate-600">
-                <p className="text-xs text-gray-500">
-                  © 2024 IPTV Thunder. Wszelkie prawa zastrzeżone.
-                </p>
-              </div>
+            {/* Footer */}
+            <div className="border-t border-slate-700 px-8 py-5 flex justify-end gap-3">
+              <Button variant="outline" onClick={onClose}>
+                {t('cancel')}
+              </Button>
+              <Button onClick={handleSave}>
+                {t('saveChanges')}
+              </Button>
             </div>
-          )}
+          </motion.div>
         </div>
-
-        {/* Footer */}
-        <div className="flex gap-3 p-6 border-t border-slate-600">
-          <button
-            onClick={handleSave}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-          >
-            Zapisz zmiany
-          </button>
-          <button
-            onClick={handleClear}
-            className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg font-medium transition-colors"
-          >
-            Resetuj
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
-          >
-            Zamknij
-          </button>
-        </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 };

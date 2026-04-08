@@ -178,6 +178,25 @@ export const getSeriesInfo = async (
   // Extract episodes from data.data array
   if (Array.isArray(data?.data)) {
     episodesList = data.data;
+    // If no series info but data has items, extract series metadata from first item
+    if (!seriesInfo?.name && data.data.length > 0) {
+      const firstItem = data.data[0];
+      seriesInfo = {
+        id: firstItem.id,
+        name: firstItem.name,
+        description: firstItem.description,
+        genres_str: firstItem.genres_str,
+        genre: firstItem.genre,
+        director: firstItem.director,
+        actors: firstItem.actors,
+        year: firstItem.year,
+        rating_imdb: firstItem.rating_imdb,
+        rating_kinopoisk: firstItem.rating_kinopoisk,
+        country: firstItem.country,
+        logo: firstItem.screenshot_uri || firstItem.logo,
+        poster: firstItem.screenshot_uri || firstItem.poster,
+      };
+    }
   } else if (data?.data && typeof data.data === 'object') {
     episodesList = Object.values(data.data);
   }
@@ -247,10 +266,6 @@ export const getSeriesInfo = async (
   if (seasons.length === 0 && episodesList.length > 0) {
     seasons.push('1');
   }
-
-  console.log(
-    `📺 Series loaded: "${seriesInfo?.name || 'Unknown'}" | Seasons: ${seasons.length} | Episodes: ${episodesList.length}`
-  );
 
   return {
     series: {

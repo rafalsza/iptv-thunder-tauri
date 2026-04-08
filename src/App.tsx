@@ -10,6 +10,7 @@ import { StalkerChannel, StalkerVOD, StalkerGenre } from '@/types';
 import { usePlayer } from '@/features/player/player.hooks';
 import { Navigation } from '@/components/ui/Navigation';
 import { usePortalsStore } from '@/store/portals.store';
+import { useTranslation } from '@/hooks/useTranslation';
 import { Settings } from '@/features/settings/Settings';
 
 // Lazy load components
@@ -53,6 +54,7 @@ interface AppProps {
 }
 
 function AppInner({ }: AppProps) {
+  const { t } = useTranslation();
   const [activeView, setActiveView] = useState<ActiveView>('portals');
   const [search, setSearch] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -144,6 +146,7 @@ function AppInner({ }: AppProps) {
         name: fullName,
         channelId: Number.parseInt(String(episode.id)),
         isVod: true,
+        movieId: String(episode.id),
         resumePosition: resumePosition || 0
       });
     } catch (error) {
@@ -177,86 +180,86 @@ function AppInner({ }: AppProps) {
   const navigationItems = [
     {
       id: 'portals',
-      label: 'Portale',
+      label: t('managePortals'),
       icon: '🌐',
       active: activeView === 'portals',
       onClick: () => setActiveView('portals'),
     },
     {
       id: 'tv',
-      label: 'Live TV',
+      label: t('channels'),
       icon: '📡',
       active: activeView === 'tv' || activeView === 'categories' || activeView === 'favorite-categories' || activeView === 'favorite-channels',
       disabled: !activePortal,
       subItems: [
         {
           id: 'categories',
-          label: 'Kategorie',
+          label: t('categories'),
           onClick: () => setActiveView('categories'),
         },
         {
           id: 'favorite-categories',
-          label: 'Ulubione kategorie',
+          label: t('favoriteCategories'),
           onClick: () => setActiveView('favorite-categories'),
         },
         {
           id: 'favorite-channels',
-          label: 'Ulubione kanały',
+          label: t('favoriteChannels'),
           onClick: () => setActiveView('favorite-channels'),
         },
       ],
     },
     {
       id: 'movies',
-      label: 'Movies',
+      label: t('movies'),
       icon: '🎬',
       active: activeView === 'movies' || activeView === 'movie-categories' || activeView === 'favorite-movie-categories' || activeView === 'favorite-movies' || activeView === 'movie-details',
       disabled: !activePortal,
       subItems: [
         {
           id: 'movie-categories',
-          label: 'Categories',
+          label: t('categories'),
           onClick: () => setActiveView('movie-categories'),
         },
         {
           id: 'favorite-movie-categories',
-          label: 'Favorites categories',
+          label: t('favoriteCategories'),
           onClick: () => setActiveView('favorite-movie-categories'),
         },
         {
           id: 'favorite-movies',
-          label: 'Favorites movies',
+          label: t('favorites'),
           onClick: () => setActiveView('favorite-movies'),
         },
       ],
     },
     {
       id: 'series',
-      label: 'Series',
+      label: t('series'),
       icon: '📺',
       active: activeView === 'series' || activeView === 'series-categories' || activeView === 'favorite-series-categories' || activeView === 'favorite-series' || activeView === 'series-details',
       disabled: !activePortal,
       subItems: [
         {
           id: 'series-categories',
-          label: 'Categories',
+          label: t('categories'),
           onClick: () => setActiveView('series-categories'),
         },
         {
           id: 'favorite-series-categories',
-          label: 'Favorites categories',
+          label: t('favoriteCategories'),
           onClick: () => setActiveView('favorite-series-categories'),
         },
         {
           id: 'favorite-series',
-          label: 'Favorites series',
+          label: t('favorites'),
           onClick: () => setActiveView('favorite-series'),
         },
       ],
     },
     {
       id: 'settings',
-      label: 'Ustawienia',
+      label: t('settings'),
       icon: '⚙️',
       active: false,
       onClick: () => setIsSettingsOpen(true),
@@ -482,7 +485,7 @@ function AppInner({ }: AppProps) {
             <div className="p-4 border-b border-slate-700 bg-slate-800 bg-opacity-50 backdrop-blur-sm">
               <input
                 type="text"
-                placeholder={`Search ${activeView}...`}
+                placeholder={`${t('search')}...`}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full px-4 py-3 bg-slate-700 bg-opacity-50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

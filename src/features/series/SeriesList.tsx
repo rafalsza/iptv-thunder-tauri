@@ -32,7 +32,6 @@ function setCachedImage(key: string, value: string) {
 
 interface SeriesCardProps {
   series: StalkerVOD;
-  posterUrl: string;
   isSelected: boolean;
   onSelect: (seriesName: string) => void;
   onPrefetch: (series: StalkerVOD) => void;
@@ -41,8 +40,12 @@ interface SeriesCardProps {
 }
 
 const SeriesCard = React.memo<SeriesCardProps>(({
-  series, posterUrl, isSelected, onSelect, onPrefetch, favoriteIds, onToggleFavorite,
+  series, isSelected, onSelect, onPrefetch, favoriteIds, onToggleFavorite,
 }) => {
+  const posterUrl = useMemo(
+    () => series.poster || series.logo || '',
+    [series.poster, series.logo]
+  );
   const [imgSrc, setImgSrc] = useState<string | null>(() => imageCache.get(posterUrl) ?? null);
   const [imgError, setImgError] = useState(false);
   const isFavorite = favoriteIds.has(String(series.id));
@@ -104,13 +107,10 @@ const SeriesCard = React.memo<SeriesCardProps>(({
         </div>
 
         {/* Info */}
-        <div className="p-2 bg-slate-800 flex-shrink-0 min-h-[60px]">
-          <h3 className="font-medium text-sm text-white line-clamp-2 leading-tight mb-1">
+        <div className="p-2 bg-slate-800 flex-shrink-0 min-h-[60px] flex items-center">
+          <h3 className="font-medium text-sm text-white line-clamp-2 leading-tight">
             {seriesName || series.name || 'Unknown'}
           </h3>
-          {series.genre && (
-            <span className="text-xs text-slate-500 truncate block">{series.genre}</span>
-          )}
         </div>
       </div>
     </div>
@@ -215,6 +215,16 @@ export const SeriesList: React.FC<SeriesListProps> = ({
       name: name as string,
       poster: posterUrl,
       cmd: series.cmd,
+      extra: {
+        description: series.description,
+        rating_imdb: series.rating_imdb,
+        rating_kinopoisk: series.rating_kinopoisk,
+        director: series.director,
+        actors: series.actors,
+        year: series.year,
+        genres_str: series.genres_str,
+        country: series.country,
+      },
     });
   }, [toggleItemFavorite]);
 
@@ -322,7 +332,6 @@ export const SeriesList: React.FC<SeriesListProps> = ({
                         <SeriesCard
                           key={seriesId}
                           series={series}
-                          posterUrl={series.poster || series.logo || ''}
                           isSelected={false}
                           onSelect={handleSeriesSelect}
                           onPrefetch={handlePrefetch}

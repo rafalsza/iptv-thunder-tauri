@@ -84,13 +84,11 @@ export async function getDB(): Promise<Database> {
   if (initPromise !== null) return initPromise;
 
   initPromise = (async () => {
-    console.log('[DB] Initializing database...');
     const db = await Database.load(DB_PATH);
     
     // Enable WAL mode for better concurrency (reads don't block writes)
     await db.execute('PRAGMA journal_mode = WAL');
     await db.execute('PRAGMA synchronous = NORMAL');
-    console.log('[DB] WAL mode enabled, synchronous=NORMAL');
     
     // Run migrations first
     await runMigrations(db);
@@ -104,7 +102,6 @@ export async function getDB(): Promise<Database> {
     await initFavoritesTable(db);
     
     dbInstance = db;
-    console.log('[DB] Database initialized successfully');
     return db;
   })();
 
@@ -129,8 +126,6 @@ async function runMigrations(db: Database): Promise<void> {
   );
   const currentVersion = result[0]?.version ?? 0;
   
-  console.log(`[DB] Current schema version: ${currentVersion}`);
-  
   // Run migrations in order
   if (currentVersion < 1) {
     await migrateToV1(db);
@@ -146,7 +141,6 @@ async function runMigrations(db: Database): Promise<void> {
   // Update version
   await db.execute('DELETE FROM schema_version');
   await db.execute('INSERT INTO schema_version (version) VALUES (?)', [CURRENT_SCHEMA_VERSION]);
-  console.log(`[DB] Schema updated to version ${CURRENT_SCHEMA_VERSION}`);
 }
 
 async function migrateToV3(db: Database): Promise<void> {
@@ -158,7 +152,6 @@ async function migrateToV3(db: Database): Promise<void> {
     const columns = new Set(tableInfo.map(c => c.name));
     
     if (!columns.has('cmd')) {
-      console.log('[DB] Migration: Adding cmd to series');
       await db.execute(`ALTER TABLE series ADD COLUMN cmd TEXT`);
     }
   } catch (e) {

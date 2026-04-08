@@ -5,9 +5,7 @@ import React, { useState, useMemo } from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
 import { useFavoriteCategories } from '@/hooks/useFavorites';
-import { usePortalCacheStore } from '@/store/portalCache.store';
 import { useMovieCategories } from './movies.hooks';
-import { useQueryClient } from '@tanstack/react-query';
 
 interface MovieCategoriesListProps {
   client: StalkerClient;
@@ -23,10 +21,7 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
   const accountId = client?.getAccount?.()?.id || 'default';
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'vod');
-  const cacheStore = usePortalCacheStore();
-  const queryClient = useQueryClient();
 
-  // Pobieranie kategorii filmów z cache
   const { 
     data: categories = [], 
     isLoading, 
@@ -34,33 +29,15 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
     refetch 
   } = useMovieCategories(client);
 
-  const handleClearCache = () => {
-    console.log('🧹 Clearing all cache...');
-    cacheStore.clearAllCache();
-    queryClient.clear();
-    localStorage.removeItem('portal-data-cache');
-    window.location.reload();
-  };
-
-  // Filtrowanie kategorii na podstawie wyszukiwania
   const filteredCategories = useMemo(() =>
     categories.filter(category =>
       category.title.toLowerCase().includes(search.toLowerCase())
     ),
   [categories, search]);
 
-  // Debug: log categories count
-  console.log('🎬 Categories total:', categories.length, 'filtered:', filteredCategories.length, 'search:', search);
-
   const handleCategoryClick = (category: StalkerGenre) => {
-    console.log('🎬 MovieCategoriesList - handleCategoryClick called!');
-    console.log('🎬 Selected category:', category);
-    console.log('🎬 About to call onCategorySelect');
-    
     setSelectedCategory(category);
     onCategorySelect(category);
-    
-    console.log('🎬 Called onCategorySelect with:', category);
   };
 
   const handleToggleFavorite = (e: React.MouseEvent, categoryId: string, categoryName?: string) => {
@@ -71,10 +48,25 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p>Ładowanie kategorii filmów...</p>
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
+        {/* Skeleton Header */}
+        <div className="bg-slate-800 border-b border-slate-700 p-4">
+          <div className="h-6 w-48 bg-slate-700 rounded animate-pulse mb-2"></div>
+          <div className="h-4 w-64 bg-slate-700 rounded animate-pulse"></div>
+        </div>
+        {/* Skeleton Grid */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-slate-700 rounded-lg animate-pulse"></div>
+                  <div className="w-6 h-6 bg-slate-700 rounded-full animate-pulse"></div>
+                </div>
+                <div className="h-5 bg-slate-700 rounded animate-pulse mb-2"></div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -125,13 +117,6 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
       <div className="bg-slate-800 border-b border-slate-700 p-4">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold text-white">Kategorie filmów</h1>
-          <button
-            onClick={handleClearCache}
-            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors"
-            title="Wyczyść cache i odśwież"
-          >
-            🧹 Wyczyść cache
-          </button>
         </div>
         <p className="text-sm text-slate-400">
           Wybierz kategorię, aby zobaczyć dostępne filmy ({filteredCategories.length} kategorii)
@@ -159,8 +144,6 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
                 }
               `}
             >
-              {/* Index number for debugging */}
-              <div className="absolute top-1 left-1 text-xs text-slate-600">#{index + 1}</div>
               {/* Category Icon/Number */}
               <div className="flex items-center justify-between mb-3">
                 <div className={`
@@ -199,14 +182,6 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
               `}>
                 {category.title}
               </h3>
-
-              {/* Category Description */}
-              <p className="text-slate-400 text-sm mb-2">
-                {category.id === '*' 
-                  ? 'Wszystkie dostępne filmy' 
-                  : `Kategoria filmów #${category.id}`
-                }
-              </p>
 
               {/* Selection Indicator */}
               {selectedCategory?.id === category.id && (

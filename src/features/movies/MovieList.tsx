@@ -7,6 +7,7 @@ import React, {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useMoviesAll, usePrefetchMovieStream } from './movies.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
+import { useTranslation } from '@/hooks/useTranslation';
 import { usePortalsStore } from '@/store/portals.store';
 import { getImageUrl } from '@/hooks/useImageCache';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
@@ -104,13 +105,10 @@ const MovieCard = React.memo<MovieCardProps>(({
         </div>
 
         {/* Info */}
-        <div className="p-2 bg-slate-800 flex-shrink-0 min-h-[60px]">
-          <h3 className="font-medium text-sm text-white line-clamp-2 leading-tight mb-1">
+        <div className="p-2 bg-slate-800 flex-shrink-0 min-h-[60px] flex items-center">
+          <h3 className="font-medium text-sm text-white line-clamp-2 leading-tight">
             {movie.name}
           </h3>
-          {movie.genre && (
-            <span className="text-xs text-slate-500 truncate block">{movie.genre}</span>
-          )}
         </div>
       </div>
     </div>
@@ -131,6 +129,7 @@ interface MovieListProps {
 export const MovieList: React.FC<MovieListProps> = ({
   client, onMovieSelect, selectedCategory, search,
 }) => {
+  const { t } = useTranslation();
   // ── Data ──────────────────────────────────────────────────────────────────────
   const { movies, isLoading, error } = useMoviesAll(client, selectedCategory?.id);
   const prefetchStream = usePrefetchMovieStream(client);
@@ -251,7 +250,7 @@ export const MovieList: React.FC<MovieListProps> = ({
           <circle cx="12" cy="12" r="10" stroke="#334155" strokeWidth="2" />
           <path d="M12 2 A10 10 0 0 1 22 12" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
         </svg>
-        <p className="text-slate-400 text-sm">Loading movies…</p>
+        <p className="text-slate-400 text-sm">{t('loading')}</p>
       </div>
     );
   }
@@ -259,7 +258,7 @@ export const MovieList: React.FC<MovieListProps> = ({
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <p className="text-red-400">Error loading movies</p>
+        <p className="text-red-400">{t('error')}</p>
       </div>
     );
   }

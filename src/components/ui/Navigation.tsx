@@ -3,6 +3,7 @@
 // =========================
 import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export type NavigationItem = {
   id: string;
@@ -27,6 +28,7 @@ interface NavigationProps {
 }
 
 export const Navigation: React.FC<NavigationProps> = ({ items, accountInfo }) => {
+  const { t } = useTranslation();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   const toggleSubmenu = (itemId: string) => {
@@ -42,15 +44,15 @@ export const Navigation: React.FC<NavigationProps> = ({ items, accountInfo }) =>
             <span className="text-white text-xl">📺</span>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">IPTV Player</h1>
-            <p className="text-xs text-slate-400">Premium Experience</p>
+            <h1 className="text-xl font-bold text-white">IPTV Thunder</h1>
+            <p className="text-xs text-slate-400">{t('player')}</p>
           </div>
         </div>
         {accountInfo && (
           <div className="bg-slate-700 bg-opacity-50 rounded-lg p-3 backdrop-blur-sm border border-slate-600">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-green-400 text-sm">🟢</span>
-              <span className="text-xs font-medium text-green-400">Connected</span>
+              <span className="text-xs font-medium text-green-400">{t('active')}</span>
             </div>
             <p className="text-xs text-slate-300 truncate font-mono">{accountInfo.name}</p>
             <p className="text-xs text-slate-400 truncate font-mono">{accountInfo.portalUrl}</p>

@@ -55,10 +55,25 @@ export const FavoriteSeriesCategoriesList: React.FC<FavoriteSeriesCategoriesList
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p>Ładowanie ulubionych kategorii seriali...</p>
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
+        {/* Skeleton Header */}
+        <div className="bg-slate-800 border-b border-slate-700 p-4">
+          <div className="h-6 w-48 bg-slate-700 rounded animate-pulse mb-2"></div>
+          <div className="h-4 w-64 bg-slate-700 rounded animate-pulse"></div>
+        </div>
+        {/* Skeleton Grid */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-slate-700 rounded-lg animate-pulse"></div>
+                  <div className="w-6 h-6 bg-slate-700 rounded-full animate-pulse"></div>
+                </div>
+                <div className="h-5 bg-slate-700 rounded animate-pulse mb-2"></div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -118,11 +133,11 @@ export const FavoriteSeriesCategoriesList: React.FC<FavoriteSeriesCategoriesList
   }
 
   return (
-    <div className="flex-1 overflow-auto">
-      {/* Header */}
-      <div className="sticky top-0 bg-slate-900 bg-opacity-95 backdrop-blur-sm p-6 pb-4 z-10 border-b border-slate-800">
-        <h1 className="text-2xl font-bold text-white mb-2">Ulubione kategorie seriali</h1>
-        <p className="text-slate-400">
+    <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
+      {/* Header - Unified Style */}
+      <div className="bg-slate-800 border-b border-slate-700 p-4">
+        <h1 className="text-lg font-bold text-white">Ulubione kategorie seriali</h1>
+        <p className="text-sm text-slate-400">
           Twoje ulubione kategorie seriali ({favoriteCategories.length})
         </p>
         {search && (
@@ -133,14 +148,14 @@ export const FavoriteSeriesCategoriesList: React.FC<FavoriteSeriesCategoriesList
       </div>
 
       {/* Favorite Series Categories Grid */}
-      <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
           {filteredCategories.map((category) => (
             <div
               key={category.id}
               onClick={() => handleCategoryClick(category)}
               className={`
-                relative bg-slate-800 bg-opacity-50 backdrop-blur-sm border rounded-xl p-6 
+                relative bg-slate-800 bg-opacity-50 backdrop-blur-sm border rounded-lg p-4
                 cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl
                 ${selectedCategory?.id === category.id 
                   ? 'border-blue-500 bg-blue-500 bg-opacity-10 shadow-lg shadow-blue-500/25' 
@@ -149,9 +164,9 @@ export const FavoriteSeriesCategoriesList: React.FC<FavoriteSeriesCategoriesList
               `}
             >
               {/* Category Icon/Number */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3">
                 <div className={`
-                  w-12 h-12 rounded-lg flex items-center justify-center text-2xl font-bold
+                  w-10 h-10 rounded-lg flex items-center justify-center text-xl font-bold
                   ${selectedCategory?.id === category.id 
                     ? 'bg-blue-500 text-white' 
                     : 'bg-slate-700 text-slate-300'
@@ -181,19 +196,11 @@ export const FavoriteSeriesCategoriesList: React.FC<FavoriteSeriesCategoriesList
 
               {/* Category Title */}
               <h3 className={`
-                font-semibold text-lg mb-2 line-clamp-2
+                font-semibold text-base mb-1 line-clamp-2
                 ${selectedCategory?.id === category.id ? 'text-blue-400' : 'text-white'}
               `}>
                 {category.title}
               </h3>
-
-              {/* Category Description */}
-              <p className="text-slate-400 text-sm mb-4">
-                {category.id === '*' 
-                  ? 'Wszystkie dostępne seriale' 
-                  : `Kategoria seriali #${category.id}`
-                }
-              </p>
 
               {/* Selection Indicator */}
               {selectedCategory?.id === category.id && (
@@ -214,25 +221,19 @@ export const FavoriteSeriesCategoriesList: React.FC<FavoriteSeriesCategoriesList
 
         {/* Selected Category Info */}
         {selectedCategory && (
-          <div className="mt-8 p-6 bg-slate-800 bg-opacity-50 backdrop-blur-sm border border-slate-600 rounded-xl">
+          <div className="mt-6 p-4 bg-slate-800 bg-opacity-50 backdrop-blur-sm border border-slate-600 rounded-lg">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center text-3xl">
+              <div className="w-14 h-14 bg-blue-500 bg-opacity-20 rounded-lg flex items-center justify-center text-2xl">
                 {selectedCategory.id === '*' ? '📺' : '🎭'}
               </div>
               <div className="flex-1">
                 <h3 className="text-xl font-bold text-white mb-1">
                   {selectedCategory.title}
                 </h3>
-                <p className="text-slate-400">
-                  {selectedCategory.id === '*' 
-                    ? 'Wybrano wszystkie seriale' 
-                    : `Wybrano kategorię seriali #${selectedCategory.id}`
-                  }
-                </p>
               </div>
               <button
                 onClick={() => onCategorySelect(selectedCategory)}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
               >
                 <span>📺</span>
                 Pokaż seriale

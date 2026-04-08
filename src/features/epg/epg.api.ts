@@ -51,13 +51,11 @@ export const getChannelsEPG = async (
 export const getCurrentProgram = (epg: StalkerEPG[]): StalkerEPG | null => {
   const now = Math.floor(Date.now() / 1000);
   
-  const result = epg.find(program => {
+  return epg.find(program => {
     const startTime = Number.parseInt(program.start_time);
     const endTime = Number.parseInt(program.end_time);
     return startTime <= now && endTime > now;
   }) || null;
-  
-  return result;
 };
 
 export const getNextProgram = (epg: StalkerEPG[]): StalkerEPG | null => {
@@ -188,9 +186,7 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
     });
     
     // If no channel name match, try direct ID match
-    if (!targetChannelId) {
-      targetChannelId = channelId.toString();
-    }
+    targetChannelId ??= channelId.toString();
     
     // Find programme elements for this channel only
     const programmes = xmlDoc.querySelectorAll('programme');
@@ -218,7 +214,7 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
           start_time: startTime.toString(),
           end_time: stopTime.toString(),
           description: desc,
-          channel_id: typeof channelId === 'number' ? channelId : Number.parseInt(channelId) || 0,
+          channel_id: channelId,
         });
       }
     });

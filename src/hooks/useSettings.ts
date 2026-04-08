@@ -13,7 +13,7 @@ async function getStore(): Promise<Store> {
 export interface AppSettings {
   // UI settings
   theme: 'light' | 'dark' | 'system';
-  language: string;
+  language: 'pl' | 'en';
   sidebarCollapsed: boolean;
   channelViewMode: 'grid' | 'list';
 

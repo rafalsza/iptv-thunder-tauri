@@ -3,15 +3,17 @@
 // =========================
 import React, { useState } from 'react';
 import { usePortalsStore } from '@/store/portals.store';
+import { useTranslation } from '@/hooks/useTranslation';
 import { PortalAccount } from './portals.types';
 import { PortalForm } from './PortalForm';
 import { PortalTest } from './PortalTest';
 
 export const PortalList: React.FC = () => {
+  const { t } = useTranslation();
   const [editingPortal, setEditingPortal] = useState<PortalAccount | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [testingPortal, setTestingPortal] = useState<string | null>(null);
-  
+
   const {
     portals,
     activePortalId,
@@ -29,7 +31,7 @@ export const PortalList: React.FC = () => {
   };
 
   const handleDelete = (portal: PortalAccount) => {
-    if (globalThis.confirm(`Czy na pewno chcesz usunąć portal "${portal.name}"?`)) {
+    if (globalThis.confirm(`${t('delete')} portal "${portal.name}"?`)) {
       deletePortal(portal.id);
     }
   };
@@ -58,9 +60,9 @@ export const PortalList: React.FC = () => {
       {/* Header */}
       <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Zarządzanie Portalami</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">{t('managePortals')}</h1>
           <p className="text-slate-400">
-            Dodawaj, edytuj i zarządzaj swoimi portalami IPTV
+            {t('portalDescription')}
           </p>
         </div>
         <button
@@ -68,7 +70,7 @@ export const PortalList: React.FC = () => {
           className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 flex items-center gap-2 shadow-lg"
         >
           <span className="text-xl">➕</span>
-          Dodaj Portal
+          {t('addPortal')}
         </button>
       </div>
 
@@ -97,7 +99,7 @@ export const PortalList: React.FC = () => {
                   <button
                     onClick={() => handleSetActive(portal)}
                     className="p-2 text-green-400 hover:bg-green-400 hover:bg-opacity-20 rounded-lg transition-colors"
-                    title="Ustaw jako aktywny"
+                    title={t('setActive')}
                   >
                     🎯
                   </button>
@@ -105,21 +107,21 @@ export const PortalList: React.FC = () => {
                 <button
                   onClick={() => setTestingPortal(portal.id)}
                   className="p-2 text-blue-400 hover:bg-blue-400 hover:bg-opacity-20 rounded-lg transition-colors"
-                  title="Testuj połączenie"
+                  title={t('testConnection')}
                 >
                   🔄
                 </button>
                 <button
                   onClick={() => handleEdit(portal)}
                   className="p-2 text-yellow-400 hover:bg-yellow-400 hover:bg-opacity-20 rounded-lg transition-colors"
-                  title="Edytuj"
+                  title={t('edit')}
                 >
                   ✏️
                 </button>
                 <button
                   onClick={() => handleDelete(portal)}
                   className="p-2 text-red-400 hover:bg-red-400 hover:bg-opacity-20 rounded-lg transition-colors"
-                  title="Usuń"
+                  title={t('delete')}
                 >
                   🗑️
                 </button>
@@ -163,7 +165,7 @@ export const PortalList: React.FC = () => {
               {portal.id === activePortalId && (
                 <div className="mt-4">
                   <span className="px-3 py-1 bg-gradient-to-r from-green-600 to-emerald-600 text-white text-sm rounded-full font-medium shadow-lg">
-                    Aktywny Portal
+                    {t('active')}
                   </span>
                 </div>
               )}
@@ -184,16 +186,16 @@ export const PortalList: React.FC = () => {
         <div className="text-center py-12">
           <div className="text-6xl mb-4">🌐</div>
           <h3 className="text-xl font-semibold text-white mb-2">
-            Brak skonfigurowanych portali
+            {t('noResults')}
           </h3>
           <p className="text-slate-400 mb-6">
-            Dodaj swój pierwszy portal IPTV, aby rozpocząć korzystanie z aplikacji
+            {t('portalDescription')}
           </p>
           <button
             onClick={() => setShowForm(true)}
             className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
           >
-            Dodaj Pierwszy Portal
+            {t('addPortal')}
           </button>
         </div>
       )}
