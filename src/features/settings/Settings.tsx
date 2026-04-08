@@ -191,16 +191,17 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     </div>
 
                     <div>
-                      <label className="text-sm text-slate-400 mb-3 block">
+                      <label htmlFor="default-volume" className="text-sm text-slate-400 mb-3 block">
                         {t('defaultVolume')} — {Math.round(settings.volume * 100)}%
                       </label>
                       <input
+                        id="default-volume"
                         type="range"
                         min="0"
                         max="1"
                         step="0.05"
                         value={settings.volume}
-                        onChange={(e) => updateSetting('volume', parseFloat(e.target.value))}
+                        onChange={(e) => updateSetting('volume', Number.parseFloat(e.target.value))}
                         className="w-full accent-blue-500"
                       />
                     </div>
@@ -227,8 +228,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
                     {showCustomUrl && (
                       <div>
-                        <label className="text-sm text-slate-400 mb-2 block">{t('customEpgUrl')}</label>
+                        <label htmlFor="custom-epg-url" className="text-sm text-slate-400 mb-2 block">{t('customEpgUrl')}</label>
                         <input
+                          id="custom-epg-url"
                           type="url"
                           value={epgUrl}
                           onChange={(e) => setEpgUrl(e.target.value)}

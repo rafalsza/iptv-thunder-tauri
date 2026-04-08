@@ -23,12 +23,13 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   onHover,
 }) => {
   const isVOD = type === 'movie' || type === 'series';
+  const isChannel = type === 'channel';
   const vodItem = isVOD ? item as StalkerVOD : null;
-  const channelItem = !isVOD ? item as StalkerChannel : null;
+  const channelItem = isChannel ? item as StalkerChannel : null;
 
   const getPoster = () => {
     if (isVOD && vodItem?.poster) return vodItem.poster;
-    if (!isVOD && channelItem?.logo) return channelItem.logo;
+    if (isChannel && channelItem?.logo) return channelItem.logo;
     return null;
   };
 
@@ -39,7 +40,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
 
   const getSubtitle = () => {
     if (isVOD && vodItem?.year) return vodItem.year.toString();
-    if (!isVOD && channelItem?.number) return `#${channelItem.number}`;
+    if (isChannel && channelItem?.number) return `#${channelItem.number}`;
     return null;
   };
 
