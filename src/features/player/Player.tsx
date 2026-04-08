@@ -4,9 +4,11 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useStreamStore } from '@/store/stream.store';
-import { useCurrentProgram, useChannelEPG } from '@/features/epg/epg.hooks';
+import { useChannelEPG } from '@/features/epg/epg.hooks';
+import { getCurrentProgram } from '@/features/epg/epg.api';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
+import { StalkerEPG } from '@/types';
 import { useResumeStore } from '@/store/resume.store';
 import {
   MpvObservableProperty,
@@ -27,15 +29,6 @@ const OBSERVED_PROPERTIES = [
 ] as const satisfies MpvObservableProperty[];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface StalkerEPG {
-  id: number;
-  name: string;
-  description?: string;
-  start_time: string;
-  end_time: string;
-  channel_id?: number;
-}
 
 type StreamState = 'connecting' | 'playing' | 'stalled' | 'retrying' | 'dead';
 
@@ -1128,16 +1121,16 @@ export const Player: React.FC<PlayerProps> = ({
     mac: '', token: '', lastUsed: new Date(), isActive: false,
   }));
 
-  const { data: currentProgram } = useCurrentProgram(
-    client ?? placeholderClient.current, channelId ?? 0, name, !isVod
-  );
-
-  const [showEPGModal, setShowEPGModal] = useState(false);
-  const hasResumedRef = useRef(false);
-
+  // Single EPG query for 24 hours - used by both current program and EPG modal
   const { data: channelEPG, isLoading: epgLoading } = useChannelEPG(
     client ?? placeholderClient.current, channelId ?? 0, name, 24, !isVod && !!channelId
   );
+
+  // Derive current program from channelEPG data instead of making separate query
+  const currentProgram = channelEPG ? getCurrentProgram(channelEPG) : null;
+
+  const [showEPGModal, setShowEPGModal] = useState(false);
+  const hasResumedRef = useRef(false);
 
   // Cleanup on unmount and before page unload
   useEffect(() => {

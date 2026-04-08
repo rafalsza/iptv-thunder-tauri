@@ -4,6 +4,7 @@ import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useResumeStore } from '@/store/resume.store';
 import { usePortalsStore } from '@/store/portals.store';
+import { useTranslation } from '@/hooks/useTranslation';
 import { useSeriesInfo } from './series.hooks';
 import { Button } from '@/components/ui/button';
 import { Loader2, Play, Heart, ArrowLeft } from 'lucide-react';
@@ -21,6 +22,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   onPlay,
   onBack,
 }) => {
+  const { t } = useTranslation();
   const accountId = usePortalsStore((s) =>
     s.portals.find((p) => p.id === s.activePortalId)?.id ?? 'default'
   );
@@ -59,7 +61,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const episodes = seriesInfo?.episodes || [];
   const seasons = seriesInfo?.seasons || [];
 
-  // Ustaw pierwszy dostępny sezon po załadowaniu danych
+  // Set first available season after loading data
   useEffect(() => {
     if (seasons.length > 0 && !seasons.includes(selectedSeason)) {
       setSelectedSeason(seasons[0]);
@@ -70,7 +72,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     (f) => f.type === 'series' && String(f.item_id) === String(series.id)
   );
 
-  // Grupowanie odcinków według sezonu
+  // Group episodes by season
   const episodesBySeason = useMemo(() => {
     const grouped: Record<string, StalkerVOD[]> = {};
 
@@ -80,7 +82,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
       grouped[season].push(ep);
     });
 
-    // Sortowanie odcinków w sezonie
+    // Sort episodes within season
     Object.keys(grouped).forEach((season) => {
       grouped[season].sort((a, b) => {
         const epA = Number.parseInt(String(a.episode) || '0');
@@ -150,7 +152,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     });
   };
 
-  // Parsowanie aktorów i reżyserów
+  // Parse actors and directors
   const actorsList = fullSeries.actors
     ? fullSeries.actors.split(',').map((a: string) => a.trim()).filter(Boolean)
     : [];
@@ -214,10 +216,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 <span className="text-slate-400">{fullSeries.genres_str || seriesInfo?.series?.genres_str}</span>
               )}
               {seasons.length > 0 && (
-                <span className="text-slate-400">{seasons.length} {seasons.length === 1 ? 'Sezon' : 'Sezony'}</span>
+                <span className="text-slate-400">{seasons.length} {seasons.length === 1 ? t('season') : t('seasons')}</span>
               )}
               {episodes.length > 0 && (
-                <span className="text-slate-400">{episodes.length} odc.</span>
+                <span className="text-slate-400">{episodes.length} {t('episode').toLowerCase()}.</span>
               )}
               {(fullSeries.rating_imdb || seriesInfo?.series?.rating_imdb) && (
                 <span className="px-2 py-0.5 bg-yellow-600/80 rounded text-white text-xs flex items-center gap-1">
@@ -239,7 +241,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
             {/* Directors */}
             {(directorsList.length > 0 || series.director || seriesInfo?.series?.director) && (
               <div className="mb-3">
-                <span className="text-slate-400 text-sm">Reżyseria: </span>
+                <span className="text-slate-400 text-sm">{t('director')}: </span>
                 <span className="text-slate-300 text-sm">
                   {directorsList.length > 0
                     ? directorsList.join(', ')
@@ -251,7 +253,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
             {/* Cast */}
             {(actorsList.length > 0 || series.actors || seriesInfo?.series?.actors) && (
               <div className="mb-4">
-                <span className="text-slate-400 text-sm">Obsada: </span>
+                <span className="text-slate-400 text-sm">{t('cast')}: </span>
                 <span className="text-slate-300 text-sm">
                   {actorsList.length > 0
                     ? actorsList.join(', ')
@@ -274,7 +276,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                   className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-slate-100 rounded-lg text-slate-900 font-semibold transition-colors"
                 >
                   <Play className="w-5 h-5 fill-current" />
-                  Odtwórz pierwszy odcinek
+                  {t('playFirstEpisode')}
                 </button>
               )}
               <button
@@ -282,7 +284,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors"
               >
                 <Heart className={isFavorite ? 'fill-red-500 text-red-500 w-5 h-5' : 'w-5 h-5'} />
-                {isFavorite ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+                {isFavorite ? t('removeFromFavorites') : t('addToFavorites')}
               </button>
             </div>
           </div>
@@ -290,9 +292,9 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
         {/* Episodes Section */}
         <div>
-        {/* Nagłówek z selektorem sezonu */}
+        {/* Header with season selector */}
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-bold text-white">Odcinki</h2>
+          <h2 className="text-2xl font-bold text-white">{t('episodes')}</h2>
           {seasons.length > 1 && (
             <select
               value={selectedSeason}
@@ -301,7 +303,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
             >
               {seasons.map((season: string) => (
                 <option key={season} value={season}>
-                  Sezon {season} ({episodesBySeason[season]?.length || 0} odc.)
+                  {t('season')} {season} ({episodesBySeason[season]?.length || 0} {t('episode').toLowerCase()}.)
                 </option>
               ))}
             </select>
@@ -318,7 +320,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 const resumePos = getPosition(String(episode.id));
                 const hasResume = resumePos > 30;
                 const epNum = index + 1;
-                const displayName = episode.episodeName || episode.name || `Odcinek ${epNum}`;
+                const displayName = episode.episodeName || episode.name || `${t('episode')} ${epNum}`;
 
                 return (
                   <div
@@ -326,12 +328,12 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                     onClick={() => handleEpisodePlay(episode)}
                     className="group flex items-start gap-6 py-6 cursor-pointer hover:bg-slate-800/50 transition-colors"
                   >
-                    {/* Numer odcinka */}
+                    {/* Episode number */}
                     <span className="text-2xl font-light text-slate-500 w-8 text-center pt-8">
                       {epNum}
                     </span>
 
-                    {/* Miniaturka */}
+                    {/* Thumbnail */}
                     <div className="relative w-40 aspect-video bg-slate-800 rounded-lg overflow-hidden flex-shrink-0">
                       {episode.logo || fullSeries.poster ? (
                         <img
@@ -351,7 +353,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                       </div>
                     </div>
 
-                    {/* Informacje */}
+                    {/* Info */}
                     <div className="flex-1 min-w-0 py-2">
                       <div className="flex items-start justify-between gap-4">
                         <div>
@@ -368,12 +370,12 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         <div className="flex items-center gap-4 flex-shrink-0">
                           {hasResume && (
                             <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded">
-                              Wznów
+                              {t('resume')}
                             </span>
                           )}
                           {episode.length && (
                             <span className="text-sm text-slate-400">
-                              {Math.floor(episode.length / 60)} min
+                              {Math.floor(episode.length / 60)} {t('minutes')}
                             </span>
                           )}
                         </div>
@@ -385,27 +387,27 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
             </div>
           ) : (
             <div className="text-center py-16 text-slate-400">
-              Brak odcinków w wybranym sezonie
+              {t('noEpisodes')}
             </div>
           )}
         </div>
       </div>
 
-      {/* Dialog wznowienia */}
+      {/* Resume dialog */}
       {showResumeDialog && selectedEpisode && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
           <div className="bg-slate-900 rounded-2xl p-8 max-w-md w-full mx-4">
-            <h3 className="text-2xl font-semibold mb-2">Kontynuować odtwarzanie?</h3>
+            <h3 className="text-2xl font-semibold text-white mb-2">{t('resumeWatching')}</h3>
             <p className="text-slate-400 mb-8">
-              Oglądałeś ten odcinek do <span className="text-white font-medium">{formatTime(resumePosition)}</span>
+              <span className="text-slate-300">{t('watchedEpisodeTo')} <span className="text-white font-medium">{formatTime(resumePosition)}</span></span>
             </p>
 
             <div className="flex gap-4">
               <Button variant="secondary" onClick={handlePlayFromStart} className="flex-1">
-                Odtwórz od początku
+                {t('playFromStart')}
               </Button>
               <Button onClick={handleResume} className="flex-1">
-                Wznów odtwarzanie
+                {t('resumePlayback')}
               </Button>
             </div>
           </div>

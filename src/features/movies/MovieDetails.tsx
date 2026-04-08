@@ -3,6 +3,7 @@ import { StalkerVOD } from '@/types';
 import { useFavorites } from '@/hooks/useFavorites';
 import { usePortalsStore } from '@/store/portals.store';
 import { useResumeStore } from '@/store/resume.store';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface MovieDetailsProps {
   movie: StalkerVOD;
@@ -15,6 +16,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
   onPlay,
   onBack,
 }) => {
+  const { t } = useTranslation();
   const accountId = usePortalsStore(s =>
     s.portals.find(p => p.id === s.activePortalId)?.id ?? 'default'
   );
@@ -166,7 +168,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
             {/* Cast */}
             {actorsList.length > 0 && (
               <div className="mb-4">
-                <h3 className="text-sm text-slate-400 mb-2">Actors</h3>
+                <h3 className="text-sm text-slate-400 mb-2">{t('cast')}</h3>
                 <p className="text-sm text-slate-300">{actorsList.join(', ')}</p>
               </div>
             )}
@@ -175,7 +177,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
             {directorsList.length > 0 && (
               <div className="mb-6">
                 <h3 className="text-sm text-slate-400 mb-2">
-                  {directorsList.length > 1 ? 'Directors' : 'Director'}
+                  {t('director')}
                 </h3>
                 <p className="text-sm text-slate-300">{directorsList.join(', ')}</p>
               </div>
@@ -185,13 +187,13 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
             <div className="flex items-center gap-6 mb-8 text-sm text-slate-400">
               {movie.country && (
                 <div>
-                  <span className="text-slate-500">Country: </span>
+                  <span className="text-slate-500">{t('country')}: </span>
                   {movie.country}
                 </div>
               )}
               {movie.length && (
                 <div>
-                  <span className="text-slate-500">Duration: </span>
+                  <span className="text-slate-500">{t('duration')}: </span>
                   {Math.floor(movie.length / 60)}h {movie.length % 60}m
                 </div>
               )}
@@ -257,22 +259,22 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
       {showResumeDialog && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-bold text-white mb-2">Kontynuuj oglądanie?</h3>
+            <h3 className="text-xl font-bold text-white mb-2">{t('resumeWatching')}</h3>
             <p className="text-slate-300 mb-6">
-              Oglądałeś ten film do <span className="text-white font-semibold">{formatTime(resumePosition)}</span>
+              {t('watchedTo')} <span className="text-white font-semibold">{formatTime(resumePosition)}</span>
             </p>
             <div className="flex gap-3">
               <button
                 onClick={handlePlayFromStart}
                 className="flex-1 px-4 py-3 bg-slate-700 text-white rounded-lg font-medium hover:bg-slate-600 transition-colors"
               >
-                Od początku
+                {t('fromStart')}
               </button>
               <button
                 onClick={handleResume}
                 className="flex-1 px-4 py-3 bg-white text-slate-900 rounded-lg font-medium hover:bg-slate-100 transition-colors"
               >
-                Wznów
+                {t('resume')}
               </button>
             </div>
           </div>

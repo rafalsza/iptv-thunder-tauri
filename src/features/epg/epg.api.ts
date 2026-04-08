@@ -8,31 +8,25 @@ import { invoke } from '@tauri-apps/api/core';
 export const getChannelEPG = async (
   client: StalkerClient, 
   channelId: number, 
-  from?: number, 
-  to?: number
+  _from?: number, 
+  _to?: number
 ): Promise<StalkerEPG[]> => {
-  // Use full EPG with time range if from/to provided, otherwise short EPG
-  if (from && to) {
-    return client.getFullEPG(channelId, from, to);
-  }
+  // Always use short EPG - get_epg endpoint is disabled
   return client.getEPG(channelId);
 };
 
 export const getChannelsEPG = async (
   client: StalkerClient, 
   channelIds: number[], 
-  from?: number, 
-  to?: number
+  _from?: number, 
+  _to?: number
 ): Promise<Record<number, StalkerEPG[]>> => {
   const epgData: Record<number, StalkerEPG[]> = {};
   
-  // Fetch EPG for each channel in parallel
+  // Fetch EPG for each channel in parallel - always use short EPG
   const promises = channelIds.map(async (channelId) => {
     try {
-      // Use full EPG with time range if from/to provided, otherwise short EPG
-      const epg = (from && to) 
-        ? await client.getFullEPG(channelId, from, to)
-        : await client.getEPG(channelId);
+      const epg = await client.getEPG(channelId);
       return { channelId, epg };
     } catch (error) {
       console.error(`Failed to fetch EPG for channel ${channelId}:`, error);

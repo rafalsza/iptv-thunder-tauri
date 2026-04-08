@@ -61,22 +61,31 @@ export class StalkerClient {
 
     if (this.useTauri) {
       // Use Tauri HTTP client - no CORS issues!
+      // Cookie with MAC is required for EPG and other requests
+      const cookieHeader = `mac=${this.account.mac}; stb_lang=en_US; timezone=Europe/Berlin`;
       this.tauriHttp = new TauriHttpClient(baseURL, {
         'User-Agent': USER_AGENT,
+        'X-User-Agent': USER_AGENT,
         'Accept': '*/*',
         'Accept-Language': 'en-US,en;q=0.9',
+        'Cookie': cookieHeader,
+        'Connection': 'keep-alive',
       });
       this.axios = {} as AxiosInstance; // Placeholder - won't be used
     } else {
       // Use Axios for browser development - will have CORS issues
+      const cookieHeader = `mac=${this.account.mac}; stb_lang=en_US; timezone=Europe/Berlin`;
       this.axios = axios.create({
         baseURL,
         timeout: 15000,
         withCredentials: true,
         headers: {
           'User-Agent': USER_AGENT,
+          'X-User-Agent': USER_AGENT,
           'Accept': '*/*',
           'Accept-Language': 'en-US,en;q=0.9',
+          'Cookie': cookieHeader,
+          'Connection': 'keep-alive',
         },
       });
       this.tauriHttp = null;
@@ -356,33 +365,31 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     };
 
     const response = await this._makeRequest(params);
-    const epg = this.useTauri ? (response?.js || []) : (response.data?.js || []);
-    console.log(`✅ Loaded ${epg.length} EPG entries for channel ${channelId}`);
+    const rawEpg = this.useTauri ? (response?.js || []) : (response.data?.js || []);
+    
+    // Map API fields to StalkerEPG interface
+    // API returns: start_timestamp, stop_timestamp, descr, ch_id
+    // StalkerEPG expects: start_time, end_time, description, channel_id
+    const epg: StalkerEPG[] = rawEpg.map((item: any) => ({
+      id: Number(item.id),
+      name: item.name,
+      description: item.descr || item.description || '',
+      start_time: String(item.start_timestamp || item.start_time || ''),
+      end_time: String(item.stop_timestamp || item.end_time || ''),
+      channel_id: Number(item.ch_id || item.channel_id || 0),
+      category_id: item.category_id,
+      ch_short_name: item.ch_short_name,
+      display_name: item.display_name,
+      rating: item.rating,
+      director: item.director,
+      actors: item.actor || item.actors,
+      year: item.year,
+      icon: item.icon,
+    }));
+
     return epg;
   }
 
-  /**
-   * Pobranie pełnego EPG dla kanału z zakresem czasowym (get_epg z from/to)
-   */
-  async getFullEPG(channelId: number, from: number, to: number): Promise<StalkerEPG[]> {
-    if (!this.token) {
-      await this.handshake();
-    }
-
-    const params: any = {
-      type: 'itv',
-      action: 'get_epg',
-      ch_id: channelId.toString(),
-      from: from.toString(),
-      to: to.toString(),
-      JsHttpRequest: '1-xml',
-    };
-
-    const response = await this._makeRequest(params);
-    const epg = this.useTauri ? (response?.js || []) : (response.data?.js || []);
-    console.log(`✅ Loaded ${epg.length} full EPG entries for channel ${channelId}`);
-    return epg;
-  }
 
   /**
    * Test połączenia (quick handshake check)

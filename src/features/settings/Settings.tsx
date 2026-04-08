@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Settings2, MonitorPlay, Tv, Wrench, Info, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from '@/hooks/useTranslation';
+import { TranslationKey } from '@/lib/translations';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -16,20 +17,17 @@ interface SettingsProps {
 
 type TabType = 'general' | 'player' | 'epg' | 'advanced' | 'about';
 
-const useTabs = () => {
-  const { t } = useTranslation();
-  return [
-    { id: 'general' as const, label: t('general'), icon: <Settings2 className="w-4 h-4" /> },
-    { id: 'player' as const, label: t('player'), icon: <MonitorPlay className="w-4 h-4" /> },
-    { id: 'epg' as const, label: t('epg'), icon: <Tv className="w-4 h-4" /> },
-    { id: 'advanced' as const, label: t('advanced'), icon: <Wrench className="w-4 h-4" /> },
-    { id: 'about' as const, label: t('about'), icon: <Info className="w-4 h-4" /> },
-  ];
-};
+const useTabs = (t: (key: TranslationKey) => string) => [
+  { id: 'general' as const, label: t('general'), icon: <Settings2 className="w-4 h-4" /> },
+  { id: 'player' as const, label: t('player'), icon: <MonitorPlay className="w-4 h-4" /> },
+  { id: 'epg' as const, label: t('epg'), icon: <Tv className="w-4 h-4" /> },
+  { id: 'advanced' as const, label: t('advanced'), icon: <Wrench className="w-4 h-4" /> },
+  { id: 'about' as const, label: t('about'), icon: <Info className="w-4 h-4" /> },
+];
 
 export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   const { t, currentLang, changeLanguage } = useTranslation();
-  const TABS = useTabs();
+  const TABS = useTabs(t);
 
   const { 
     externalEpgUrl, 
