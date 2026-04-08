@@ -773,7 +773,22 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
     return startTime <= now && endTime > now;
   };
 
+  // Track expanded descriptions by program ID
+  const [expandedPrograms, setExpandedPrograms] = useState<Set<number>>(new Set());
+
   if (!isOpen) return null;
+
+  const toggleExpanded = (programId: number) => {
+    setExpandedPrograms(prev => {
+      const next = new Set(prev);
+      if (next.has(programId)) {
+        next.delete(programId);
+      } else {
+        next.add(programId);
+      }
+      return next;
+    });
+  };
 
   // Group programs by date
   const groupedPrograms = epgData?.reduce((acc, program) => {
@@ -815,6 +830,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
                   <div className="space-y-2">
                     {programs.map((program) => {
                       const nowPlaying = isNow(program.start_time, program.end_time);
+                      const isExpanded = expandedPrograms.has(program.id);
                       return (
                         <div
                           key={program.id}
@@ -838,7 +854,12 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
                                 )}
                               </div>
                               {program.description && (
-                                <p className="text-xs text-gray-500 mt-1 line-clamp-2">{program.description}</p>
+                                <p
+                                  className={`text-xs text-gray-500 mt-1 cursor-pointer ${isExpanded ? '' : 'line-clamp-2'}`}
+                                  onClick={() => toggleExpanded(program.id)}
+                                >
+                                  {program.description}
+                                </p>
                               )}
                             </div>
                             <div className="flex-shrink-0 text-xs text-gray-500 font-mono">
