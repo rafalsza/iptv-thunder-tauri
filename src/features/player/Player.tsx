@@ -173,7 +173,6 @@ function useMpvPlayer(
     };
 
     setUsingMpv(true);
-    setStatusMsg('Initializing MPV…');
     console.log('🎬 init() starting…');
 
     try {
@@ -662,7 +661,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
             <div className="h-1 bg-gray-600 rounded cursor-pointer relative group" onClick={onProgressClick}>
               <div className="h-full bg-red-600 rounded transition-all duration-100"
                 style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
-              <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              <div className="absolute top-1/2 w-4 h-4 bg-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                 style={{ left: `${duration ? (currentTime / duration) * 100 : 0}%`, transform: 'translate(-50%, -50%)' }} />
             </div>
           </div>
