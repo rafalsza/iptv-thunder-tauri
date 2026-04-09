@@ -9,9 +9,11 @@ import { useMoviesAll, usePrefetchMovieStream } from './movies.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { useTranslation } from '@/hooks/useTranslation';
 import { usePortalsStore } from '@/store/portals.store';
+import { useResumeStore, type WatchStatus } from '@/store/resume.store';
 import { getImageUrl } from '@/hooks/useImageCache';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerVOD, StalkerGenre } from '@/types';
+import { ContinueWatching } from './ContinueWatching';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -39,14 +41,33 @@ interface MovieCardProps {
   onPrefetch: (movie: StalkerVOD) => void;
   favoriteIds: Set<string>;
   onToggleFavorite: (e: React.MouseEvent, movie: StalkerVOD) => void;
+  watchStatus?: WatchStatus;
+  progressPercentage?: number;
 }
 
 const MovieCard = React.memo<MovieCardProps>(({
   movie, posterUrl, onSelect, onPrefetch, favoriteIds, onToggleFavorite,
+  watchStatus, progressPercentage = 0,
 }) => {
   const [imgSrc,  setImgSrc]  = useState<string | null>(() => imageCache.get(posterUrl) ?? null);
   const [imgError, setImgError] = useState(false);
   const isFavorite = favoriteIds.has(String(movie.id));
+  const isWatched = watchStatus === 'watched';
+  const isInProgress = watchStatus === 'in_progress';
+
+  // Get progress data to recalculate percentage using movie.length for consistency
+  const { getProgress } = useResumeStore();
+  const progress = getProgress(String(movie.id));
+
+  // Recalculate percentage using movie.length from API if available
+  const displayPercentage = React.useMemo(() => {
+    if (!progress || !isInProgress) return progressPercentage;
+    if (movie.length && movie.length > 0) {
+      const totalSeconds = movie.length * 60;
+      return totalSeconds > 0 ? Math.round((progress.position / totalSeconds) * 100) : progressPercentage;
+    }
+    return progressPercentage;
+  }, [progress, movie.length, isInProgress, progressPercentage]);
 
   useEffect(() => {
     if (!posterUrl || imageCache.has(posterUrl)) {
@@ -102,6 +123,31 @@ const MovieCard = React.memo<MovieCardProps>(({
           >
             {isFavorite ? '❤️' : '🤍'}
           </button>
+
+          {/* Watch Status Badge */}
+          {isWatched && (
+            <div className="absolute top-2 left-2 bg-green-600/90 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+              </svg>
+              Obejrzane
+            </div>
+          )}
+
+          {/* Progress Bar */}
+          {isInProgress && displayPercentage > 0 && (
+            <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1">
+              <div className="w-full bg-slate-600 rounded-full h-1">
+                <div
+                  className="bg-blue-500 h-1 rounded-full transition-all"
+                  style={{ width: `${displayPercentage}%` }}
+                />
+              </div>
+              <div className="text-white text-xs mt-1 text-center">
+                {displayPercentage}%
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Info */}
@@ -265,6 +311,10 @@ export const MovieList: React.FC<MovieListProps> = ({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
+      {/* Continue Watching Section - Show when no category selected (all movies) */}
+      {!selectedCategory && (
+        <ContinueWatching onMovieSelect={onMovieSelect} />
+      )}
 
       {/* Category header */}
       {selectedCategory && (
@@ -319,17 +369,23 @@ export const MovieList: React.FC<MovieListProps> = ({
                 className="grid gap-4 h-full"
                 style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
               >
-                {getRow(vRow.index).map(movie => (
-                  <MovieCard
-                    key={String(movie.id)}   // stable key — only movie.id
-                    movie={movie}
-                    posterUrl={movie.poster || movie.logo || ''}
-                    onSelect={onMovieSelect}
-                    onPrefetch={handlePrefetch}
-                    favoriteIds={favoriteIds}
-                    onToggleFavorite={handleToggleFavorite}
-                  />
-                ))}
+                {getRow(vRow.index).map(movie => {
+                  const movieId = String(movie.id);
+                  const progress = useResumeStore.getState().getProgress(movieId);
+                  return (
+                    <MovieCard
+                      key={movieId}
+                      movie={movie}
+                      posterUrl={movie.poster || movie.logo || ''}
+                      onSelect={onMovieSelect}
+                      onPrefetch={handlePrefetch}
+                      favoriteIds={favoriteIds}
+                      onToggleFavorite={handleToggleFavorite}
+                      watchStatus={progress?.status}
+                      progressPercentage={progress?.percentage}
+                    />
+                  );
+                })}
               </div>
             </div>
           ))}

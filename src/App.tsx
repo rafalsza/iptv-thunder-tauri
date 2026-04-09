@@ -371,10 +371,11 @@ function AppInner({ }: AppProps) {
         );
       
       case 'movie-details':
-        return selectedMovie ? (
+        return selectedMovie && client ? (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Movie Details...</div>}>
             <MovieDetails
               movie={selectedMovie}
+              client={client}
               onPlay={handleMoviePlay}
               onBack={handleMovieBack}
             />

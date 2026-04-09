@@ -4,15 +4,19 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { usePortalsStore } from '@/store/portals.store';
 import { useResumeStore } from '@/store/resume.store';
 import { useTranslation } from '@/hooks/useTranslation';
+import { StalkerClient } from '@/lib/stalkerAPI_new';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 interface MovieDetailsProps {
   movie: StalkerVOD;
+  client: StalkerClient;
   onPlay: (movie: StalkerVOD, resumePosition?: number) => void;
   onBack: () => void;
 }
 
 export const MovieDetails: React.FC<MovieDetailsProps> = ({
   movie,
+  client,
   onPlay,
   onBack,
 }) => {
@@ -21,8 +25,28 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
     s.portals.find(p => p.id === s.activePortalId)?.id ?? 'default'
   );
   const { isItemFavorite, toggleItemFavorite } = useFavorites(accountId);
-  const { getPosition, clearPosition } = useResumeStore();
+  const { getPosition, clearPosition, getProgress } = useResumeStore();
   const [isHovered, setIsHovered] = useState(false);
+
+  const progress = getProgress(String(movie.id));
+  const isWatched = progress?.status === 'watched';
+  const isInProgress = progress?.status === 'in_progress';
+
+  // Recalculate percentage using the same source as display time for consistency
+  const getDisplayPercentage = () => {
+    if (!progress) return 0;
+    if (movie.length && movie.length > 0) {
+      // Use movie.length from API for both percentage and time display
+      const totalSeconds = movie.length * 60;
+      return totalSeconds > 0 ? Math.round((progress.position / totalSeconds) * 100) : 0;
+    } else if (progress.duration > 0) {
+      // Use progress.duration from player
+      return Math.round((progress.position / progress.duration) * 100);
+    }
+    return progress.percentage;
+  };
+
+  const displayPercentage = getDisplayPercentage();
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [resumePosition, setResumePosition] = useState(0);
 
@@ -57,9 +81,20 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
     }
   };
 
-  const handleDownload = () => {
-    // TODO: Implement download functionality
-    console.log('Download movie:', movie.name);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!client || !movie.cmd) return;
+    
+    setIsDownloading(true);
+    try {
+      const streamUrl = await client.getStreamUrl(movie.cmd);
+      await openUrl(streamUrl);
+    } catch (error) {
+      console.error('Failed to open download URL:', error);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const isFavorite = isItemFavorite('vod', String(movie.id));
@@ -94,6 +129,38 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               ) : (
                 <div className="w-full aspect-[2/3] bg-gradient-to-br from-slate-700 to-slate-800 flex flex-col items-center justify-center">
                   <span className="text-6xl">🎬</span>
+                </div>
+              )}
+
+              {/* Watch Status Badge */}
+              {isWatched && (
+                <div className="absolute top-3 left-3 bg-green-600/90 text-white text-sm px-3 py-1.5 rounded-md flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                  </svg>
+                  Obejrzane
+                </div>
+              )}
+
+              {/* Progress Bar on Poster */}
+              {isInProgress && progress && displayPercentage > 0 && (
+                <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-3 py-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="flex-1 bg-slate-600 rounded-full h-2">
+                      <div
+                        className="bg-blue-500 h-2 rounded-full transition-all"
+                        style={{ width: `${displayPercentage}%` }}
+                      />
+                    </div>
+                    <span className="text-white text-xs font-medium">{displayPercentage}%</span>
+                  </div>
+                  <p className="text-slate-300 text-xs text-center">
+                    {movie.length && movie.length > 0
+                      ? `Obejrzano ${formatTime(progress.position)} z ${formatTime(movie.length * 60)}`
+                      : progress.duration > 0
+                        ? `Obejrzano ${formatTime(progress.position)} z ${formatTime(progress.duration)}`
+                        : `Obejrzano ${formatTime(progress.position)}`}
+                  </p>
                 </div>
               )}
 
@@ -139,7 +206,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                   {movie.year}
                 </span>
               )}
-              {movie.genres_str && movie.genres_str.trim() && (
+              {movie.genres_str?.trim() && (
                 <span className="px-3 py-1 bg-slate-700/80 rounded-md text-sm">
                   {movie.genres_str}
                 </span>
@@ -158,6 +225,22 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                   </svg>
                   {movie.rating_kinopoisk}
+                </span>
+              )}
+              {isWatched && (
+                <span className="px-3 py-1 bg-green-600/80 rounded-md text-sm flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                  </svg>
+                  Obejrzane
+                </span>
+              )}
+              {isInProgress && progress && (
+                <span className="px-3 py-1 bg-blue-600/80 rounded-md text-sm flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+                  </svg>
+                  {displayPercentage}%
                 </span>
               )}
             </div>
@@ -253,12 +336,13 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                 data-tv-focusable
                 tabIndex={0}
                 onClick={handleDownload}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-500 transition-colors"
+                disabled={isDownloading}
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                Download
+                {isDownloading ? 'Opening...' : 'Download'}
               </button>
             </div>
           </div>

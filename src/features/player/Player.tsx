@@ -26,11 +26,22 @@ const OBSERVED_PROPERTIES = [
   ['duration', 'double', 'none'],
   ['filename', 'string', 'none'],
   ['video-params', 'node', 'none'],
+  ['track-list', 'node', 'none'],
+  ['aid', 'string', 'none'],
+  ['sid', 'string', 'none'],
 ] as const satisfies MpvObservableProperty[];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StreamState = 'connecting' | 'playing' | 'stalled' | 'retrying' | 'dead';
+
+interface Track {
+  id: string;
+  type: 'audio' | 'sub' | 'video';
+  title?: string;
+  lang?: string;
+  selected?: boolean;
+}
 
 interface PlayerProps {
   url: string;
@@ -61,10 +72,15 @@ interface UseMpvPlayerReturn {
   duration: number;
   isPaused: boolean;
   isLoading: boolean;
+  tracks: Track[];
+  currentAudioId: string | null;
+  currentSubId: string | null;
   handleManualRetry: (preserveIndex?: boolean) => void;
   loadUrl: (streamUrl: string, urlIdx: number, retry: number) => Promise<void>;
   cleanup: () => Promise<void>;
   getRankedUrls: () => string[];
+  setAudioTrack: (id: string) => Promise<void>;
+  setSubTrack: (id: string) => Promise<void>;
 }
 
 function useMpvPlayer(
@@ -72,7 +88,7 @@ function useMpvPlayer(
   fallbackUrls: string[],
   isVod: boolean,
   movieId: string | undefined,
-  setPosition: (id: string, pos: number) => void
+  setPosition: (id: string, pos: number, duration?: number) => void
 ): UseMpvPlayerReturn {
   const isMountedRef = useRef(true);
   const mpvRunningRef = useRef(false);
@@ -84,6 +100,7 @@ function useMpvPlayer(
   const isLoadingRef = useRef(false);
   const currentTimeRef = useRef(0);
   const lastTimeUpdateRef = useRef(Date.now());
+  const durationRef = useRef(0);
   const unobserveRef = useRef<(() => void) | null>(null);
   const requestIdRef = useRef(0);
   const lastRetryRef = useRef(0);
@@ -110,6 +127,9 @@ function useMpvPlayer(
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [currentAudioId, setCurrentAudioId] = useState<string | null>(null);
+  const [currentSubId, setCurrentSubId] = useState<string | null>(null);
 
 
   // Smart URL ranking based on metrics + stream store
@@ -207,7 +227,7 @@ function useMpvPlayer(
 
   const cleanup = useCallback(async () => {
     if (isVod && movieId && currentTimeRef.current > 30) {
-      setPosition(movieId, currentTimeRef.current);
+      setPosition(movieId, currentTimeRef.current, durationRef.current);
     }
     if (unobserveRef.current) {
       unobserveRef.current();
@@ -350,6 +370,9 @@ function useMpvPlayer(
           'demuxer-max-back-bytes': '20MiB',
           'network-timeout': '10',
           'stream-buffer-size': '4M',
+          'sid': 'no',
+          'sub-auto': 'no',
+          'sub-visibility': 'no',
           'stream-lavf-o': [
             'reconnect=1',
             'reconnect_streamed=1',
@@ -386,6 +409,7 @@ function useMpvPlayer(
           }
           if (name === 'duration' && typeof data === 'number') {
             setDuration(data);
+            durationRef.current = data;
           }
           if (name === 'video-params' && data && typeof data === 'object') {
             const params = data as { w?: number; h?: number; fps?: number };
@@ -400,6 +424,22 @@ function useMpvPlayer(
           }
           if (name === 'pause' && typeof data === 'boolean') {
             setIsPaused(data);
+          }
+          if (name === 'track-list' && Array.isArray(data)) {
+            const parsedTracks: Track[] = data.map((t: any) => ({
+              id: String(t.id),
+              type: t.type,
+              title: t.title,
+              lang: t.lang,
+              selected: t.selected,
+            }));
+            setTracks(parsedTracks);
+          }
+          if (name === 'aid') {
+            setCurrentAudioId(data ? String(data) : null);
+          }
+          if (name === 'sid') {
+            setCurrentSubId(data ? String(data) : null);
           }
         });
         unobserveRef.current = unobserve;
@@ -467,6 +507,20 @@ function useMpvPlayer(
     return () => clearInterval(interval);
   }, [handleManualRetry]);
 
+  const setAudioTrack = useCallback(async (id: string) => {
+    try {
+      await setProperty('aid', id);
+    } catch (e) { console.error('Set audio track failed:', e); }
+  }, []);
+
+  const setSubTrack = useCallback(async (id: string) => {
+    try {
+      await setProperty('sid', id);
+      // Enable subtitle visibility when selecting a track, disable when 'no'
+      await setProperty('sub-visibility', id === 'no' ? 'no' : 'yes');
+    } catch (e) { console.error('Set sub track failed:', e); }
+  }, []);
+
   return {
     streamState,
     setStreamState,
@@ -481,10 +535,15 @@ function useMpvPlayer(
     duration,
     isPaused,
     isLoading,
+    tracks,
+    currentAudioId,
+    currentSubId,
     handleManualRetry,
     loadUrl,
     cleanup,
     getRankedUrls,
+    setAudioTrack,
+    setSubTrack,
   };
 }
 
@@ -805,6 +864,9 @@ interface PlayerControlsProps {
   volume: number;
   currentTime: number;
   duration: number;
+  tracks: Track[];
+  currentAudioId: string | null;
+  currentSubId: string | null;
   onPlayPause: () => void;
   onStop: () => void;
   onFullscreen: () => void;
@@ -812,13 +874,20 @@ interface PlayerControlsProps {
   onVolumeChange: (v: number) => void;
   onProgressClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   onShowEPG: () => void;
+  onSetAudioTrack: (id: string) => void;
+  onSetSubTrack: (id: string) => void;
 }
 
 const PlayerControls: React.FC<PlayerControlsProps> = ({
   isVod, streamState, isFullscreen, showUi, isPaused, volume,
-  currentTime, duration, onPlayPause, onStop, onFullscreen, onClose,
-  onVolumeChange, onProgressClick, onShowEPG
+  currentTime, duration, tracks, currentAudioId, currentSubId,
+  onPlayPause, onStop, onFullscreen, onClose,
+  onVolumeChange, onProgressClick, onShowEPG, onSetAudioTrack, onSetSubTrack
 }) => {
+  const [showTrackMenu, setShowTrackMenu] = useState(false);
+  const audioTracks = tracks.filter(t => t.type === 'audio');
+  const subTracks = tracks.filter(t => t.type === 'sub');
+  const hasTracks = audioTracks.length > 1 || subTracks.length > 0;
   const formatTime = (seconds: number) => {
     if (!seconds || seconds < 0) return '0:00';
     const h = Math.floor(seconds / 3600);
@@ -875,6 +944,80 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
                 <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3h2v2h-2V6zm0 4h2v2h-2v-2zm0 4h2v2h-2v-2zM7 6h2v2H7V6zm0 4h2v2H7v-2zm0 4h2v2H7v-2zm10 4h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V6h2v2z"/>
               </svg>
             </button>
+          )}
+
+          {/* Track Selection Button */}
+          {hasTracks && (
+            <div className="relative">
+              <button
+                data-tv-focusable
+                tabIndex={0}
+                onClick={() => setShowTrackMenu(!showTrackMenu)}
+                className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+                title="Wybór ścieżki (Audio/Napisy)"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                  <path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/>
+                </svg>
+              </button>
+
+              {showTrackMenu && (
+                <div className="absolute bottom-full left-0 mb-2 w-64 bg-slate-900/95 border border-slate-700 rounded-lg shadow-xl p-3 z-50">
+                  {/* Audio Tracks */}
+                  {audioTracks.length > 1 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-gray-400 uppercase mb-1">Audio</p>
+                      {audioTracks.map(track => (
+                        <button
+                          key={track.id}
+                          onClick={() => { onSetAudioTrack(track.id); setShowTrackMenu(false); }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-sm ${
+                            currentAudioId === track.id
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          {track.lang || track.title || `Ścieżka ${track.id}`}
+                          {currentAudioId === track.id && ' ✓'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Subtitle Tracks */}
+                  {subTracks.length > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase mb-1">Napisy</p>
+                      <button
+                        onClick={() => { onSetSubTrack('no'); setShowTrackMenu(false); }}
+                        className={`w-full text-left px-2 py-1.5 rounded text-sm ${
+                          currentSubId === 'no' || !currentSubId
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        Wyłączone
+                        {(currentSubId === 'no' || !currentSubId) && ' ✓'}
+                      </button>
+                      {subTracks.map(track => (
+                        <button
+                          key={track.id}
+                          onClick={() => { onSetSubTrack(track.id); setShowTrackMenu(false); }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-sm ${
+                            currentSubId === track.id
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          {track.lang || track.title || `Napisy ${track.id}`}
+                          {currentSubId === track.id && ' ✓'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -1287,6 +1430,9 @@ export const Player: React.FC<PlayerProps> = ({
           volume={controls.volume}
           currentTime={mpv.currentTime}
           duration={mpv.duration}
+          tracks={mpv.tracks}
+          currentAudioId={mpv.currentAudioId}
+          currentSubId={mpv.currentSubId}
           onPlayPause={() => void controls.handlePlayPause()}
           onStop={handleStop}
           onFullscreen={() => void controls.handleFullscreen()}
@@ -1294,6 +1440,8 @@ export const Player: React.FC<PlayerProps> = ({
           onVolumeChange={(v) => void controls.handleVolumeChange(v)}
           onProgressClick={handleProgressClick}
           onShowEPG={handleShowEPG}
+          onSetAudioTrack={(id) => void mpv.setAudioTrack(id)}
+          onSetSubTrack={(id) => void mpv.setSubTrack(id)}
         />
 
         <EPGDetailsModal

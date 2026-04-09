@@ -164,11 +164,11 @@ async fn check_mpv_available() -> Result<bool, String> {
 // ExoPlayer commands - on Android these invoke the native Kotlin plugin
 // On desktop these are stubs (desktop uses libmpv instead)
 #[tauri::command]
-async fn exoplayer_play(url: String) -> Result<serde_json::Value, String> {
+async fn exoplayer_play(_url: String) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "android")]
     {
         // On Android, this command is handled by the ExoPlayerPlugin Kotlin class
-        Ok(serde_json::json!({"success": true, "url": url}))
+        Ok(serde_json::json!({"success": true, "url": _url}))
     }
     #[cfg(not(target_os = "android"))]
     {

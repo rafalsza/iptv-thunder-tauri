@@ -210,6 +210,34 @@ export async function getVod(portalId: string, genre?: string, limit?: number, o
   }));
 }
 
+export async function getVodByIds(portalId: string, ids: string[]): Promise<Vod[]> {
+  if (ids.length === 0) return [];
+  
+  const db = await getDb();
+  
+  // Build placeholders for IN clause: (?, ?, ?)
+  const placeholders = ids.map(() => '?').join(', ');
+  const query = `SELECT * FROM vod WHERE portal_id = ? AND id IN (${placeholders}) ORDER BY name COLLATE NOCASE`;
+  const params = [portalId, ...ids];
+  
+  const rows = await db.select<DbVod[]>(query, params);
+  return rows.map(row => ({
+    id: row.id.toString(),
+    name: row.name,
+    description: row.description,
+    posterUrl: row.poster_url,
+    posterLocal: row.poster_local,
+    streamUrl: row.stream_url,
+    year: row.year,
+    rating: row.rating,
+    duration: row.duration,
+    genre: row.genre,
+    director: row.director,
+    actors: row.actors,
+    added: row.added,
+  }));
+}
+
 export async function getVodCount(portalId: string, genre?: string): Promise<number> {
   const db = await getDb();
   let query = 'SELECT COUNT(*) as count FROM vod WHERE portal_id = ?';
