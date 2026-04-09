@@ -119,6 +119,12 @@ export const translations = {
     quality: 'Jakość',
     audio: 'Dźwięk',
     subtitles: 'Napisy',
+    trackSelection: 'Wybór ścieżki (Audio/Napisy)',
+    disabled: 'Wyłączone',
+    audioTrack: 'Ścieżka',
+    subtitleTrack: 'Napisy',
+    nowPlayingLabel: 'TERAZ',
+    noEpgData: 'Brak danych EPG dla tego kanału',
   },
 
   en: {
@@ -237,6 +243,12 @@ export const translations = {
     quality: 'Quality',
     audio: 'Audio',
     subtitles: 'Subtitles',
+    trackSelection: 'Track Selection (Audio/Subtitles)',
+    disabled: 'Disabled',
+    audioTrack: 'Track',
+    subtitleTrack: 'Subtitles',
+    nowPlayingLabel: 'NOW',
+    noEpgData: 'No EPG data available for this channel',
   }
 } as const;
 

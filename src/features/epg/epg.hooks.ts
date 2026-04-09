@@ -16,7 +16,7 @@ import {
   fetchExternalEPG
 } from './epg.api';
 
-export const useChannelEPG = (client: StalkerClient, channelId: number, channelName?: string, hours: number = 24, enabled: boolean = true) => {
+export const useChannelEPG = (client: StalkerClient | undefined, channelId: number, channelName?: string, hours: number = 24, enabled: boolean = true) => {
   const { from, to } = getEPGTimeRange(hours);
   const effectiveEpgUrl = usePortalStore((state) => state.getEffectiveEpgUrl());
   const portalId = usePortalStore((state) => state.currentPortalId);
@@ -29,6 +29,8 @@ export const useChannelEPG = (client: StalkerClient, channelId: number, channelN
   return useQuery({
     queryKey: ['epg', 'channel', channelId, channelName, from, to, effectiveEpgUrl],
     queryFn: async () => {
+      if (!client) throw new Error('StalkerClient is required');
+
       let result: StalkerEPG[];
 
       // If external EPG URL is configured, use it

@@ -1,8 +1,8 @@
 // =========================
-// 🎬 PLAYER — MPV Only (Refactored)
+// 🎬 PLAYER — MPV Only
 // =========================
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useStreamStore } from '@/store/stream.store';
 import { useChannelEPG } from '@/features/epg/epg.hooks';
 import { getCurrentProgram } from '@/features/epg/epg.api';
@@ -10,6 +10,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerEPG } from '@/types';
 import { useResumeStore } from '@/store/resume.store';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   MpvObservableProperty,
   init, observeProperties, command, setProperty, destroy,
@@ -131,6 +132,11 @@ function useMpvPlayer(
   const [currentAudioId, setCurrentAudioId] = useState<string | null>(null);
   const [currentSubId, setCurrentSubId] = useState<string | null>(null);
 
+  // Track mount state to prevent state updates on unmounted component
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   // Smart URL ranking based on metrics + stream store
   const getRankedUrls = useCallback(() => {
@@ -242,6 +248,9 @@ function useMpvPlayer(
   const streamStateRef = useRef(streamState);
   useEffect(() => { streamStateRef.current = streamState; }, [streamState]);
 
+  // Note: recordUrlStart, recordUrlSuccess, recordUrlFailure are intentionally
+  // excluded from deps - they are memoized via useCallback([]) with stable refs.
+  // clearAllTimers and safeDestroyMpv also use refs internally, making them safe.
   const loadUrl = useCallback(async (streamUrl: string, urlIdx: number, retry: number) => {
     const requestId = ++requestIdRef.current;
 
@@ -259,7 +268,7 @@ function useMpvPlayer(
     };
 
     // Track if onSuccess was already called for this request (avoids stale ref issues)
-    const successCalledRef = { current: false };
+    let successCalled = false;
 
     if (!isMountedRef.current) {
       finishLoading();
@@ -340,8 +349,8 @@ function useMpvPlayer(
     const onSuccess = () => {
       if (!isMountedRef.current) return;
       if (requestId !== requestIdRef.current) return;
-      if (successCalledRef.current) return; // already succeeded
-      successCalledRef.current = true;
+      if (successCalled) return; // already succeeded
+      successCalled = true;
 
       if (connTimeoutRef.current) {
         clearTimeout(connTimeoutRef.current);
@@ -355,7 +364,6 @@ function useMpvPlayer(
     };
 
     setUsingMpv(true);
-    console.log('🎬 init() starting…');
 
     try {
       const mpvConfig = {
@@ -386,7 +394,6 @@ function useMpvPlayer(
 
       await init(mpvConfig);
       mpvRunningRef.current = true;
-      console.log('✅ MPV init done');
 
       // Guard: new request may have started during init
       if (localRequestId !== requestIdRef.current) {
@@ -418,7 +425,7 @@ function useMpvPlayer(
               return { width: params.w, height: params.h, fps: Math.round(params.fps ?? 0) };
             });
             // Video actually started rendering - success!
-            if (!successCalledRef.current) {
+            if (!successCalled) {
               onSuccess();
             }
           }
@@ -703,14 +710,7 @@ interface PlayerHeaderProps {
   totalRetries: number;
   currentUrlIdx: number;
   urlCount: number;
-  currentProgram: {
-    name: string;
-    description?: string;
-    start_time: string;
-    end_time: string;
-    year?: string;
-    rating?: number;
-  } | null;
+  currentProgram: Pick<StalkerEPG, 'name' | 'description' | 'start_time' | 'end_time' | 'year' | 'rating'> | null;
   isVod: boolean;
   isLoading: boolean;
   statusMsg: string;
@@ -745,16 +745,11 @@ const EPGInfoRow: React.FC<{
   currentProgram: PlayerHeaderProps['currentProgram'];
   isVod: boolean;
 }> = ({ currentProgram, isVod }) => {
-  const formatEPGTime = (timestamp: number): string => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', hour12: false });
-  };
-
   if (!currentProgram || isVod) return null;
   return (
     <div className="flex items-center gap-2 mt-1 ml-[22px]">
       <span className="text-xs text-gray-500">
-        {formatEPGTime(Number.parseInt(currentProgram.start_time))} - {formatEPGTime(Number.parseInt(currentProgram.end_time))}
+        {formatEPGTime(currentProgram.start_time)} - {formatEPGTime(currentProgram.end_time)}
       </span>
       <EPGProgress startTime={Number.parseInt(currentProgram.start_time)} endTime={Number.parseInt(currentProgram.end_time)} />
       {currentProgram.year && (
@@ -772,16 +767,18 @@ const EPGInfoRow: React.FC<{
   );
 };
 
+// Constants defined outside component to avoid re-creation on every render
+const STATE_COLOR: Record<StreamState, string> = {
+  connecting: '#888780', playing: '#1D9E75', stalled: '#BA7517', retrying: '#D85A30', dead: '#A32D2D',
+};
+const STATE_LABEL: Record<StreamState, string> = {
+  connecting: 'Connecting', playing: 'Live', stalled: 'Stalled', retrying: 'Retrying', dead: 'Dead',
+};
+
 const PlayerHeader: React.FC<PlayerHeaderProps> = ({
   name, streamState, usingMpv, videoParams, totalRetries, currentUrlIdx, urlCount,
   currentProgram, isVod, isLoading, statusMsg, isFullscreen, showUi, onClose
 }) => {
-  const stateColor: Record<StreamState, string> = {
-    connecting: '#888780', playing: '#1D9E75', stalled: '#BA7517', retrying: '#D85A30', dead: '#A32D2D',
-  };
-  const stateLabel: Record<StreamState, string> = {
-    connecting: 'Connecting', playing: 'Live', stalled: 'Stalled', retrying: 'Retrying', dead: 'Dead',
-  };
 
   if (isFullscreen && !showUi) return null;
 
@@ -793,15 +790,15 @@ const PlayerHeader: React.FC<PlayerHeaderProps> = ({
         <div className="flex items-center gap-3 min-w-0">
           <span style={{
             display: 'inline-block', width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
-            background: stateColor[streamState],
-            boxShadow: streamState === 'playing' ? `0 0 0 4px ${stateColor.playing}44` : 'none',
+            background: STATE_COLOR[streamState],
+            boxShadow: streamState === 'playing' ? `0 0 0 4px ${STATE_COLOR.playing}44` : 'none',
             transition: 'background 0.3s',
           }} />
           <h2 id="player-title" className="text-white text-xl font-semibold truncate">{name}</h2>
           <span className="text-sm px-3 py-1 rounded-full flex-shrink-0" style={{
-            background: `${stateColor[streamState]}22`, color: stateColor[streamState],
-            border: `1px solid ${stateColor[streamState]}55`,
-          }}>{stateLabel[streamState]}</span>
+            background: `${STATE_COLOR[streamState]}22`, color: STATE_COLOR[streamState],
+            border: `1px solid ${STATE_COLOR[streamState]}55`,
+          }}>{STATE_LABEL[streamState]}</span>
           {usingMpv && (
             <span className="text-sm px-3 py-1 rounded-full flex-shrink-0"
               style={{ background: '#22c55e22', color: '#22c55e', border: '1px solid #22c55e44' }}>
@@ -855,6 +852,16 @@ const PlayerHeader: React.FC<PlayerHeaderProps> = ({
 
 // ─── Player Controls Sub-component ────────────────────────────────────────────
 
+// Helper function defined outside component
+function formatDurationTime(seconds: number): string {
+  if (!seconds || seconds < 0) return '0:00';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 interface PlayerControlsProps {
   isVod: boolean;
   streamState: StreamState;
@@ -884,18 +891,11 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
   onPlayPause, onStop, onFullscreen, onClose,
   onVolumeChange, onProgressClick, onShowEPG, onSetAudioTrack, onSetSubTrack
 }) => {
+  const { t } = useTranslation();
   const [showTrackMenu, setShowTrackMenu] = useState(false);
   const audioTracks = tracks.filter(t => t.type === 'audio');
   const subTracks = tracks.filter(t => t.type === 'sub');
   const hasTracks = audioTracks.length > 1 || subTracks.length > 0;
-  const formatTime = (seconds: number) => {
-    if (!seconds || seconds < 0) return '0:00';
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
 
   if (streamState !== 'playing' || (isFullscreen && !showUi)) return null;
 
@@ -954,7 +954,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
                 tabIndex={0}
                 onClick={() => setShowTrackMenu(!showTrackMenu)}
                 className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
-                title="Wybór ścieżki (Audio/Napisy)"
+                title={t('trackSelection')}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                   <path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/>
@@ -977,7 +977,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
                               : 'text-gray-300 hover:bg-slate-800'
                           }`}
                         >
-                          {track.lang || track.title || `Ścieżka ${track.id}`}
+                          {track.lang || track.title || `${t('audioTrack')} ${track.id}`}
                           {currentAudioId === track.id && ' ✓'}
                         </button>
                       ))}
@@ -987,7 +987,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
                   {/* Subtitle Tracks */}
                   {subTracks.length > 0 && (
                     <div>
-                      <p className="text-xs text-gray-400 uppercase mb-1">Napisy</p>
+                      <p className="text-xs text-gray-400 uppercase mb-1">{t('subtitles')}</p>
                       <button
                         onClick={() => { onSetSubTrack('no'); setShowTrackMenu(false); }}
                         className={`w-full text-left px-2 py-1.5 rounded text-sm ${
@@ -996,7 +996,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
                             : 'text-gray-300 hover:bg-slate-800'
                         }`}
                       >
-                        Wyłączone
+                        {t('disabled')}
                         {(currentSubId === 'no' || !currentSubId) && ' ✓'}
                       </button>
                       {subTracks.map(track => (
@@ -1009,7 +1009,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
                               : 'text-gray-300 hover:bg-slate-800'
                           }`}
                         >
-                          {track.lang || track.title || `Napisy ${track.id}`}
+                          {track.lang || track.title || `${t('subtitleTrack')} ${track.id}`}
                           {currentSubId === track.id && ' ✓'}
                         </button>
                       ))}
@@ -1025,8 +1025,8 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
         {isVod ? (
           <div className="flex-1 mx-4">
             <div className="flex justify-between text-white text-xs mb-1">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+              <span>{formatDurationTime(currentTime)}</span>
+              <span>{formatDurationTime(duration)}</span>
             </div>
             <div className="h-1 bg-gray-600 rounded cursor-pointer relative group" onClick={onProgressClick}>
               <div className="h-full bg-red-600 rounded transition-all duration-100"
@@ -1103,6 +1103,24 @@ const DeadState: React.FC<DeadStateProps> = ({ errorMsg, onRetry, onClose }) => 
 
 // ─── EPG Details Modal ──────────────────────────────────────────────────────
 
+// Helper functions - defined outside component to avoid re-creation on every render
+function formatEPGTime(timestamp: string): string {
+  const date = new Date(Number.parseInt(timestamp) * 1000);
+  return date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function formatEPGDate(timestamp: string): string {
+  const date = new Date(Number.parseInt(timestamp) * 1000);
+  return date.toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function isProgramNow(start: string, end: string): boolean {
+  const now = Math.floor(Date.now() / 1000);
+  const startTime = Number.parseInt(start);
+  const endTime = Number.parseInt(end);
+  return startTime <= now && endTime > now;
+}
+
 interface EPGDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -1112,43 +1130,27 @@ interface EPGDetailsModalProps {
 }
 
 const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgData, channelName, isLoading }) => {
+  const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
 
+  const handleClickOutside = useCallback((e: MouseEvent) => {
+    if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
+      onClose();
+    }
+  }, [onClose]);
+
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, onClose]);
-
-  const formatTime = (timestamp: string): string => {
-    const date = new Date(Number.parseInt(timestamp) * 1000);
-    return date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', hour12: false });
-  };
-
-  const formatDate = (timestamp: string): string => {
-    const date = new Date(Number.parseInt(timestamp) * 1000);
-    return date.toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'short' });
-  };
-
-  const isNow = (start: string, end: string): boolean => {
-    const now = Math.floor(Date.now() / 1000);
-    const startTime = Number.parseInt(start);
-    const endTime = Number.parseInt(end);
-    return startTime <= now && endTime > now;
-  };
+  }, [isOpen, handleClickOutside]);
 
   // Track expanded descriptions by program ID
   const [expandedPrograms, setExpandedPrograms] = useState<Set<number>>(new Set());
 
-  if (!isOpen) return null;
-
-  const toggleExpanded = (programId: number) => {
+  // Toggle expanded state for program description
+  const toggleExpanded = useCallback((programId: number) => {
     setExpandedPrograms(prev => {
       const next = new Set(prev);
       if (next.has(programId)) {
@@ -1158,15 +1160,19 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
       }
       return next;
     });
-  };
+  }, []);
 
-  // Group programs by date
-  const groupedPrograms = epgData?.reduce((acc, program) => {
-    const date = formatDate(program.start_time);
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(program);
-    return acc;
-  }, {} as Record<string, StalkerEPG[]>);
+  // Group programs by date - memoized to avoid recalculation on every render
+  const groupedPrograms = useMemo(() =>
+    epgData?.reduce((acc, program) => {
+      const date = formatEPGDate(program.start_time);
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(program);
+      return acc;
+    }, {} as Record<string, StalkerEPG[]>),
+  [epgData]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.8)' }}>
@@ -1190,7 +1196,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
             </div>
           ) : !epgData || epgData.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-gray-500">Brak danych EPG dla tego kanału</p>
+              <p className="text-gray-500">{t('noEpgData')}</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -1199,7 +1205,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
                   <h4 className="text-sm font-medium text-blue-400 mb-2 sticky top-0 bg-zinc-900 py-1">{date}</h4>
                   <div className="space-y-2">
                     {programs.map((program) => {
-                      const nowPlaying = isNow(program.start_time, program.end_time);
+                      const nowPlaying = isProgramNow(program.start_time, program.end_time);
                       const isExpanded = expandedPrograms.has(program.id);
                       return (
                         <div
@@ -1210,7 +1216,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
                         >
                           <div className="flex items-start gap-3">
                             <div className="flex-shrink-0 text-xs text-gray-400 font-mono pt-0.5">
-                              {formatTime(program.start_time)}
+                              {formatEPGTime(program.start_time)}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
@@ -1219,7 +1225,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
                                 </span>
                                 {nowPlaying && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-blue-600 text-white animate-pulse">
-                                    TERAZ
+                                    {t('nowPlayingLabel')}
                                   </span>
                                 )}
                               </div>
@@ -1233,7 +1239,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
                               )}
                             </div>
                             <div className="flex-shrink-0 text-xs text-gray-500 font-mono">
-                              {formatTime(program.end_time)}
+                              {formatEPGTime(program.end_time)}
                             </div>
                           </div>
                         </div>
@@ -1249,7 +1255,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
         {/* Footer */}
         <div className="p-3 border-t border-zinc-700 text-center">
           <button onClick={onClose} data-tv-focusable tabIndex={0} className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm transition-colors">
-            Zamknij
+            {t('close')}
           </button>
         </div>
       </div>
@@ -1265,14 +1271,10 @@ export const Player: React.FC<PlayerProps> = ({
   const mpv = useMpvPlayer(url, fallbackUrls, isVod, movieId, setPosition);
   const controls = usePlayerControls();
 
-  const placeholderClient = useRef(new StalkerClient({
-    id: 'placeholder', name: 'placeholder', portalUrl: 'http://localhost',
-    mac: '', token: '', lastUsed: new Date(), isActive: false,
-  }));
-
   // Single EPG query for 24 hours - used by both current program and EPG modal
+  // Only fetch when we have a valid client
   const { data: channelEPG, isLoading: epgLoading } = useChannelEPG(
-    client ?? placeholderClient.current, channelId ?? 0, name, 24, !isVod && !!channelId
+    client, channelId ?? 0, name, 24, !isVod && !!channelId && !!client
   );
 
   // Derive current program from channelEPG data instead of making separate query
@@ -1281,41 +1283,43 @@ export const Player: React.FC<PlayerProps> = ({
   const [showEPGModal, setShowEPGModal] = useState(false);
   const hasResumedRef = useRef(false);
 
+  // Memoized cleanup handler for beforeunload event
+  const handleBeforeUnload = useCallback(() => {
+    void mpv.cleanup();
+  }, [mpv.cleanup]);
+
   // Cleanup on unmount and before page unload
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      void mpv.cleanup();
-    };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       void mpv.cleanup();
     };
-  }, [mpv.cleanup]);
+  }, [handleBeforeUnload]); // mpv.cleanup jest już w handleBeforeUnload deps
 
   // Initial load on URL change
   useEffect(() => {
+    const { cleanup, loadUrl, getRankedUrls, setStreamState, setStatusMsg } = mpv;
     hasResumedRef.current = false;
 
     let cancelled = false;
 
     // Cleanup old MPV before loading new URL
-    void mpv.cleanup().then(() => {
+    void cleanup().then(() => {
       if (cancelled) return;
 
       // Reset state for new stream
-      mpv.setStreamState('connecting');
-      mpv.setStatusMsg('Connecting…');
+      setStreamState('connecting');
+      setStatusMsg('Connecting…');
       // Use ranked URLs for smart priority ordering
-      const ranked = mpv.getRankedUrls ? mpv.getRankedUrls() : [url, ...fallbackUrls];
-      void mpv.loadUrl(ranked[0], 0, 0);
+      const ranked = getRankedUrls ? getRankedUrls() : [url, ...fallbackUrls];
+      void loadUrl(ranked[0], 0, 0);
     });
 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url]);
+  }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Seek to resume position when playing and duration is available
   const { seekTo } = controls;
@@ -1330,6 +1334,9 @@ export const Player: React.FC<PlayerProps> = ({
       return () => clearTimeout(timer);
     }
   }, [isVod, resumePosition, mpv.streamState, mpv.duration, seekTo]);
+
+  // Memoized URL list to avoid re-calculation on every render
+  const allUrls = useMemo(() => [url, ...fallbackUrls], [url, fallbackUrls]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -1390,8 +1397,8 @@ export const Player: React.FC<PlayerProps> = ({
           videoParams={mpv.videoParams}
           totalRetries={mpv.totalRetries}
           currentUrlIdx={mpv.currentUrlIdx}
-          urlCount={[url, ...fallbackUrls].length}
-          currentProgram={currentProgram as unknown as { name: string; description?: string; start_time: string; end_time: string; year?: string; rating?: number; } | null}
+          urlCount={allUrls.length}
+          currentProgram={currentProgram}
           isVod={isVod}
           isLoading={mpv.isLoading || buffering}
           statusMsg={mpv.statusMsg}

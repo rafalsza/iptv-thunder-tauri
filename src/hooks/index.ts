@@ -24,11 +24,9 @@ export {
 } from './useDatabase';
 
 // Also export from db.ts directly for low-level access
-export { 
-  getDB as getDatabase, 
-  resetDatabase as resetDb, 
-  withTransaction, 
-  dbExecute, 
+export {
+  withTransaction,
+  dbExecute,
   dbSelect,
   cleanupOldData,
   cleanupAllStaleData
