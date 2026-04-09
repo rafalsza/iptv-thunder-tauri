@@ -69,6 +69,8 @@ export const Navigation: React.FC<NavigationProps> = ({ items, accountInfo }) =>
           return (
             <div key={item.id}>
               <button
+                data-tv-focusable
+                tabIndex={0}
                 onClick={() => {
                   if (hasSubItems) {
                     toggleSubmenu(item.id);
@@ -123,6 +125,8 @@ export const Navigation: React.FC<NavigationProps> = ({ items, accountInfo }) =>
                 <div className="mt-1 ml-4 space-y-1">
                   {item.subItems.map((subItem) => (
                     <button
+                      data-tv-focusable
+                      tabIndex={0}
                       key={subItem.id}
                       onClick={subItem.onClick}
                       className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all duration-200 text-sm bg-slate-700 bg-opacity-30 text-slate-300 hover:bg-slate-600 hover:text-white hover:translate-x-1"

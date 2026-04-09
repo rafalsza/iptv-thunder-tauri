@@ -43,3 +43,40 @@
     background: transparent !important;
   }
 }
+
+/* TV Navigation Styles */
+[data-tv-focusable] {
+  outline: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-tv-focusable]:focus,
+[data-tv-focusable].tv-focused {
+  outline: 3px solid #3b82f6;
+  outline-offset: 2px;
+  transform: scale(1.02);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  z-index: 10;
+}
+
+[data-tv-focusable]:focus-visible {
+  outline: 3px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* TV optimized button sizes - larger touch targets */
+@media (hover: none) and (pointer: coarse) {
+  [data-tv-focusable] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Hide scrollbar for TV interface */
+.tv-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.tv-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

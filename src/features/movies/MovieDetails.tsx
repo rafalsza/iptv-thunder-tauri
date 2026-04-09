@@ -101,6 +101,8 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               {isHovered && (
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center transition-all">
                   <button
+                    data-tv-focusable
+                    tabIndex={0}
                     onClick={handlePlay}
                     className="w-20 h-20 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center backdrop-blur-sm transition-all"
                   >
@@ -119,6 +121,8 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
             <div className="flex items-start justify-between mb-4">
               <h1 className="text-4xl font-bold flex-1 pr-4">{movie.name}</h1>
               <button
+                data-tv-focusable
+                tabIndex={0}
                 onClick={onBack}
                 className="flex items-center justify-center w-10 h-10 bg-slate-800/80 hover:bg-slate-700/80 rounded-full text-white transition-all backdrop-blur-sm flex-shrink-0"
               >
@@ -202,6 +206,8 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
             {/* Action Buttons */}
             <div className="flex items-center gap-4">
               <button
+                data-tv-focusable
+                tabIndex={0}
                 onClick={handlePlay}
                 className="flex items-center gap-2 px-6 py-3 bg-white text-slate-900 rounded-lg font-semibold hover:bg-slate-100 transition-colors"
               >
@@ -212,6 +218,8 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               </button>
 
               <button
+                data-tv-focusable
+                tabIndex={0}
                 onClick={() => toggleItemFavorite('vod', String(movie.id), {
                   name: movie.name,
                   poster: movie.poster,
@@ -242,6 +250,8 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               </button>
 
               <button
+                data-tv-focusable
+                tabIndex={0}
                 onClick={handleDownload}
                 className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-500 transition-colors"
               >
@@ -265,12 +275,16 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
             </p>
             <div className="flex gap-3">
               <button
+                data-tv-focusable
+                tabIndex={0}
                 onClick={handlePlayFromStart}
                 className="flex-1 px-4 py-3 bg-slate-700 text-white rounded-lg font-medium hover:bg-slate-600 transition-colors"
               >
                 {t('fromStart')}
               </button>
               <button
+                data-tv-focusable
+                tabIndex={0}
                 onClick={handleResume}
                 className="flex-1 px-4 py-3 bg-white text-slate-900 rounded-lg font-medium hover:bg-slate-100 transition-colors"
               >

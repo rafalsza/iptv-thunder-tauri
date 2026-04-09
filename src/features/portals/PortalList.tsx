@@ -66,6 +66,8 @@ export const PortalList: React.FC = () => {
           </p>
         </div>
         <button
+          data-tv-focusable
+          tabIndex={0}
           onClick={() => setShowForm(true)}
           className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 flex items-center gap-2 shadow-lg"
         >
@@ -97,6 +99,8 @@ export const PortalList: React.FC = () => {
               <div className="flex gap-2">
                 {portal.id !== activePortalId && (
                   <button
+                    data-tv-focusable
+                    tabIndex={0}
                     onClick={() => handleSetActive(portal)}
                     className="p-2 text-green-400 hover:bg-green-400 hover:bg-opacity-20 rounded-lg transition-colors"
                     title={t('setActive')}
@@ -105,6 +109,8 @@ export const PortalList: React.FC = () => {
                   </button>
                 )}
                 <button
+                  data-tv-focusable
+                  tabIndex={0}
                   onClick={() => setTestingPortal(portal.id)}
                   className="p-2 text-blue-400 hover:bg-blue-400 hover:bg-opacity-20 rounded-lg transition-colors"
                   title={t('testConnection')}
@@ -112,6 +118,8 @@ export const PortalList: React.FC = () => {
                   🔄
                 </button>
                 <button
+                  data-tv-focusable
+                  tabIndex={0}
                   onClick={() => handleEdit(portal)}
                   className="p-2 text-yellow-400 hover:bg-yellow-400 hover:bg-opacity-20 rounded-lg transition-colors"
                   title={t('edit')}
@@ -119,6 +127,8 @@ export const PortalList: React.FC = () => {
                   ✏️
                 </button>
                 <button
+                  data-tv-focusable
+                  tabIndex={0}
                   onClick={() => handleDelete(portal)}
                   className="p-2 text-red-400 hover:bg-red-400 hover:bg-opacity-20 rounded-lg transition-colors"
                   title={t('delete')}

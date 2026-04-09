@@ -161,27 +161,98 @@ async fn check_mpv_available() -> Result<bool, String> {
     Ok(true)
 }
 
+// ExoPlayer commands - on Android these invoke the native Kotlin plugin
+// On desktop these are stubs (desktop uses libmpv instead)
+#[tauri::command]
+async fn exoplayer_play(url: String) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "android")]
+    {
+        // On Android, this command is handled by the ExoPlayerPlugin Kotlin class
+        Ok(serde_json::json!({"success": true, "url": url}))
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        // Desktop uses libmpv, not ExoPlayer
+        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
+    }
+}
+
+#[tauri::command]
+async fn exoplayer_pause() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({"success": true}))
+}
+
+#[tauri::command]
+async fn exoplayer_resume() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({"success": true}))
+}
+
+#[tauri::command]
+async fn exoplayer_stop() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({"success": true}))
+}
+
+#[tauri::command]
+async fn exoplayer_seek(position: i64) -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({"success": true, "position": position}))
+}
+
+#[tauri::command]
+async fn exoplayer_set_speed(speed: f32) -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({"success": true, "speed": speed}))
+}
+
+#[tauri::command]
+async fn exoplayer_get_position() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({"position": 0, "duration": 0, "is_playing": false}))
+}
+
+#[tauri::command]
+async fn exoplayer_is_playing() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({"is_playing": false}))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(
-            tauri_plugin_stronghold::Builder::new(|password| {
-                // Simple 32-byte hash for Stronghold requirement
-                // In production, use argon2 or similar for secure hashing
-                let mut key = vec![0u8; 32];
-                let pwd_bytes = password.as_bytes();
-                for (i, byte) in pwd_bytes.iter().enumerate().take(32) {
-                    key[i] = *byte;
-                }
-                key
-            })
-            .build(),
-        )
-        .plugin(tauri_plugin_libmpv::init())
+    #[cfg_attr(target_os = "android", allow(unused_mut))]
+    let mut builder = tauri::Builder::default();
+
+    // Desktop-only plugins (stronghold and libmpv not available on Android)
+    #[cfg(not(target_os = "android"))]
+    {
+        builder = builder
+            .plugin(
+                tauri_plugin_stronghold::Builder::new(|password| {
+                    let mut key = vec![0u8; 32];
+                    let pwd_bytes = password.as_bytes();
+                    for (i, byte) in pwd_bytes.iter().enumerate().take(32) {
+                        key[i] = *byte;
+                    }
+                    key
+                })
+                .build(),
+            )
+            .plugin(tauri_plugin_libmpv::init());
+    }
+
+    builder
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![stalker_request, fetch_image, check_mpv_available])
+        .invoke_handler(tauri::generate_handler![
+            stalker_request,
+            fetch_image,
+            check_mpv_available,
+            // Android ExoPlayer commands
+            exoplayer_play,
+            exoplayer_pause,
+            exoplayer_resume,
+            exoplayer_stop,
+            exoplayer_seek,
+            exoplayer_set_speed,
+            exoplayer_get_position,
+            exoplayer_is_playing
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

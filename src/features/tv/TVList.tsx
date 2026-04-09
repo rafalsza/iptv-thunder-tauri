@@ -121,13 +121,15 @@ export const TVList: React.FC<TVListProps> = ({
             </div>
             {/* Favorite Category Button */}
             <button
+              data-tv-focusable
+              tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
                 if (selectedCategory) {
                   toggleCategory(String(selectedCategory.id), selectedCategory.title);
                 }
               }}
-              className="text-xl hover:scale-110 transition-transform p-2 rounded-full hover:bg-slate-700"
+              className="text-xl hover:scale-110 transition-transform p-2 rounded-full hover:bg-slate-700 focus:bg-slate-700"
               title={isCategoryFavorite(String(selectedCategory.id)) ? t('removeFromFavorites') : t('addToFavorites')}
             >
               {isCategoryFavorite(String(selectedCategory.id)) ? '❤️' : '🤍'}
@@ -142,12 +144,14 @@ export const TVList: React.FC<TVListProps> = ({
           {filtered.map((channel: StalkerChannel, index: number) => (
           <div
             key={channel.id}
+            data-tv-focusable
+            tabIndex={0}
             ref={index === filtered.length - 1 && hasMore ? (el) => {
               if (el && observerRef.current) observerRef.current.observe(el);
             } : undefined}
             onMouseEnter={() => debouncedPreload(channel)}
             onClick={() => onChannelSelect(channel)}
-            className="p-3 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700 hover:border-blue-500 transition-all"
+            className="p-3 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700 hover:border-blue-500 transition-all focus:bg-slate-700 focus:border-blue-500"
           >
             <div className="flex justify-between items-start">
               <div className="flex-1 min-w-0">
@@ -159,6 +163,8 @@ export const TVList: React.FC<TVListProps> = ({
                 )}
               </div>
               <button
+                data-tv-focusable
+                tabIndex={0}
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleItemFavorite('live', String(channel.id), {
@@ -167,7 +173,7 @@ export const TVList: React.FC<TVListProps> = ({
                     cmd: channel.cmd,
                   });
                 }}
-                className="ml-2 text-lg hover:scale-110 transition-transform"
+                className="ml-2 text-lg hover:scale-110 transition-transform focus:scale-110"
               >
                 {isItemFavorite('live', String(channel.id)) ? '❤️' : '🤍'}
               </button>

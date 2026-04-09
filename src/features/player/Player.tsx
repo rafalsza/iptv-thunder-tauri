@@ -760,7 +760,7 @@ const PlayerHeader: React.FC<PlayerHeaderProps> = ({
             <span className="text-xs text-yellow-500">fallback {currentUrlIdx}/{urlCount - 1}</span>
           )}
           {!isFullscreen && (
-            <button onClick={onClose} aria-label="Close"
+            <button onClick={onClose} aria-label="Close" data-tv-focusable tabIndex={0}
               className="text-gray-400 hover:text-white transition-colors text-xl leading-none">✕</button>
           )}
         </div>
@@ -840,6 +840,8 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
         {/* Left: Play/Pause & Stop */}
         <div className="flex items-center gap-3">
           <button
+            data-tv-focusable
+            tabIndex={0}
             onClick={onPlayPause}
             className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
             title={isPaused ? 'Play' : 'Pause'}
@@ -851,6 +853,8 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
             )}
           </button>
           <button
+            data-tv-focusable
+            tabIndex={0}
             onClick={onStop}
             className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
             title="Stop"
@@ -861,6 +865,8 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
           {/* EPG Button - Live TV only */}
           {!isVod && (
             <button
+              data-tv-focusable
+              tabIndex={0}
               onClick={onShowEPG}
               className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
               title="Program TV (EPG)"
@@ -901,7 +907,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
 
         {/* Right: Fullscreen & Close */}
         <div className="flex items-center gap-3">
-          <button onClick={onFullscreen}
+          <button onClick={onFullscreen} data-tv-focusable tabIndex={0}
             className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
             title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
             {isFullscreen ? (
@@ -914,7 +920,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
               </svg>
             )}
           </button>
-          <button onClick={onClose}
+          <button onClick={onClose} data-tv-focusable tabIndex={0}
             className="w-10 h-10 rounded-full bg-red-500/80 hover:bg-red-500 flex items-center justify-center transition-colors"
             title="Close">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
@@ -940,11 +946,11 @@ const DeadState: React.FC<DeadStateProps> = ({ errorMsg, onRetry, onClose }) => 
     <p className="text-white text-lg font-medium">Stream unavailable</p>
     {errorMsg && <p className="text-gray-400 text-sm max-w-sm">{errorMsg}</p>}
     <div className="flex gap-3 mt-2">
-      <button onClick={onRetry}
+      <button onClick={onRetry} data-tv-focusable tabIndex={0}
         className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors">
         Try again
       </button>
-      <button onClick={onClose}
+      <button onClick={onClose} data-tv-focusable tabIndex={0}
         className="px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors">
         Close
       </button>
@@ -1028,7 +1034,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
             <h3 className="text-lg font-semibold text-white">📺 {channelName}</h3>
             <p className="text-sm text-gray-400">Program TV - EPG</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition-colors">
+          <button onClick={onClose} data-tv-focusable tabIndex={0} className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition-colors">
             <span className="text-gray-400 text-lg">×</span>
           </button>
         </div>
@@ -1099,7 +1105,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
 
         {/* Footer */}
         <div className="p-3 border-t border-zinc-700 text-center">
-          <button onClick={onClose} className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm transition-colors">
+          <button onClick={onClose} data-tv-focusable tabIndex={0} className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm transition-colors">
             Zamknij
           </button>
         </div>

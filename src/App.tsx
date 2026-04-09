@@ -10,7 +10,7 @@ import { StalkerChannel, StalkerVOD, StalkerGenre } from '@/types';
 import { usePlayer } from '@/features/player/player.hooks';
 import { Navigation } from '@/components/ui/Navigation';
 import { usePortalsStore } from '@/store/portals.store';
-import { useTranslation } from '@/hooks/useTranslation';
+import { useTranslation, useTVNavigation } from '@/hooks';
 import { Settings } from '@/features/settings/Settings';
 
 // Lazy load components
@@ -61,10 +61,10 @@ function AppInner({ }: AppProps) {
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
   const [selectedMovie, setSelectedMovie] = useState<StalkerVOD | null>(null);
   const [selectedSeries, setSelectedSeries] = useState<StalkerVOD | null>(null);
-  
+
   // Track previous view for back navigation
   const previousViewRef = useRef<ActiveView>('movies');
-  
+
   const activePortal = usePortalsStore(s =>
     s.portals.find(p => p.id === s.activePortalId) ?? null
   );
@@ -106,6 +106,18 @@ function AppInner({ }: AppProps) {
     setSelectedSeries(null);
     setActiveView(previousViewRef.current);
   };
+
+  // TV Navigation (D-pad support for Android TV)
+  useTVNavigation({
+    selector: '[data-tv-focusable]',
+    onBack: () => {
+      if (activeView === 'movie-details' && selectedMovie) {
+        handleMovieBack();
+      } else if (activeView === 'series-details' && selectedSeries) {
+        handleSeriesBack();
+      }
+    },
+  });
 
   const handleEpisodeSelect = async (episode: StalkerVOD, resumePosition?: number) => {
     if (!client) return;
