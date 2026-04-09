@@ -44,15 +44,19 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   const [epgUrl, setEpgUrl] = useState(externalEpgUrl || '');
   const [selectedService, setSelectedService] = useState(selectedEpgService || 'auto');
 
-  // Load data when modal opens
+  // Load data when modal opens or store values change
   useEffect(() => {
     if (isOpen) {
       getSettings().then(setSettings);
       getVersion().then(setVersion);
-      setEpgUrl(externalEpgUrl || '');
-      setSelectedService(selectedEpgService || 'auto');
     }
-  }, [isOpen, externalEpgUrl, selectedEpgService]);
+  }, [isOpen]);
+
+  // Sync local EPG state with store values whenever they change
+  useEffect(() => {
+    setEpgUrl(externalEpgUrl || '');
+    setSelectedService(selectedEpgService || 'auto');
+  }, [externalEpgUrl, selectedEpgService]);
 
   const updateSetting = async <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     await setSetting(key, value);
@@ -65,6 +69,20 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
       setExternalEpgUrl(epgUrl.trim() || null);
     }
     onClose();
+  };
+
+  const handleEpgServiceChange = (serviceId: string) => {
+    setSelectedService(serviceId);
+    setSelectedEpgService(serviceId);
+    // For predefined services (not custom), clear custom URL
+    if (serviceId !== 'custom') {
+      const service = PREDEFINED_EPG_SERVICES.find(s => s.id === serviceId);
+      if (service && service.url) {
+        setExternalEpgUrl(service.url);
+      } else if (serviceId === 'auto') {
+        setExternalEpgUrl(null);
+      }
+    }
   };
 
   const handleResetEpg = () => {
@@ -210,7 +228,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                   <div className="max-w-lg space-y-8">
                     <div>
                       <label className="text-sm text-slate-400 mb-2 block">{t('epgSource')}</label>
-                      <Select value={selectedService} onValueChange={setSelectedService}>
+                      <Select value={selectedService} onValueChange={handleEpgServiceChange}>
                         <SelectTrigger className="bg-slate-800 border-slate-700">
                           <SelectValue>{selectedServiceObj?.name}</SelectValue>
                         </SelectTrigger>
@@ -231,7 +249,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                           id="custom-epg-url"
                           type="url"
                           value={epgUrl}
-                          onChange={(e) => setEpgUrl(e.target.value)}
+                          onChange={(e) => {
+                            const newUrl = e.target.value;
+                            setEpgUrl(newUrl);
+                            if (newUrl.trim()) {
+                              setExternalEpgUrl(newUrl.trim());
+                            }
+                          }}
                           placeholder="https://twoj-serwer.pl/epg.xml"
                           className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-2xl focus:outline-none focus:border-blue-500"
                         />

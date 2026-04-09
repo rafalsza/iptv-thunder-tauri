@@ -30,8 +30,9 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
       // Test profile
       const profile = await client.getProfileAndAuth();
       
-      // Test channels
-      const channels = await client.getAllChannels();
+      // Test channels - get first page only for quick test
+      const channelsResult = await client.getChannelsWithPagination('*', 1);
+      const channels = channelsResult.channels;
       
       const responseTime = Date.now() - startTime;
 

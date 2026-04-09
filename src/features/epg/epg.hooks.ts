@@ -111,8 +111,11 @@ export const usePrefetchEPG = (client: StalkerClient) => {
     }
 
     const { from, to } = getEPGTimeRange(hours);
+    const queryKey = ['epg', 'channel', channelId, from, to];
+    const state = queryClient.getQueryState(queryKey);
+    if (state?.fetchStatus === 'fetching') return;
     queryClient.prefetchQuery({
-      queryKey: ['epg', 'channel', channelId, from, to],
+      queryKey,
       queryFn: async () => {
         const result = await getChannelEPG(client, channelId, from, to);
         // Save to persistent cache

@@ -131,7 +131,7 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
       {/* Movie Categories Grid */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-          {filteredCategories.map((category, index) => (
+          {filteredCategories.map((category) => (
             <div
               key={category.id}
               onClick={() => handleCategoryClick(category)}

@@ -51,6 +51,12 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   const isFavorite = favoriteIds.has(String(series.id));
   const seriesName = String(series.series || series.name || '');
 
+  // Reset state when posterUrl changes (fix for virtualization reuse)
+  useEffect(() => {
+    setImgSrc(imageCache.get(posterUrl) ?? null);
+    setImgError(false);
+  }, [posterUrl]);
+
   useEffect(() => {
     if (!posterUrl || imageCache.has(posterUrl)) {
       return;

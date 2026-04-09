@@ -1,12 +1,13 @@
 // =========================
 // 📺 TV LIST (UI)
 // =========================
-import React, { useMemo, useRef, useCallback } from 'react';
-import { useChannels, usePrefetchStream } from './tv.hooks';
+import React, { useMemo, useRef, useCallback, useEffect } from 'react';
+import { useLazyChannels, usePrefetchStream } from './tv.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel, StalkerGenre } from '@/types';
+import { ChannelLogo } from './ChannelLogo';
 
 interface TVListProps {
   client: StalkerClient;
@@ -25,10 +26,12 @@ export const TVList: React.FC<TVListProps> = ({
 }) => {
   const { t } = useTranslation();
   const {
-    data: allChannels = [],
+    channels: allChannels = [],
     isLoading,
+    hasMore,
+    loadMore,
     error
-  } = useChannels(client, selectedCategory?.id);
+  } = useLazyChannels(client, selectedCategory?.id);
   const preload = usePrefetchStream(client);
   const { isItemFavorite, toggleItemFavorite } = useFavorites(accountId);
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'live');
@@ -38,6 +41,25 @@ export const TVList: React.FC<TVListProps> = ({
   const lastPreloadedRef = useRef<string | null>(null);
   const prefetchCountRef = useRef(0);
   const MAX_PREFETCHES = 10;
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  // Setup intersection observer for infinite scroll
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          loadMore();
+        }
+      },
+      { rootMargin: '100px' }
+    );
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [hasMore, isLoading, loadMore]);
 
   // Debounced prefetch - waits 300ms and limits total prefetches
   const debouncedPreload = useCallback((channel: StalkerChannel) => {
@@ -61,12 +83,12 @@ export const TVList: React.FC<TVListProps> = ({
   }, [preload]);
 
   const filtered = useMemo(() =>
-    allChannels.filter((c: StalkerChannel) => 
+    allChannels.filter((c: StalkerChannel) =>
       c.name.toLowerCase().includes(search.toLowerCase())
     ),
   [allChannels, search]);
 
-  if (isLoading) {
+  if (isLoading && allChannels.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-lg text-white">{t('loading')}</div>
@@ -74,10 +96,10 @@ export const TVList: React.FC<TVListProps> = ({
     );
   }
 
-  if (error) {
+  if (error && allChannels.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-lg text-red-500">{t('error')}</div>
+        <div className="text-lg text-red-500">{t('error')}: {error.message}</div>
       </div>
     );
   }
@@ -117,9 +139,12 @@ export const TVList: React.FC<TVListProps> = ({
       {/* Channels Grid */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {filtered.map((channel: StalkerChannel) => (
+          {filtered.map((channel: StalkerChannel, index: number) => (
           <div
             key={channel.id}
+            ref={index === filtered.length - 1 && hasMore ? (el) => {
+              if (el && observerRef.current) observerRef.current.observe(el);
+            } : undefined}
             onMouseEnter={() => debouncedPreload(channel)}
             onClick={() => onChannelSelect(channel)}
             className="p-3 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700 hover:border-blue-500 transition-all"
@@ -133,29 +158,52 @@ export const TVList: React.FC<TVListProps> = ({
                   <p className="text-xs text-slate-400">#{channel.number}</p>
                 )}
               </div>
-              <button 
+              <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  toggleItemFavorite('live', String(channel.id));
+                  toggleItemFavorite('live', String(channel.id), {
+                    name: channel.name,
+                    poster: channel.logo,
+                    cmd: channel.cmd,
+                  });
                 }}
                 className="ml-2 text-lg hover:scale-110 transition-transform"
               >
                 {isItemFavorite('live', String(channel.id)) ? '❤️' : '🤍'}
               </button>
             </div>
-            {!!channel.logo && (
-              <img 
-                src={channel.logo} 
-                alt={channel.name}
-                className="w-full h-16 object-contain mt-2"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            )}
+            {!!channel.logo && <ChannelLogo logo={channel.logo} name={channel.name} />}
           </div>
         ))}
         </div>
+        
+        {/* Infinite scroll trigger and loading state */}
+        {isLoading && (
+          <div className="flex justify-center py-4">
+            <div className="text-white">{t('loading')}...</div>
+          </div>
+        )}
+        
+        {error && (
+          <div className="flex justify-center py-4">
+            <div className="text-red-400 text-sm">{error.message}</div>
+          </div>
+        )}
+
+        {/* No search results */}
+        {!isLoading && search && filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+            <div className="text-4xl mb-3">🔍</div>
+            <p className="text-lg">Nie znaleziono kanałów</p>
+            <p className="text-sm text-slate-500">Brak wyników dla "{search}"</p>
+          </div>
+        )}
+
+        {!isLoading && !hasMore && filtered.length > 0 && (
+          <div className="text-center py-4 text-slate-500">
+            {filtered.length} z {allChannels.length} {t('channels').toLowerCase()}
+          </div>
+        )}
       </div>
     </div>
   );

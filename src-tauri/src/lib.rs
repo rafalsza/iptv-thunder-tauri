@@ -116,31 +116,44 @@ async fn fetch_image(url: String, timeout: u64) -> Result<serde_json::Value, Str
         .build()
         .map_err(|e| e.to_string())?;
 
-    let response = client
+    let response_result = client
         .get(&url)
         .header("Accept", "image/*,*/*")
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         .send()
-        .await
-        .map_err(|e| e.to_string())?;
+        .await;
 
-    let status = response.status().as_u16();
-    let headers: std::collections::HashMap<String, String> = response
-        .headers()
-        .iter()
-        .filter_map(|(k, v)| {
-            v.to_str().ok().map(|s| (k.to_string(), s.to_string()))
-        })
-        .collect();
+    match response_result {
+        Ok(response) => {
+            let status = response.status().as_u16();
+            let headers: std::collections::HashMap<String, String> = response
+                .headers()
+                .iter()
+                .filter_map(|(k, v)| {
+                    v.to_str().ok().map(|s| (k.to_string(), s.to_string()))
+                })
+                .collect();
 
-    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
-    let body: Vec<u8> = bytes.to_vec();
+            let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+            let body: Vec<u8> = bytes.to_vec();
 
-    Ok(json!({
-        "status": status,
-        "headers": headers,
-        "body": body
-    }))
+            Ok(json!({
+                "status": status,
+                "headers": headers,
+                "body": body
+            }))
+        }
+        Err(e) => {
+            // Return error as 0 status so frontend can handle it gracefully
+            // This prevents throwing errors for expected failures (404s, DNS failures, etc.)
+            Ok(json!({
+                "status": 0,
+                "headers": {},
+                "body": [],
+                "error": e.to_string()
+            }))
+        }
+    }
 }
 
 #[tauri::command]

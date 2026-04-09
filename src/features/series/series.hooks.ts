@@ -317,8 +317,11 @@ export const usePrefetchSeriesStream = (client: StalkerClient) => {
   return React.useCallback(
     (episode: StalkerVOD) => {
       if (!episode.cmd) return;
+      const queryKey = ['series-stream', episode.id];
+      const state = queryClient.getQueryState(queryKey);
+      if (state?.fetchStatus === 'fetching') return;
       queryClient.prefetchQuery({
-        queryKey: ['series-stream', episode.id],
+        queryKey,
         queryFn: () => getSeriesStream(client, episode.cmd),
         staleTime: 5 * 60 * 1000,
       });

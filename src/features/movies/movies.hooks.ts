@@ -53,6 +53,10 @@ async function fetchAllMovies(
   // Deduplicate by id (pages can overlap on some servers)
   const map = new Map<string, StalkerVOD>();
   for (const item of allItems) {
+    // Use o_name if available (clean title) instead of file-like name
+    if (item.o_name && item.o_name !== item.name) {
+      item.name = item.o_name;
+    }
     map.set(String(item.id), item);
   }
   const uniqueItems = Array.from(map.values());
@@ -71,18 +75,7 @@ async function fetchAllMovies(
 
 export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
   const accountId = client?.getAccount()?.id ?? 'default';
-  const queryClient = useQueryClient();
   const enabled = !!categoryId && !!accountId && accountId !== 'default';
-  // Clear stale cache on category change
-  React.useEffect(() => {
-    if (categoryId && accountId) {
-      const key = ['movies-all', accountId, categoryId];
-      const cached = queryClient.getQueryData(key);
-      if (cached !== undefined) {
-        queryClient.removeQueries({ queryKey: key, exact: true });
-      }
-    }
-  }, [categoryId, accountId, queryClient]);
 
   const query = useQuery({
     queryKey: ['movies-all', accountId, categoryId],
@@ -127,7 +120,7 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
         saveVod(
           items.map(vod => ({
             id: vod.id?.toString() || '',
-            name: vod.name || '',
+            name: vod.o_name || vod.name || '',
             description: vod.description || '',
             posterUrl: vod.logo || vod.poster || '',
             streamUrl: vod.cmd || '',
@@ -202,8 +195,11 @@ export const usePrefetchMovieStream = (client: StalkerClient) => {
   return React.useCallback(
     (movie: StalkerVOD) => {
       if (!movie.cmd) return;
+      const queryKey = ['movie-stream', movie.id];
+      const state = queryClient.getQueryState(queryKey);
+      if (state?.fetchStatus === 'fetching') return;
       queryClient.prefetchQuery({
-        queryKey: ['movie-stream', movie.id],
+        queryKey,
         queryFn: () => client.getVODUrl(movie.cmd),
         staleTime: 5 * 60 * 1000,
       });

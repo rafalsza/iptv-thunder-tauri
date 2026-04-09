@@ -1,29 +1,34 @@
 // =========================
 // 🪝 MODERN TV HOOKS with Cache
 // =========================
-import { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel } from '@/types';
 import { usePortalCacheStore } from '@/store/portalCache.store';
-import { saveChannels } from '@/hooks/useDatabase';
+import { saveChannels, getChannels as getChannelsFromDB } from '@/hooks/useDatabase';
 import { getChannelEPG, getEPGTimeRange } from '@/features/epg/epg.api';
+import { getGenres, getChannels } from './tv.api';
 
 // Pobierz wszystkie kanały z kategorii (z SQLite DB lub API)
 export const useChannels = (client: StalkerClient, genreId?: string) => {
   const accountId = client?.['account']?.id || 'default';
-  const prevLengthRef = useRef<number>(0);
-  const prevFirstIdRef = useRef<string | number>('');
+  const prevSignatureRef = useRef<string>('');
   
   const query = useQuery({
     queryKey: ['channels', accountId, genreId],
     queryFn: async ({ signal }) => {
-      if (!genreId || genreId === '*') {
-        return await client.getAllChannels();
-      }
+      // Always use paginated fetching - get_all_channels endpoint is deprecated
+      const targetGenreId = genreId || '*';
       
       // Fetch page 1 first to determine total count
-      const firstPage = await client.getChannelsWithPagination(genreId, 1, signal);
+      const firstPage = await getChannels(client, {
+        genre: targetGenreId,
+        page: 1,
+        sortby: 'number',
+        signal
+      });
+      
       if (signal?.aborted) return [];
       
       const allChannels: StalkerChannel[] = [...firstPage.channels];
@@ -38,8 +43,11 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
       }
       
       // Calculate remaining pages based on total count
-      const itemsPerPage = firstPage.channels.length || 50;
-      const totalPages = Math.min(Math.ceil(firstPage.totalItems / itemsPerPage), 50);
+      const itemsPerPage = firstPage.channels.length || 14;
+      // Safety limit: max ~1000 channels for EPG (prevents UI freeze with 80k channels)
+      const MAX_CHANNELS = 1000;
+      const maxPages = Math.ceil(MAX_CHANNELS / itemsPerPage);
+      const totalPages = Math.min(Math.ceil(firstPage.totalItems / itemsPerPage), maxPages);
       const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
       
       // Fetch remaining pages in batches with throttling to avoid overwhelming the portal
@@ -49,7 +57,12 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
         
         const batch = remainingPages.slice(i, i + BATCH);
         const results = await Promise.allSettled(
-          batch.map(page => client.getChannelsWithPagination(genreId, page, signal))
+          batch.map(page => getChannels(client, {
+            genre: targetGenreId,
+            page,
+            sortby: 'number',
+            signal
+          }))
         );
         
         results.forEach(result => {
@@ -81,7 +94,7 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    enabled: !!client && !!genreId,
+    enabled: !!client,
   });
   
   // Save channels to SQLite when data changes (replaces onSuccess callback)
@@ -89,12 +102,18 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
     const data = query.data;
     if (!data || data.length === 0) return;
 
-    // Cheap check: length + first ID (avoids O(n) JSON.stringify)
-    const firstId = data[0]?.id;
-    if (data.length === prevLengthRef.current && firstId === prevFirstIdRef.current) return;
-    prevLengthRef.current = data.length;
-    prevFirstIdRef.current = firstId ?? '';
-    
+    // Lightweight signature: count + first ID + last ID (detects add/remove/reorder)
+    const signature = `${data.length}-${data[0]?.id}-${data[data.length - 1]?.id}`;
+    if (signature === prevSignatureRef.current) return;
+    prevSignatureRef.current = signature;
+
+    // Check if we already saved this exact data (prevents re-save after player close)
+    const savedSignatureKey = `iptv-channels-saved-${accountId}-${genreId || '*'}`;
+    const alreadySaved = localStorage.getItem(savedSignatureKey);
+    if (alreadySaved === signature) {
+      return;
+    }
+
     saveChannels(data.map(ch => ({
       id: ch.id?.toString() || '',
       name: ch.name || '',
@@ -102,7 +121,10 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
       iconUrl: ch.logo_url || ch.logo || '',
       genreId: genreId || ch.tv_genre_id?.toString(),
       orderNum: ch.number || 0,
-    })), accountId).catch(err => console.error('[DB] Failed to save channels:', err));
+    })), accountId).then(() => {
+      // Mark as saved
+      localStorage.setItem(savedSignatureKey, signature);
+    }).catch(err => console.error('[DB] Failed to save channels:', err));
   }, [query.data, accountId, genreId]);
   
   // Pre-fetch EPG for channels (only for first 20 visible channels)
@@ -143,12 +165,14 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
             
             // Skip if already cached in store with same TTL (avoids mismatch)
             if (hasValidEPG(accountId, channelId, EPG_TTL)) return;
-            
+
+            // Mark as prefetched BEFORE fetch to prevent race conditions
+            prefetchedEPG.current.set(channelId, now);
+
             try {
               const epg = await getChannelEPG(client, channelId, from, to);
               if (!cancelled) {
                 setChannelEPG(accountId, channelId, epg);
-                prefetchedEPG.current.set(channelId, now);
                 
                 // Cleanup: keep only last 100 entries to prevent memory leak
                 if (prefetchedEPG.current.size > 200) {
@@ -160,6 +184,8 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
               }
             } catch (err) {
               console.warn('Failed to prefetch EPG for channel', ch.id, err);
+              // Allow retry on failure - remove from prefetched cache
+              prefetchedEPG.current.delete(channelId);
             }
           })
         );
@@ -185,22 +211,249 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
 // Pobierz kategorie kanałów (tylko w TanStack Query, bez Zustand cache)
 export const useChannelCategories = (client: StalkerClient) => {
   const accountId = client?.['account']?.id || 'default';
-  
+
   const query = useQuery({
     queryKey: ['channel-categories', accountId],
     queryFn: async () => {
-      const result = await client.getGenres();
-      return result;
+      return await getGenres(client);
     },
     staleTime: 60 * 60 * 1000, // 1 hour - categories rarely change
     gcTime: 7 * 24 * 60 * 60 * 1000,
     enabled: !!client,
   });
-  
+
   return {
     ...query,
     data: query.data || [],
     isLoading: query.isLoading,
+  };
+};
+
+// Lazy loading hook - fetches pages on demand for infinite scroll
+export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
+  const accountId = client?.['account']?.id || 'default';
+  const [allChannels, setAllChannels] = React.useState<StalkerChannel[]>([]);
+  const [hasMore, setHasMore] = React.useState(true);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<Error | null>(null);
+  const loadedPagesRef = React.useRef<Set<number>>(new Set());
+  const loadingRef = React.useRef(false);
+  const mountedRef = React.useRef(true);
+  const generationRef = React.useRef(0);
+  const prevSignatureRef = useRef<string>('');
+  const initialLoadDoneRef = React.useRef(false);
+  const pageRef = React.useRef(1);
+  const hasMoreRef = React.useRef(true);
+  const autoLoadTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const totalExpectedRef = React.useRef<number | null>(null);
+
+  const loadMore = React.useCallback(async () => {
+    if (!client || !hasMoreRef.current || loadingRef.current) return;
+
+    const pageToLoad = pageRef.current;
+    if (loadedPagesRef.current.has(pageToLoad)) return;
+
+    const currentGen = generationRef.current;
+    loadingRef.current = true;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Always fetch from API (SQLite is only for initial load)
+      const result = await getChannels(client, {
+        genre: genreId || '*',
+        page: pageToLoad,
+        sortby: 'number'
+      });
+
+      // Skip if component unmounted or generation changed (stale request)
+      if (!mountedRef.current || generationRef.current !== currentGen) return;
+
+      // Track total expected items from API (for cache completeness check)
+      // Store in localStorage on every API call since we may start from calculated page
+      if (result.totalItems > 0) {
+        totalExpectedRef.current = result.totalItems;
+        const cacheKey = `iptv-channels-total-${accountId}-${genreId || '*'}`;
+        localStorage.setItem(cacheKey, String(result.totalItems));
+      }
+
+      loadedPagesRef.current.add(pageToLoad);
+      pageRef.current = pageToLoad + 1; // Update ref immediately
+
+      setAllChannels(prev => {
+        const newChannels = [...prev, ...result.channels];
+        // Deduplicate by ID
+        const unique = new Map<string, StalkerChannel>();
+        newChannels.forEach(ch => unique.set(String(ch.id), ch));
+        return Array.from(unique.values());
+      });
+
+      hasMoreRef.current = result.hasMore;
+      setHasMore(result.hasMore);
+
+      // If we just finished loading all data from API, clear saved signature
+      // so the new data will be saved to database
+      if (!result.hasMore) {
+        const savedSignatureKey = `iptv-channels-saved-${accountId}-${genreId || '*'}`;
+        localStorage.removeItem(savedSignatureKey);
+      }
+
+      // Auto-continue loading if there are more pages
+      if (result.hasMore && mountedRef.current) {
+        // Clear any existing timeout to prevent duplicates
+        if (autoLoadTimeoutRef.current) {
+          clearTimeout(autoLoadTimeoutRef.current);
+        }
+        autoLoadTimeoutRef.current = setTimeout(() => {
+          if (!loadingRef.current && mountedRef.current && hasMoreRef.current) {
+            loadMore();
+          }
+        }, 100);
+      }
+    } catch (err) {
+      // Skip if generation changed - stale error
+      if (!mountedRef.current || generationRef.current !== currentGen) return;
+      console.error('[useLazyChannels] Failed to load page', pageToLoad, err);
+      setError(err instanceof Error ? err : new Error('Failed to load channels'));
+    } finally {
+      // Only reset loading if this is still the current generation
+      if (generationRef.current === currentGen) {
+        loadingRef.current = false;
+        if (mountedRef.current) {
+          setIsLoading(false);
+        }
+      }
+    }
+  }, [client, genreId]);
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (autoLoadTimeoutRef.current) {
+        clearTimeout(autoLoadTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Reset when genre changes - load from SQLite first
+  React.useEffect(() => {
+    generationRef.current += 1; // Invalidate any in-flight requests
+    setAllChannels([]);
+    setHasMore(true);
+    loadedPagesRef.current.clear();
+    loadingRef.current = false;
+    prevSignatureRef.current = '';
+    initialLoadDoneRef.current = false;
+    pageRef.current = 1;
+    hasMoreRef.current = true;
+    totalExpectedRef.current = null;
+    // Clear any pending auto-load timeout
+    if (autoLoadTimeoutRef.current) {
+      clearTimeout(autoLoadTimeoutRef.current);
+      autoLoadTimeoutRef.current = null;
+    }
+    // Try to load from SQLite first
+    const loadFromCache = async () => {
+      // Prevent double load
+      if (initialLoadDoneRef.current) return;
+
+      try {
+        const cached = await getChannelsFromDB(accountId, genreId || undefined);
+        if (cached && cached.length > 0) {
+          // Convert DB format to StalkerChannel
+          const channels: StalkerChannel[] = cached.map(ch => ({
+            id: ch.id,
+            name: ch.name,
+            cmd: ch.streamUrl ?? '',
+            logo: ch.iconUrl,
+            tv_genre_id: ch.genreId ? parseInt(ch.genreId) : undefined,
+            number: ch.orderNum ?? 0,
+            censored: false,
+          }));
+          setAllChannels(channels);
+          initialLoadDoneRef.current = true;
+
+          // Check if we have complete data from previous API session (use localStorage for persistence)
+          const cacheKey = `iptv-channels-total-${accountId}-${genreId || '*'}`;
+          const totalExpected = localStorage.getItem(cacheKey);
+          const expectedCount = totalExpected ? parseInt(totalExpected, 10) : 0;
+
+          // If we have complete data (cached >= expected), skip API call
+          if (expectedCount > 0 && channels.length >= expectedCount) {
+            hasMoreRef.current = false;
+            setHasMore(false);
+            return;
+          }
+
+          // Otherwise, continue loading from API to get remaining channels
+          setHasMore(true);
+          // Calculate which page to load next based on cached channels count
+          // Portal returns ~14 channels per page
+          pageRef.current = Math.ceil(channels.length / 14) + 1;
+          setTimeout(async () => {
+            if (!loadingRef.current && mountedRef.current) {
+              await loadMore();
+            }
+          }, 100);
+        } else {
+          // No cached data - load from API
+          if (client && !loadingRef.current && !initialLoadDoneRef.current) {
+            initialLoadDoneRef.current = true;
+            await loadMore();
+          }
+        }
+      } catch (err) {
+        // On error, load from API
+        if (client && !loadingRef.current && !initialLoadDoneRef.current) {
+          initialLoadDoneRef.current = true;
+          await loadMore();
+        }
+      }
+    };
+
+    loadFromCache();
+  }, [genreId, accountId, client]);
+
+  // Save channels to SQLite only when fully loaded (avoid spamming DB during pagination)
+  useEffect(() => {
+    if (!allChannels || allChannels.length === 0) return;
+    // Only save when we have all channels (hasMore is false)
+    // This prevents saving on every page during background loading
+    if (hasMoreRef.current) return;
+
+    // Lightweight signature: count + first ID + last ID
+    const signature = `${allChannels.length}-${allChannels[0]?.id}-${allChannels[allChannels.length - 1]?.id}`;
+    if (signature === prevSignatureRef.current) return;
+    prevSignatureRef.current = signature;
+
+    // Check if we already saved this exact data (prevents re-save after player close)
+    const savedSignatureKey = `iptv-channels-saved-${accountId}-${genreId || '*'}`;
+    const alreadySaved = localStorage.getItem(savedSignatureKey);
+    if (alreadySaved === signature) {
+      return;
+    }
+
+    saveChannels(allChannels.map(ch => ({
+      id: ch.id?.toString() || '',
+      name: ch.name || '',
+      streamUrl: ch.cmd || '',
+      iconUrl: ch.logo_url || ch.logo || '',
+      genreId: genreId || ch.tv_genre_id?.toString(),
+      orderNum: ch.number || 0,
+    })), accountId).then(() => {
+      // Mark as saved
+      localStorage.setItem(savedSignatureKey, signature);
+    }).catch(err => console.error('[DB] Failed to save channels:', err));
+  }, [allChannels, accountId, genreId]);
+
+  return {
+    channels: allChannels,
+    isLoading,
+    hasMore,
+    loadMore,
+    error,
   };
 };
 
@@ -233,7 +486,7 @@ export const usePrefetchStream = (client: StalkerClient) => {
     }
     
     prefetchedRef.current.set(channelId, now);
-    
+
     // Cleanup: keep only last 200 entries to prevent memory leak
     if (prefetchedRef.current.size > 500) {
       const entries = Array.from(prefetchedRef.current.entries())
@@ -241,7 +494,11 @@ export const usePrefetchStream = (client: StalkerClient) => {
         .slice(-200);
       prefetchedRef.current = new Map(entries);
     }
-    
+
+    // Skip if already fetching
+    const state = queryClient.getQueryState(queryKey);
+    if (state?.fetchStatus === 'fetching') return;
+
     queryClient.prefetchQuery({
       queryKey,
       queryFn: () => client.getStreamUrl(channel.cmd),

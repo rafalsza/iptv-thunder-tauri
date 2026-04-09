@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
 import { useFavoriteCategories } from '@/hooks/useFavorites';
+import { getGenres } from './tv.api';
 
 interface FavoriteCategoriesListProps {
   client: StalkerClient;
@@ -23,14 +24,14 @@ export const FavoriteCategoriesList: React.FC<FavoriteCategoriesListProps> = ({
   const { categoryIds: favoriteCategories, toggleCategory } = useFavoriteCategories(accountId, 'live');
 
   // Pobieranie wszystkich kategorii kanałów z cache
-  const { 
-    data: categories = [], 
-    isLoading, 
-    error, 
-    refetch 
+  const {
+    data: categories = [],
+    isLoading,
+    error,
+    refetch
   } = useQuery({
     queryKey: ['channel-genres', client.getAccount().id],
-    queryFn: () => client.getGenres(),
+    queryFn: () => getGenres(client),
     staleTime: 30 * 60 * 1000, // 30 minutes cache
     retry: 2,
   });

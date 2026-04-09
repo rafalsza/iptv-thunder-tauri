@@ -30,8 +30,6 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
     refetch 
   } = useChannelCategories(client);
 
-  console.log('🔍 ChannelCategoriesList:', { client: !!client, isLoading, error, categoriesCount: categories.length });
-
   // Filtrowanie kategorii na podstawie wyszukiwania
   const filteredCategories = useMemo(() =>
     categories.filter(category =>

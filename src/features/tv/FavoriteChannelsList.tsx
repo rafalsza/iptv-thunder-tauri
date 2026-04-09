@@ -2,52 +2,43 @@
 // ❤️ FAVORITE CHANNELS LIST
 // =========================
 import React, { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useFavorites } from '@/hooks/useFavorites';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel } from '@/types';
 
 interface FavoriteChannelsListProps {
-  client: StalkerClient;
+  client?: StalkerClient;
   accountId: string;
   search: string;
   onChannelSelect: (channel: StalkerChannel) => void;
 }
 
 export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
-  client,
   accountId,
   search,
   onChannelSelect,
 }) => {
-  // Use SQLite for favorites
-  const { favorites: dbFavorites, isItemFavorite, toggleItemFavorite } = useFavorites(accountId);
-  
-  // Get favorite channel IDs from SQLite
-  const favoriteChannelIds = useMemo(() => {
+  // Use SQLite for favorites - contains all metadata (name, poster/logo, cmd)
+  const { favorites: dbFavorites, isLoading, toggleItemFavorite } = useFavorites(accountId);
+
+  // Convert favorites to StalkerChannel format using stored metadata
+  const favoriteChannels = useMemo((): StalkerChannel[] => {
     return dbFavorites
       .filter(f => f.type === 'live')
-      .map(f => f.item_id);
+      .map(f => ({
+        id: f.item_id,
+        name: f.name || 'Unknown Channel',
+        cmd: f.cmd || '',
+        logo: f.poster,
+        tv_genre_id: undefined,
+        number: 0,
+        censored: false,
+      }));
   }, [dbFavorites]);
-  
-  // Fetch ALL channels from API (not from empty cache!)
-  const { data: allChannels = [], isLoading } = useQuery({
-    queryKey: ['all-channels-favorites', accountId],
-    queryFn: () => client.getAllChannels(),
-    enabled: !!client,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // Filter to only favorite channels
-  const favoriteChannels = useMemo(() =>
-    allChannels.filter((c: StalkerChannel) =>
-      favoriteChannelIds.includes(String(c.id))
-    ),
-  [allChannels, favoriteChannelIds]);
 
   // Apply search filter
   const filtered = useMemo(() =>
-    favoriteChannels.filter((c: StalkerChannel) =>
+    favoriteChannels.filter((c) =>
       c.name.toLowerCase().includes(search.toLowerCase())
     ),
   [favoriteChannels, search]);
@@ -78,7 +69,7 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
     );
   }
 
-  if (favoriteChannels.length === 0) {
+  if (!isLoading && favoriteChannels.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-white">
         <div className="text-center">
@@ -88,7 +79,7 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
             Dodaj kanały do ulubionych klikając ❤️ przy kanale
           </p>
           <p className="text-sm text-slate-500">
-            Kanały pojawią się tutaj po ich dodaniu i odwiedzeniu w TV
+            Kanały pojawią się tutaj po ich dodaniu
           </p>
         </div>
       </div>
@@ -125,11 +116,15 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    toggleItemFavorite('live', String(channel.id));
+                    toggleItemFavorite('live', String(channel.id), {
+                      name: channel.name,
+                      poster: channel.logo,
+                      cmd: channel.cmd,
+                    });
                   }}
                   className="ml-2 text-lg hover:scale-110 transition-transform"
                 >
-                  {isItemFavorite('live', String(channel.id)) ? '❤️' : '🤍'}
+                  ❤️
                 </button>
               </div>
               {channel.logo && (

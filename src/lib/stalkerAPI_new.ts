@@ -156,9 +156,7 @@ export class StalkerClient {
    * Pobranie profilu użytkownika (ważne – potwierdza aktywne konto)
    */
   async getProfileAndAuth(): Promise<StalkerProfile> {
-    if (!this.token) {
-      await this.handshake();
-    }
+    await this.ensureAuthenticated();
 
     const params = {
       type: 'stb',
@@ -199,9 +197,7 @@ export class StalkerClient {
    * Pobieranie listy VOD z informacjami o paginacji
    */
   async getVODListWithPagination(categoryId: string = '', page: number = 1, options?: { signal?: AbortSignal }): Promise<{items: StalkerVOD[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
-    if (!this.token) {
-      await this.handshake();
-    }
+    await this.ensureAuthenticated();
 
     const params: any = {
       type: 'vod',
@@ -253,11 +249,8 @@ export class StalkerClient {
    * Pobieranie kategorii VOD
    */
   async getVODCategories(): Promise<StalkerGenre[]> {
-    
-    if (!this.token) {
-      await this.handshake();
-    }
-    
+    await this.ensureAuthenticated();
+
     // Wywołaj getProfileAndAuth aby aktywować sesję - to może być wymagane aby dostać pełną listę kategorii
     console.log('🎬 Calling getProfileAndAuth...');
     await this.getProfileAndAuth();
@@ -293,6 +286,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
 }
 
   async _makeRequest(params: any, signal?: AbortSignal): Promise<any> {
+    await this.ensureAuthenticated();
     return this._makeGenericRequest('portal.php', params, signal);
   }
 
@@ -352,9 +346,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
    * Pobranie short EPG dla kanału (bez parametrów from/to - te są tylko dla pełnego EPG)
    */
   async getEPG(channelId: number, size: number = 10): Promise<StalkerEPG[]> {
-    if (!this.token) {
-      await this.handshake();
-    }
+    await this.ensureAuthenticated();
 
     const params: any = {
       type: 'itv',
@@ -424,13 +416,27 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
   }
 
   /**
-   * Execute operation with automatic retry on 403/auth errors
+   * Check if error is auth-related
+   */
+  private isAuthError(error: any): boolean {
+    const msg = String(error?.message || '').toLowerCase();
+    return (
+      msg.includes('403') ||
+      msg.includes('access denied') ||
+      msg.includes('token') ||
+      msg.includes('authorization') ||
+      msg.includes('unauthorized')
+    );
+  }
+
+  /**
+   * Execute operation with automatic retry on auth errors
    */
   private async withAuthRetry<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
     } catch (error: any) {
-      if (error?.message?.includes('403') || error?.message?.includes('Access denied')) {
+      if (this.isAuthError(error)) {
         await this.handshake();
         return await operation();
       }
@@ -491,30 +497,6 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     return undefined;
   }
 
-  /**
-   * Pobieranie kategorii (genres) – Live TV
-   */
-  async getGenres(): Promise<StalkerGenre[]> {
-    await this.ensureAuthenticated();
-    
-    return this.withAuthRetry(async () => {
-      const response = await this._makeRequest({
-        type: 'itv',
-        action: 'get_genres',
-        mac: this.account.mac,
-        JsHttpRequest: '1-xml',
-      });
-      
-      const genres: StalkerGenre[] = this.useTauri ? response?.js : response.data?.js || [];
-      
-      if (!genres.some(g => g.id === '*')) {
-        const allGenre: StalkerGenre = { id: '*', title: 'Wszystkie kanały' };
-        return [allGenre, ...genres];
-      }
-      return genres;
-    });
-  }
-
   // Nowa metoda do pobierania kanałów z informacjami o paginacji
   async getChannelsWithPagination(genreId: string = '*', page: number = 1, signal?: AbortSignal): Promise<{channels: StalkerChannel[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
     await this.ensureAuthenticated();
@@ -563,31 +545,6 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
       maxPageItems,
       currentPage
     };
-  }
-
-  /**
-   * Pobieranie WSZYSTKICH kanałów przez get_all_channels action
-   */
-  async getAllChannels(): Promise<StalkerChannel[]> {
-    await this.ensureAuthenticated();
-    
-    const params = {
-      type: 'itv',
-      action: 'get_all_channels',
-      mac: this.account.mac,
-      JsHttpRequest: '1-xml',
-    };
-
-    const response = await this._makeGenericRequest('server/load.php', params);
-
-    const data = this.useTauri ? 
-      (response?.js?.data || response?.data?.js?.data || response?.js || []) : 
-      (response.data?.js?.data || response.data?.js || []);
-    
-    return data.map((ch: StalkerChannel) => ({
-      ...ch,
-      logo: this.resolveLogoUrl(ch.logo),
-    }));
   }
 
   /**

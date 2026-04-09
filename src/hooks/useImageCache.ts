@@ -14,6 +14,52 @@ let lruInitialized = false;
 // In-flight request deduplication with cleanup and abort support
 const pendingRequests = new Map<string, { promise: Promise<Uint8Array>; timeout: number; abortController: AbortController }>();
 
+// Track logged errors to prevent spam
+const loggedErrors = new Set<string>();
+const LOG_ERROR_LIMIT = 50; // Limit unique errors to prevent memory bloat
+
+/**
+ * Check if an error is a "not found" type error (expected, shouldn't be logged)
+ */
+function isExpectedError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    // 404 / Not found errors
+    if (msg.includes('404') || msg.includes('not_found')) return true;
+    // Network errors that indicate the resource doesn't exist
+    if (msg.includes('error sending request')) return true;
+    // DNS resolution failures
+    if (msg.includes('dns error') || msg.includes('failed to lookup address')) return true;
+    // Connection refused/reset
+    if (msg.includes('connection refused') || msg.includes('connection reset')) return true;
+    // Timeout errors (often mean the resource doesn't exist)
+    if (msg.includes('timeout') || msg.includes('timed out')) return true;
+    // HTTP error status codes that indicate missing resources
+    if (msg.includes('403') || msg.includes('410') || msg.includes('451')) return true;
+  }
+  return false;
+}
+
+/**
+ * Log error with deduplication to prevent console spam
+ */
+function logError(url: string, error: unknown): void {
+  // Don't log expected errors (404s, network failures for missing images)
+  if (isExpectedError(error)) return;
+  
+  // Deduplication: only log unique errors
+  const errorKey = `${url}:${error instanceof Error ? error.message : String(error)}`;
+  if (loggedErrors.has(errorKey)) return;
+  
+  // Limit set size to prevent memory leak
+  if (loggedErrors.size >= LOG_ERROR_LIMIT) {
+    loggedErrors.clear();
+  }
+  loggedErrors.add(errorKey);
+  
+  console.error('[getImageUrl] Error:', error);
+}
+
 // LRU cache for tracking usage + size tracking
 const lruCache = new Map<string, { lastUsed: number; size: number }>();
 
@@ -23,23 +69,29 @@ const lruCache = new Map<string, { lastUsed: number; size: number }>();
 async function fetchWithTauriHttp(url: string, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  
+
   try {
     // Use Tauri command to bypass CORS
     const response = await invoke<{
       status: number;
       headers: Record<string, string>;
       body: number[];
+      error?: string;
     }>('fetch_image', {
       url,
       timeout: timeoutMs,
     });
-    
+
     clearTimeout(timeout);
-    
+
+    // Handle network/request errors (status 0 means error occurred)
+    if (response.status === 0 && response.error) {
+      throw new Error(response.error);
+    }
+
     // Convert number array to Uint8Array
     const data = new Uint8Array(response.body);
-    
+
     // Create a Response-like object
     return new Response(data, {
       status: response.status,
@@ -431,11 +483,8 @@ export async function getImageUrl(url: string, fallbackUrl: string = '/fallback/
       return await fileToDataUrl(await getFilePath(url));
     }
   } catch (e) {
-    // Only log errors that aren't 404s (404s are expected when images don't exist)
-    const errorMessage = e instanceof Error ? e.message : String(e);
-    if (errorMessage !== 'NOT_FOUND' && !errorMessage.includes('404')) {
-      console.error('[getImageUrl] Error:', e);
-    }
+    // Log with deduplication - expected errors (404s, network failures) are silently ignored
+    logError(url, e);
     return fallbackUrl;
   }
 }

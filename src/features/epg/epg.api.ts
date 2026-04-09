@@ -16,28 +16,32 @@ export const getChannelEPG = async (
 };
 
 export const getChannelsEPG = async (
-  client: StalkerClient, 
-  channelIds: number[], 
-  _from?: number, 
+  client: StalkerClient,
+  channelIds: number[],
+  _from?: number,
   _to?: number
 ): Promise<Record<number, StalkerEPG[]>> => {
   const epgData: Record<number, StalkerEPG[]> = {};
-  
-  // Fetch EPG for each channel in parallel - always use short EPG
-  const promises = channelIds.map(async (channelId) => {
-    try {
-      const epg = await client.getEPG(channelId);
-      return { channelId, epg };
-    } catch (error) {
-      console.error(`Failed to fetch EPG for channel ${channelId}:`, error);
-      return { channelId, epg: [] };
-    }
-  });
 
-  const results = await Promise.all(promises);
-  results.forEach(({ channelId, epg }) => {
-    epgData[channelId] = epg;
-  });
+  // Fetch EPG in batches to avoid overwhelming the portal
+  const BATCH = 5;
+  for (let i = 0; i < channelIds.length; i += BATCH) {
+    const batch = channelIds.slice(i, i + BATCH);
+    const promises = batch.map(async (channelId) => {
+      try {
+        const epg = await client.getEPG(channelId);
+        return { channelId, epg };
+      } catch (error) {
+        console.error(`Failed to fetch EPG for channel ${channelId}:`, error);
+        return { channelId, epg: [] };
+      }
+    });
+
+    const results = await Promise.all(promises);
+    results.forEach(({ channelId, epg }) => {
+      epgData[channelId] = epg;
+    });
+  }
 
   return epgData;
 };
@@ -106,6 +110,18 @@ export const getEPGTimeRange = (hours: number = 24): { from: number; to: number 
 // Maps channel IDs and caches results
 const epgCache = new Map<string, { data: StalkerEPG[]; timestamp: number }>();
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_EPG_CACHE = 200;
+
+const cleanupEPGCache = () => {
+  if (epgCache.size <= MAX_EPG_CACHE) return;
+
+  const sorted = Array.from(epgCache.entries())
+    .sort((a, b) => a[1].timestamp - b[1].timestamp)
+    .slice(-MAX_EPG_CACHE);
+
+  epgCache.clear();
+  sorted.forEach(([k, v]) => epgCache.set(k, v));
+};
 
 const getCacheKey = (url: string, channelId: number): string => `${url}_${channelId}`;
 
@@ -231,9 +247,7 @@ const parseXMLTVTime = (timeStr: string): number => {
   const minute = Number.parseInt(cleaned.substring(10, 12));
   const second = Number.parseInt(cleaned.substring(12, 14));
   
-  const timestamp = Math.floor(new Date(year, month, day, hour, minute, second).getTime() / 1000);
-  
-  return timestamp;
+  return Math.floor(new Date(year, month, day, hour, minute, second).getTime() / 1000);
 };
 
 export const fetchExternalEPG = async (
@@ -272,6 +286,7 @@ export const fetchExternalEPG = async (
       
       // Cache the results
       epgCache.set(cacheKey, { data: programs, timestamp: now });
+      cleanupEPGCache();
     }
     
     // Filter by time range if provided
