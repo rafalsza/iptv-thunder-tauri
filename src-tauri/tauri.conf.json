@@ -26,6 +26,10 @@
     ],
     "security": {
       "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https: asset:; connect-src 'self' http: https: ws: wss:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none';",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/image_cache/**"]
+      },
       "capabilities": [
         {
           "identifier": "default",
@@ -48,6 +52,7 @@
             "fs:allow-appdata-write-recursive",
             "fs:allow-appdata-meta",
             "fs:scope-appdata-recursive",
+            "core:path:default",
             "libmpv:default",
             "libmpv:allow-init",
             "libmpv:allow-command",

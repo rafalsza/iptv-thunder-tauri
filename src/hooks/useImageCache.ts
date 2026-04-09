@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir, remove, readDir, rename, stat } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { useCallback } from 'react';
 
 // Cache configuration
@@ -10,6 +10,7 @@ const MAX_RETRIES = 2;
 
 let cacheDir: string | null = null;
 let lruInitialized = false;
+let isClearing = false; // Atomic flag to prevent writes during cache clearing
 
 // In-flight request deduplication with cleanup and abort support
 const pendingRequests = new Map<string, { promise: Promise<Uint8Array>; timeout: number; abortController: AbortController }>();
@@ -51,9 +52,16 @@ function logError(url: string, error: unknown): void {
   const errorKey = `${url}:${error instanceof Error ? error.message : String(error)}`;
   if (loggedErrors.has(errorKey)) return;
   
-  // Limit set size to prevent memory leak
+  // Limit set size with FIFO eviction to prevent memory leak
   if (loggedErrors.size >= LOG_ERROR_LIMIT) {
-    loggedErrors.clear();
+    // Remove oldest half instead of clearing all to preserve recent deduplication
+    const toDelete = Math.floor(LOG_ERROR_LIMIT / 2);
+    let count = 0;
+    for (const key of loggedErrors) {
+      if (count >= toDelete) break;
+      loggedErrors.delete(key);
+      count++;
+    }
   }
   loggedErrors.add(errorKey);
   
@@ -227,12 +235,17 @@ async function enforceCacheLimit(): Promise<void> {
  * Returns the file path for direct use with convertFileSrc
  */
 export async function cacheImage(url: string, data: Uint8Array, contentType?: string | null): Promise<string> {
+  // Prevent writes during cache clearing
+  if (isClearing) {
+    throw new Error('Cache is being cleared');
+  }
+
   const filePath = await getFilePath(url);
   const tempPath = filePath + '.tmp';
   
-  // Check if file already exists (skip writing)
+  // Check if file already exists (skip writing) - use stat instead of readFile
   try {
-    await readFile(filePath);
+    await stat(filePath);
     // File exists, just update metadata if needed
     try {
       const metadata = { mimeType: contentType || 'image/jpeg', timestamp: Date.now() };
@@ -271,9 +284,9 @@ export async function cacheImage(url: string, data: Uint8Array, contentType?: st
     // Update LRU with size
     updateLru(filePath, data.length);
     
-    // Check if we need to evict
+    // Check if we need to evict (currentSize already includes the new file)
     const currentSize = await getCacheSize();
-    if (currentSize + data.length > MAX_CACHE_SIZE) {
+    if (currentSize > MAX_CACHE_SIZE) {
       await enforceCacheLimit();
     }
     
@@ -296,9 +309,9 @@ export async function cacheImage(url: string, data: Uint8Array, contentType?: st
 export async function getCachedImage(url: string): Promise<string | null> {
   try {
     const filePath = await getFilePath(url);
-    await readFile(filePath); // Verify file exists
+    await stat(filePath); // Verify file exists (stat is faster than readFile)
     updateLru(filePath);
-    return await fileToDataUrl(filePath);
+    return fileToAssetUrl(filePath);
   } catch {
     return null;
   }
@@ -361,54 +374,75 @@ export async function fetchAndCacheImage(url: string, signal?: AbortSignal): Pro
   if (pendingRequests.has(url)) {
     return pendingRequests.get(url)!.promise;
   }
-  
+
+  // Create deferred promise and register synchronously to prevent race
+  let resolvePromise!: (value: Uint8Array) => void;
+  let rejectPromise!: (reason: unknown) => void;
+  const promise = new Promise<Uint8Array>((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+
   const abortController = new AbortController();
 
-  const promise = (async () => {
-    // Try cache first (without content type check)
-    const cachedData = await getCachedImageData(url);
-    if (cachedData) {
-      return cachedData;
-    }
-
-    // Check for abortion before network request
-    if (signal?.aborted || abortController.signal.aborted) {
-      throw new Error('Aborted');
-    }
-
-    // Fetch with retry
-    const response = await fetchWithRetry(url, FETCH_TIMEOUT_MS, MAX_RETRIES, signal);
-
-    if (!response.ok) {
-      // Don't throw for 404s - they're expected when images don't exist
-      if (response.status === 404) {
-        throw new Error('NOT_FOUND');
-      }
-      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
-    }
-
-    const contentType = response.headers.get('content-type');
-    const arrayBuffer = await response.arrayBuffer();
-    const data = new Uint8Array(arrayBuffer);
-
-    // Check for abortion before writing to cache
-    if (abortController.signal.aborted) {
-      throw new Error('Aborted');
-    }
-
-    // Save to cache with atomic write
-    await cacheImage(url, data, contentType);
-
-    return data;
-  })();
-  
   // Set cleanup timeout to prevent memory leak if promise never resolves
   const cleanupTimeout = globalThis.window.setTimeout(() => {
     pendingRequests.delete(url);
+    rejectPromise(new Error('Timeout'));
   }, FETCH_TIMEOUT_MS + 5000);
-  
+
+  // Register immediately (synchronously) to prevent race condition
   pendingRequests.set(url, { promise, timeout: cleanupTimeout, abortController });
-  
+
+  // Execute async logic
+  await (async () => {
+    try {
+      // Check for abortion
+      if (signal?.aborted || abortController.signal.aborted) {
+        throw new Error('Aborted');
+      }
+
+      // Try cache first (without content type check)
+      const cachedData = await getCachedImageData(url);
+      if (cachedData) {
+        resolvePromise(cachedData);
+        return;
+      }
+
+      // Check for abortion before network request
+      if (signal?.aborted || abortController.signal.aborted) {
+        throw new Error('Aborted');
+      }
+
+      // Fetch with retry
+      const response = await fetchWithRetry(url, FETCH_TIMEOUT_MS, MAX_RETRIES, signal);
+
+      if (!response.ok) {
+        // Don't throw for 404s - they're expected when images don't exist
+        if (response.status === 404) {
+          throw new Error('NOT_FOUND');
+        }
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      const arrayBuffer = await response.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+
+      // Check for abortion before writing to cache
+      if (abortController.signal.aborted) {
+        throw new Error('Aborted');
+      }
+
+      // Save to cache with atomic write
+      await cacheImage(url, data, contentType);
+
+      resolvePromise(data);
+    } catch (error) {
+      rejectPromise(error);
+    }
+  })();
+
   try {
     return await promise;
   } finally {
@@ -421,44 +455,11 @@ export async function fetchAndCacheImage(url: string, signal?: AbortSignal): Pro
 }
 
 /**
- * Get MIME type from file metadata or guess from extension
+ * Convert file path to asset URL for use in <img> src
+ * Uses Tauri's convertFileSrc - avoids 33% base64 memory inflation
  */
-async function getMimeType(filePath: string, contentType?: string | null): Promise<string> {
-  // Use provided content type if available
-  if (contentType) return contentType;
-  
-  // Try to read metadata JSON
-  try {
-    const metaPath = filePath + '.json';
-    const metaData = await readFile(metaPath);
-    const meta = JSON.parse(new TextDecoder().decode(metaData));
-    if (meta.mimeType) return meta.mimeType;
-  } catch {
-    // Metadata file doesn't exist or is corrupted
-  }
-  
-  // Fallback to guessing from extension
-  const ext = filePath.split('.').pop()?.toLowerCase() || 'img';
-  if (ext === 'webp') return 'image/webp';
-  if (ext === 'png') return 'image/png';
-  if (ext === 'gif') return 'image/gif';
-  return 'image/jpeg';
-}
-
-/**
- * Convert file path to base64 data URL for use in <img> src
- * More reliable than asset protocol in Tauri v2 dev mode
- * Uses loop-based conversion to avoid any spread operator stack issues
- */
-async function fileToDataUrl(filePath: string): Promise<string> {
-  const data = await readFile(filePath);
-  const mimeType = await getMimeType(filePath);
-  const CHUNK = 8192;
-  let binary = '';
-  for (let i = 0; i < data.length; i += CHUNK) {
-    binary += String.fromCodePoint(...data.subarray(i, i + CHUNK));
-  }
-  return `data:${mimeType};base64,${btoa(binary)}`;
+function fileToAssetUrl(filePath: string): string {
+  return convertFileSrc(filePath);
 }
 
 /**
@@ -473,14 +474,14 @@ export async function getImageUrl(url: string, fallbackUrl: string = '/fallback/
     const cachedPath = await getFilePath(url);
     
     try {
-      await readFile(cachedPath);
+      await stat(cachedPath); // Use stat instead of readFile for existence check
       updateLru(cachedPath);
-      return await fileToDataUrl(cachedPath);
+      return fileToAssetUrl(cachedPath);
     } catch {
       if (signal?.aborted) throw new Error('Aborted');
-      
+
       await fetchAndCacheImage(url, signal);
-      return await fileToDataUrl(await getFilePath(url));
+      return fileToAssetUrl(await getFilePath(url));
     }
   } catch (e) {
     // Log with deduplication - expected errors (404s, network failures) are silently ignored
@@ -505,13 +506,27 @@ export async function preloadImage(url: string): Promise<boolean> {
  * Clear image cache
  */
 export async function clearImageCache(): Promise<void> {
+  // Set atomic flag to prevent new writes immediately
+  isClearing = true;
+
   const dir = await getCacheDir();
   try {
-    // Abort all pending requests first to prevent writes to deleted directory
+    // Collect pending promises to wait for them to settle
+    const pendingPromises: Promise<Uint8Array>[] = [];
+
+    // Abort all pending requests
     for (const [, entry] of pendingRequests) {
       globalThis.clearTimeout(entry.timeout);
       entry.abortController.abort();
+      pendingPromises.push(entry.promise);
     }
+
+    // Wait for all pending operations to complete (or fail)
+    // This prevents ongoing file writes from completing after directory removal
+    if (pendingPromises.length > 0) {
+      await Promise.allSettled(pendingPromises);
+    }
+
     pendingRequests.clear();
 
     await remove(dir, { recursive: true });
@@ -520,6 +535,9 @@ export async function clearImageCache(): Promise<void> {
     lruInitialized = false;
   } catch {
     // Directory may not exist
+  } finally {
+    // Reset flag to allow normal operation
+    isClearing = false;
   }
 }
 
@@ -610,21 +628,6 @@ export async function getCacheStats(): Promise<{
     maxSizeFormatted: formatSize(MAX_CACHE_SIZE),
     usage: Math.round((size / MAX_CACHE_SIZE) * 100),
   };
-}
-
-/**
- * @deprecated Use getCachedImage or getImageUrl instead. Blob URLs cause memory leaks.
- * Kept for backward compatibility only.
- */
-export async function getImageBlobUrl(url: string): Promise<string | null> {
-  console.warn('getImageBlobUrl is deprecated - use getImageUrl instead to avoid memory leaks');
-  try {
-    const data = await fetchAndCacheImage(url);
-    const blob = new Blob([data as BlobPart]);
-    return URL.createObjectURL(blob);
-  } catch {
-    return null;
-  }
 }
 
 /**
