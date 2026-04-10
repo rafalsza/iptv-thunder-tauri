@@ -32,17 +32,26 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
       
       // Test channels - get first page only for quick test
       const channelsResult = await client.getChannelsWithPagination('*', 1);
-      const channels = channelsResult.channels;
-      
+
       const responseTime = Date.now() - startTime;
 
-      setTestResult({
-        success: true,
-        message: 'Połączenie udane!',
-        responseTime,
-        channels: channels.length,
-        profile,
-      });
+      // Test fails if no channels available
+      if (channelsResult.totalItems === 0) {
+        setTestResult({
+          success: false,
+          message: 'Brak dostępnych kanałów',
+          responseTime,
+          channels: 0,
+        });
+      } else {
+        setTestResult({
+          success: true,
+          message: 'Połączenie udane!',
+          responseTime,
+          channels: channelsResult.totalItems,
+          profile,
+        });
+      }
 
     } catch (error: any) {
       const responseTime = Date.now() - startTime;

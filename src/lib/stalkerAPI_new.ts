@@ -531,8 +531,8 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
 
     const response = await this._makeRequest(params, signal);
 
-    const data = this.useTauri ? response?.js?.data : response.data?.js?.data as StalkerChannel[] || [];
-    const totalItems = this.useTauri ? response?.js?.total_items : response.data?.js?.total_items || 0;
+    const data = this.useTauri ? (response?.js?.data || []) : (response.data?.js?.data as StalkerChannel[] || []);
+    const totalItems = this.useTauri ? (response?.js?.total_items || 0) : (response.data?.js?.total_items || 0);
     const maxPageItems = this.useTauri ? response?.js?.max_page_items : response.data?.js?.max_page_items;
     const currentPage = this.useTauri ? response?.js?.cur_page : response.data?.js?.cur_page || page;
 

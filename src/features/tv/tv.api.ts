@@ -68,14 +68,14 @@ export const getChannels = async (
 
   const useTauri = client.useTauri;
   const data = useTauri
-    ? response?.js?.data
-    : response.data?.js?.data as StalkerChannel[] || [];
+    ? (response?.js?.data || [])
+    : (response.data?.js?.data as StalkerChannel[] || []);
   const totalItems = useTauri
-    ? response?.js?.total_items
-    : response.data?.js?.total_items || 0;
+    ? (response?.js?.total_items || 0)
+    : (response.data?.js?.total_items || 0);
   const maxPageItems = useTauri
-    ? response?.js?.max_page_items
-    : response.data?.js?.max_page_items || 30;
+    ? (response?.js?.max_page_items || 30)
+    : (response.data?.js?.max_page_items || 30);
   const currentPage = page - 1;
   const totalPages = Math.ceil(totalItems / maxPageItems);
   const hasMore = currentPage < totalPages - 1 && data.length > 0;

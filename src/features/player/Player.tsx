@@ -378,6 +378,7 @@ function useMpvPlayer(
           'demuxer-max-back-bytes': '20MiB',
           'network-timeout': '10',
           'stream-buffer-size': '4M',
+          'aid': 'auto',
           'sid': 'no',
           'sub-auto': 'no',
           'sub-visibility': 'no',

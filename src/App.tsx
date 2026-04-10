@@ -168,7 +168,6 @@ function AppInner({ }: AppProps) {
   };
 
   const handleCategorySelect = (category: StalkerGenre) => {
-    console.log('🎬 Category received:', category);
     
     setSelectedCategory(category);
     setSearch(''); // Reset search when changing category
@@ -185,8 +184,7 @@ function AppInner({ }: AppProps) {
         return 'tv';
       }
     });
-    
-    console.log('🎬 handleCategorySelect completed');
+
   };
 
   const navigationItems = [

@@ -120,6 +120,10 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         case 'Backspace':
         case 'Escape':
         case 'Back':
+          // Don't intercept backspace if user is typing in an input field
+          if (e.key === 'Backspace' && (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+            return;
+          }
           e.preventDefault();
           onBack?.();
           break;
