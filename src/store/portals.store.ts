@@ -9,6 +9,9 @@ import { PortalAccount } from '@/features/portals/portals.types';
 import { clearAllDataForPortal } from '@/hooks/useDatabase';
 import { clearAllCategoriesCache } from '@/hooks/useCategories';
 import { tauriStorage } from '@/lib/tauriStorage';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('Portals');
 
 interface PortalsState {
   portals: PortalAccount[];
@@ -54,7 +57,7 @@ export const usePortalsStore = create<PortalsState>()(
         // Check if portal exists before starting
         const portalExists = get().portals.some((p) => p.id === id);
         if (!portalExists) {
-          console.log('[Portals] Portal already deleted or does not exist:', id);
+          logger.debug('Portal already deleted or does not exist:', id);
           return;
         }
 
@@ -65,20 +68,20 @@ export const usePortalsStore = create<PortalsState>()(
           await clearAllCategoriesCache();
           // Clear React Query persisted cache from localStorage
           localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
-          console.log('[Portals] Database, categories cache, and React Query cache cleared for portal:', id);
+          logger.debug('Database, categories cache, and React Query cache cleared for portal:', id);
         } catch (error: any) {
           // Ignore if database has old schema (missing portal_id column)
           if (error?.message?.includes('no such column') || error?.message?.includes('no such table')) {
-            console.log('[Portals] Database has old schema, skipping cleanup');
+            logger.debug('Database has old schema, skipping cleanup');
           } else {
-            console.error('[Portals] Error clearing database for portal:', id, error);
+            logger.error('Error clearing database for portal:', id, error);
           }
         }
         
         // Check again before set - portal might have been deleted during await
         const stillExists = get().portals.some((p) => p.id === id);
         if (!stillExists) {
-          console.log('[Portals] Portal was removed during cleanup, skipping set');
+          logger.debug('Portal was removed during cleanup, skipping set');
           return;
         }
         

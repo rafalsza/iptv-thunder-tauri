@@ -32,7 +32,7 @@ export class StalkerClient {
     
     // Multiple detection methods for Tauri environment
     const hasTauriAPI = globalThis.window !== undefined && '__TAURI__' in globalThis.window;
-    const isTauriBuild = import.meta.env.TAURI === 'true';
+    const isTauriBuild = import.meta.env?.TAURI === 'true';
     const isLocalhost = globalThis.window !== undefined && 
                        (globalThis.window.location.hostname === 'localhost' || 
                         globalThis.window.location.hostname === '127.0.0.1' ||
@@ -54,7 +54,7 @@ export class StalkerClient {
         isLocalhost,
         hostname: globalThis.window.location.hostname,
         protocol: globalThis.window.location.protocol,
-        tauriEnv: import.meta.env.TAURI 
+        tauriEnv: import.meta.env?.TAURI 
       });
       globalThis.window.__STALKER_CLIENT_LOGGED__ = true;
     }
@@ -182,6 +182,63 @@ export class StalkerClient {
     }
 
     return profile;
+  }
+
+  /**
+   * Alias for getProfileAndAuth() - for backward compatibility
+   */
+  async getProfile(): Promise<StalkerProfile> {
+    return this.getProfileAndAuth();
+  }
+
+  /**
+   * Get channel list (alias for getChannelsWithPagination without pagination)
+   */
+  async getChannels(genreId: string = '*'): Promise<StalkerChannel[]> {
+    const result = await this.getChannelsWithPagination(genreId, 1);
+    return result.channels;
+  }
+
+  /**
+   * Get channel genres
+   */
+  async getGenres(): Promise<StalkerGenre[]> {
+    await this.ensureAuthenticated();
+
+    const params = {
+      type: 'itv',
+      action: 'get_genres',
+      mac: this.account.mac,
+      JsHttpRequest: '1-xml',
+    };
+
+    const response = await this._makeRequest(params);
+    return this.useTauri ? (response?.js || []) : (response.data?.js || []);
+  }
+
+  /**
+   * Get VOD list (alias for getVODListWithPagination without pagination)
+   */
+  async getVODList(page: number = 1): Promise<StalkerVOD[]> {
+    const result = await this.getVODListWithPagination('', page);
+    return result.items;
+  }
+
+  /**
+   * Create link for streaming
+   */
+  async createLink(cmd: string, _streamId?: number): Promise<string> {
+    // streamId is available for future use but not needed for current implementation
+    return this.getStreamUrl(cmd);
+  }
+
+  /**
+   * Check if token is valid
+   */
+  isTokenValid(): boolean {
+    if (!this.token) return false;
+    if (!this.tokenExpiresAt) return false;
+    return new Date() < this.tokenExpiresAt;
   }
 
   /**

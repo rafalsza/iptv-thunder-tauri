@@ -134,7 +134,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const handleToggleFavorite = () => {
     const posterUrl = fullSeries.poster || fullSeries.logo || '';
     const seriesId = String(fullSeries.id);
-    console.log('💙 Toggling favorite for series:', seriesId, 'Current isFavorite:', isFavorite);
+    // logger.debug('Toggling favorite for series:', seriesId, 'Current isFavorite:', isFavorite);
     toggleItemFavorite('series', seriesId, {
       name: fullSeries.name,
       poster: posterUrl,

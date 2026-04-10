@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePortalsStore } from '@/store/portals.store';
 import { PortalAccount, PortalFormData } from './portals.types';
+import { useToast } from '@/components/ui/Toast';
 
 interface PortalFormProps {
   portal?: PortalAccount | null;
@@ -11,6 +12,7 @@ interface PortalFormProps {
 }
 
 export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
+  const { showToast } = useToast();
   const [formData, setFormData] = useState<PortalFormData>({
     name: '',
     login: '',
@@ -108,7 +110,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
       onClose();
     } catch (error) {
       console.error('Error saving portal:', error);
-      alert('Wystąpił błąd podczas zapisywania portalu');
+      showToast('Wystąpił błąd podczas zapisywania portalu', 'error');
     } finally {
       setIsSubmitting(false);
     }

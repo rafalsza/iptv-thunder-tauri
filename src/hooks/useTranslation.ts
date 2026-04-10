@@ -16,6 +16,12 @@ const notifyListeners = (lang: Language) => {
   listeners.forEach(cb => cb(lang));
 };
 
+// Reset function for testing
+export const _resetLanguageState = (lang: Language = 'pl') => {
+  globalLanguage = lang;
+  listeners.clear();
+};
+
 export const useTranslation = () => {
   const [currentLang, setCurrentLang] = useState<Language>(globalLanguage);
   const [isLoading, setIsLoading] = useState(true);

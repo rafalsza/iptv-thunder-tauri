@@ -37,18 +37,14 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
     ),
   [categories, search]);
 
-  // Debug: log categories count
-  console.log('📺 Categories total:', categories.length, 'filtered:', filteredCategories.length, 'search:', search);
+  // Debug: log categories count (disabled in prod)
+  // logger.debug('Categories total:', categories.length, 'filtered:', filteredCategories.length, 'search:', search);
 
   const handleCategoryClick = (category: StalkerGenre) => {
-    console.log('📺 SeriesCategoriesList - handleCategoryClick called!');
-    console.log('📺 Selected category:', category);
-    console.log('📺 About to call onCategorySelect');
     
     setSelectedCategory(category);
     onCategorySelect(category);
     
-    console.log('📺 Called onCategorySelect with:', category);
   };
 
   const handleToggleFavorite = (e: React.MouseEvent, categoryId: string, categoryName?: string) => {

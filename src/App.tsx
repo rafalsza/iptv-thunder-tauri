@@ -12,6 +12,7 @@ import { Navigation } from '@/components/ui/Navigation';
 import { usePortalsStore } from '@/store/portals.store';
 import { useTranslation, useTVNavigation } from '@/hooks';
 import { Settings } from '@/features/settings/Settings';
+import { ToastProvider } from '@/components/ui/Toast';
 
 // Lazy load components
 const TVList = lazy(() => import('@/features/tv/TVList').then(module => ({ default: module.TVList })));
@@ -163,7 +164,7 @@ function AppInner({ }: AppProps) {
       });
     } catch (error) {
       console.error('❌ Failed to play episode:', error);
-      alert('Nie można odtworzyć odcinka.');
+      // Toast notification handled in component
     }
   };
 
@@ -481,10 +482,6 @@ function AppInner({ }: AppProps) {
       {!currentPlayer.current && (
         <Navigation 
           items={navigationItems}
-          accountInfo={activePortal ? {
-            name: activePortal.name,
-            portalUrl: activePortal.portalUrl,
-          } : undefined}
         />
       )}
 
@@ -537,7 +534,9 @@ export const App: React.FC<AppProps> = ({ }) => {
       client={queryClient}
       persistOptions={{ persister, maxAge: 7 * 24 * 60 * 60 * 1000, buster: 'iptv-v1' }}
     >
-      <AppInner />
+      <ToastProvider>
+        <AppInner />
+      </ToastProvider>
     </PersistQueryClientProvider>
   );
 };

@@ -2,8 +2,9 @@
 // 🧭 NAVIGATION COMPONENT
 // =========================
 import React, { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Power } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
+import { exit } from '@tauri-apps/plugin-process';
 
 export type NavigationItem = {
   id: string;
@@ -21,13 +22,9 @@ export type NavigationItem = {
 
 interface NavigationProps {
   items: NavigationItem[];
-  accountInfo?: {
-    name: string;
-    portalUrl: string;
-  };
 }
 
-export const Navigation: React.FC<NavigationProps> = ({ items, accountInfo }) => {
+export const Navigation: React.FC<NavigationProps> = ({ items }) => {
   const { t } = useTranslation();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
@@ -35,29 +32,24 @@ export const Navigation: React.FC<NavigationProps> = ({ items, accountInfo }) =>
     setExpandedItem(expandedItem === itemId ? null : itemId);
   };
 
+  const handleCloseApp = async () => {
+    try {
+      // Use Tauri exit to close entire application
+      await exit(0);
+    } catch (error) {
+      console.error('Failed to exit app:', error);
+      // Fallback for web/browser mode
+      window.close();
+    }
+  };
+
   return (
     <div className="w-64 bg-gradient-to-b from-slate-800 to-slate-900 border-r border-slate-700 flex flex-col h-full">
       {/* Header */}
       <div className="p-6 border-b border-slate-700">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-            <span className="text-white text-xl">📺</span>
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">IPTV Thunder</h1>
-            <p className="text-xs text-slate-400">{t('player')}</p>
-          </div>
+        <div className="flex items-center justify-center mb-4">
+          <img src="/logo.svg" alt="IPTV Thunder" className="h-10 w-auto max-w-full" />
         </div>
-        {accountInfo && (
-          <div className="bg-slate-700 bg-opacity-50 rounded-lg p-3 backdrop-blur-sm border border-slate-600">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 text-sm">🟢</span>
-              <span className="text-xs font-medium text-green-400">{t('active')}</span>
-            </div>
-            <p className="text-xs text-slate-300 truncate font-mono">{accountInfo.name}</p>
-            <p className="text-xs text-slate-400 truncate font-mono">{accountInfo.portalUrl}</p>
-          </div>
-        )}
       </div>
 
       {/* Navigation Items */}
@@ -143,9 +135,20 @@ export const Navigation: React.FC<NavigationProps> = ({ items, accountInfo }) =>
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-slate-700">
+      <div className="p-4 border-t border-slate-700 space-y-3">
+        {/* Close App Button - subtle style */}
+        <button
+          data-tv-focusable
+          tabIndex={0}
+          onClick={handleCloseApp}
+          className="w-full px-3 py-2 rounded-lg flex items-center justify-center gap-2 transition-all duration-200 bg-slate-800 text-slate-400 hover:bg-red-500/10 hover:text-red-400 border border-slate-700 hover:border-red-500/30"
+        >
+          <Power className="w-4 h-4" />
+          <span className="text-sm font-medium">{t('exit') || 'Wyjdź'}</span>
+        </button>
+
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-3 text-center">
-          <p className="text-xs text-white opacity-80">v2.0 Premium</p>
+          <p className="text-xs text-white opacity-80">v1.0.0</p>
           <div className="flex justify-center gap-1 mt-2">
             <div className="w-1 h-1 bg-white rounded-full opacity-60"></div>
             <div className="w-1 h-1 bg-white rounded-full opacity-80"></div>

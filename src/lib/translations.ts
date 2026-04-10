@@ -38,6 +38,7 @@ export const translations = {
     version: 'Wersja',
 
     // Common actions
+    exit: 'Wyjdź',
     add: 'Dodaj',
     edit: 'Edytuj',
     delete: 'Usuń',
@@ -162,6 +163,7 @@ export const translations = {
     version: 'Version',
 
     // Common actions
+    exit: 'Exit',
     add: 'Add',
     edit: 'Edit',
     delete: 'Delete',
