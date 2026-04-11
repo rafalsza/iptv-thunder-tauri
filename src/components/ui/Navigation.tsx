@@ -44,9 +44,9 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
   };
 
   return (
-    <div className="w-64 bg-gradient-to-b from-slate-800 to-slate-900 border-r border-slate-700 flex flex-col h-full">
+    <div className="w-64 flex flex-col h-full">
       {/* Header */}
-      <div className="p-6 border-b border-slate-700">
+      <div className="p-6 border-b dark:border-slate-700 border-gray-300">
         <div className="flex items-center justify-center mb-4">
           <img src="/logo.svg" alt="IPTV Thunder" className="h-10 w-auto max-w-full" />
         </div>
@@ -73,10 +73,10 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
                 disabled={item.disabled}
                 className={`w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 transition-all duration-200 relative overflow-hidden group ${
                   item.active && !hasSubItems
-                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25'
+                    ? 'bg-gradient-to-r from-green-700 to-green-800 text-white shadow-lg shadow-green-500/25'
                     : item.disabled
-                    ? 'bg-slate-700 bg-opacity-30 text-slate-500 cursor-not-allowed'
-                    : 'bg-slate-700 bg-opacity-50 text-slate-300 hover:bg-slate-600 hover:text-white hover:shadow-md hover:translate-x-1'
+                    ? 'dark:bg-slate-700 dark:bg-opacity-30 bg-gray-200 dark:text-slate-500 text-slate-500 cursor-not-allowed'
+                    : 'dark:bg-slate-700 dark:bg-opacity-50 bg-gray-200 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-600 hover:bg-gray-300 hover:text-white hover:shadow-md hover:translate-x-1'
                 }`}
               >
                 {/* Active state gradient overlay */}
@@ -86,13 +86,13 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
                 
                 {/* Hover effect background */}
                 {!item.disabled && !item.active && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-0 group-hover:opacity-10 transition-opacity duration-200"></div>
+                  <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-green-700 opacity-0 group-hover:opacity-10 transition-opacity duration-200"></div>
                 )}
                 
                 <span className={`text-xl relative z-10 ${item.active && !hasSubItems ? 'animate-pulse' : ''}`}>
                   {item.icon}
                 </span>
-                <span className="font-medium relative z-10 flex-1">{item.label}</span>
+                <span className="font-medium relative z-10 flex-1 dark:text-white text-slate-900">{item.label}</span>
                 
                 {/* Dropdown arrow for items with sub-items */}
                 {hasSubItems && (
@@ -103,7 +103,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
                 
                 {/* Disabled indicator */}
                 {item.disabled && (
-                  <span className="ml-auto text-xs bg-slate-600 px-2 py-1 rounded-full">🔒</span>
+                  <span className="ml-auto text-xs dark:bg-slate-600 bg-gray-400 px-2 py-1 rounded-full">🔒</span>
                 )}
                 
                 {/* Active indicator */}
@@ -121,10 +121,10 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
                       tabIndex={0}
                       key={subItem.id}
                       onClick={subItem.onClick}
-                      className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all duration-200 text-sm bg-slate-700 bg-opacity-30 text-slate-300 hover:bg-slate-600 hover:text-white hover:translate-x-1"
+                      className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all duration-200 text-sm dark:bg-slate-700 dark:bg-opacity-30 bg-gray-200 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-600 hover:bg-gray-300 hover:text-white hover:translate-x-1"
                     >
-                      <span className="text-sm">▸</span>
-                      <span>{subItem.label}</span>
+                      <span className="text-sm dark:text-white text-slate-900">▸</span>
+                      <span className="dark:text-white text-slate-900">{subItem.label}</span>
                     </button>
                   ))}
                 </div>
@@ -135,19 +135,19 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-slate-700 space-y-3">
+      <div className="p-4 border-t dark:border-slate-700 border-gray-300 space-y-3">
         {/* Close App Button - subtle style */}
         <button
           data-tv-focusable
           tabIndex={0}
           onClick={handleCloseApp}
-          className="w-full px-3 py-2 rounded-lg flex items-center justify-center gap-2 transition-all duration-200 bg-slate-800 text-slate-400 hover:bg-red-500/10 hover:text-red-400 border border-slate-700 hover:border-red-500/30"
+          className="w-full px-3 py-2 rounded-lg flex items-center justify-center gap-2 transition-all duration-200 dark:bg-slate-800 bg-gray-100 dark:text-slate-400 text-slate-600 dark:hover:bg-red-500/10 hover:bg-red-500/10 dark:hover:text-red-400 hover:text-red-400 dark:border-slate-700 border-gray-300 dark:hover:border-red-500/30 hover:border-red-500/30"
         >
           <Power className="w-4 h-4" />
-          <span className="text-sm font-medium">{t('exit') || 'Wyjdź'}</span>
+          <span className="text-sm font-medium dark:text-white text-slate-900">{t('exit') || 'Wyjdź'}</span>
         </button>
 
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-3 text-center">
+        <div className="bg-gradient-to-r from-green-700 to-green-800 rounded-lg p-3 text-center">
           <p className="text-xs text-white opacity-80">v1.0.0</p>
           <div className="flex justify-center gap-1 mt-2">
             <div className="w-1 h-1 bg-white rounded-full opacity-60"></div>

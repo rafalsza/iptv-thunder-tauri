@@ -43,8 +43,8 @@ describe('Navigation', () => {
   it('should render navigation with title', () => {
     render(<Navigation items={defaultItems} />);
 
-    expect(screen.getByText('IPTV Thunder')).toBeInTheDocument();
-    expect(screen.getByText('Odtwarzacz')).toBeInTheDocument();
+    expect(screen.getByAltText('IPTV Thunder')).toBeInTheDocument();
+    expect(screen.getByText('Wyjdź')).toBeInTheDocument();
   });
 
   it('should render navigation items', () => {
@@ -76,7 +76,7 @@ describe('Navigation', () => {
       btn.textContent?.includes('TV')
     );
 
-    expect(activeButton).toHaveClass('from-blue-600', 'to-purple-600');
+    expect(activeButton).toHaveClass('from-green-700', 'to-green-800');
   });
 
   it('should call onClick when item clicked', () => {

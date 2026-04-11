@@ -7,6 +7,7 @@ import React, {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFavorites } from '@/hooks/useFavorites';
 import { getImageUrl } from '@/hooks/useImageCache';
+import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerVOD } from '@/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -66,9 +67,9 @@ const MovieCard = React.memo<MovieCardProps>(({
       onClick={() => onSelect(movie)}
       className="cursor-pointer group h-full"
     >
-      <div className="relative overflow-hidden rounded-lg border border-slate-700 hover:border-blue-500 hover:shadow-lg transition-all bg-slate-800 h-full flex flex-col">
+      <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
         {/* Poster */}
-        <div className="flex-1 bg-slate-700 relative overflow-hidden">
+        <div className="flex-1 dark:bg-slate-700 bg-gray-200 relative overflow-hidden">
           {imgSrc && !imgError ? (
             <img
               src={imgSrc}
@@ -86,7 +87,7 @@ const MovieCard = React.memo<MovieCardProps>(({
           {/* Favorite button */}
           <button
             onClick={e => onToggleFavorite(e, movie)}
-            className="absolute top-2 right-2 text-xl bg-slate-900/50 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-900/80"
+            className="absolute top-2 right-2 text-xl dark:bg-slate-900/50 bg-black/20 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity dark:hover:bg-slate-900/80 hover:bg-black/30"
             aria-label="Remove from favorites"
           >
             ❤️
@@ -94,12 +95,12 @@ const MovieCard = React.memo<MovieCardProps>(({
         </div>
 
         {/* Info */}
-        <div className="p-2 bg-slate-800 flex-shrink-0 min-h-[60px]">
-          <h3 className="font-medium text-sm text-white line-clamp-2 leading-tight mb-1">
+        <div className="p-2 dark:bg-slate-800 bg-white flex-shrink-0 min-h-[60px]">
+          <h3 className="font-medium text-sm dark:text-white text-slate-900 line-clamp-2 leading-tight mb-1">
             {movie.name}
           </h3>
           {movie.genre && (
-            <span className="text-xs text-slate-500 truncate block">{movie.genre}</span>
+            <span className="text-xs dark:text-slate-500 text-slate-500 truncate block">{movie.genre}</span>
           )}
         </div>
       </div>
@@ -122,6 +123,7 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
   search,
   onMovieSelect,
 }) => {
+  const { t } = useTranslation();
   // Use SQLite for favorites with full metadata
   const { favorites: dbFavorites, toggleItemFavorite, isLoading } = useFavorites(accountId);
 
@@ -216,18 +218,18 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
           <circle cx="12" cy="12" r="10" stroke="#334155" strokeWidth="2" />
           <path d="M12 2 A10 10 0 0 1 22 12" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
         </svg>
-        <p className="text-slate-400 text-sm">Ładowanie ulubionych filmów…</p>
+        <p className="dark:text-slate-400 text-slate-600 text-sm">Ładowanie ulubionych filmów…</p>
       </div>
     );
   }
 
   if (favoriteMovies.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-white">
+      <div className="flex-1 flex items-center justify-center dark:text-white text-slate-900">
         <div className="text-center">
           <div className="text-6xl mb-4">❤️</div>
           <h2 className="text-2xl font-bold mb-2">Brak ulubionych filmów</h2>
-          <p className="text-slate-400 mb-4">
+          <p className="dark:text-slate-400 text-slate-600 mb-4">
             Dodaj filmy do ulubionych klikając ❤️ przy filmie
           </p>
         </div>
@@ -236,13 +238,13 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
+    <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 bg-slate-800 border-b border-slate-700 px-4 py-3">
+      <div className="flex-shrink-0 border-b dark:border-slate-700 border-gray-300 px-4 py-3">
         <div>
-          <h2 className="text-base font-bold text-white">Ulubione filmy</h2>
-          <p className="text-xs text-slate-400">
-            {filtered.length} z {favoriteMovies.length} filmów
+          <h2 className="text-base font-bold dark:text-white text-slate-900">{t('favoriteMovies')}</h2>
+          <p className="text-xs dark:text-slate-400 text-slate-600">
+            {filtered.length} z {favoriteMovies.length} {t('moviesCount')}
           </p>
         </div>
       </div>

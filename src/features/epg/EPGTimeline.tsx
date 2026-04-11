@@ -121,7 +121,7 @@ export const EPGTimeline: React.FC<EPGTimelineProps> = ({
             </button>
             <button
               onClick={() => setSelectedDate(new Date())}
-              className="px-3 py-1 bg-blue-500 text-white rounded text-sm"
+              className="px-3 py-1 bg-green-700 text-white rounded text-sm"
             >
               Today
             </button>
@@ -215,7 +215,7 @@ export const EPGTimeline: React.FC<EPGTimelineProps> = ({
                           key={programIndex}
                           className={`absolute top-1 bottom-1 p-1 rounded cursor-pointer transition-colors ${
                             isCurrent 
-                              ? 'bg-blue-500 text-white z-10' 
+                              ? 'bg-green-700 text-white z-10' 
                               : 'bg-gray-100 hover:bg-gray-200'
                           }`}
                           style={{

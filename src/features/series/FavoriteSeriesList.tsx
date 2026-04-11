@@ -7,6 +7,7 @@ import React, {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFavorites } from '@/hooks/useFavorites';
 import { getImageUrl } from '@/hooks/useImageCache';
+import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerVOD } from '@/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -69,12 +70,12 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   return (
     <div
       onClick={() => onSelect(series)}
-      className={`cursor-pointer group h-full ${isSelected ? 'ring-2 ring-blue-500 rounded-lg' : ''}`}
+      className={`cursor-pointer group h-full ${isSelected ? 'ring-2 ring-green-700 rounded-lg' : ''}`}
     >
-      <div className="relative overflow-hidden rounded-lg border border-slate-700 hover:border-blue-500 hover:shadow-lg transition-all bg-slate-800 h-full flex flex-col">
+      <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
 
         {/* Poster */}
-        <div className="flex-1 bg-slate-700 relative overflow-hidden">
+        <div className="flex-1 dark:bg-slate-700 bg-gray-200 relative overflow-hidden">
           {imgSrc && !imgError ? (
             <img
               src={imgSrc}
@@ -92,7 +93,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
           {/* Favorite button */}
           <button
             onClick={e => onToggleFavorite(e, series)}
-            className="absolute top-2 right-2 text-xl bg-slate-900/50 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-900/80"
+            className="absolute top-2 right-2 text-xl dark:bg-slate-900/50 bg-black/20 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity dark:hover:bg-slate-900/80 hover:bg-black/30"
             aria-label="Remove from favorites"
           >
             ❤️
@@ -100,8 +101,8 @@ const SeriesCard = React.memo<SeriesCardProps>(({
         </div>
 
         {/* Info */}
-        <div className="p-2 bg-slate-800 flex-shrink-0 min-h-[60px] flex items-center">
-          <h3 className="font-medium text-sm text-white line-clamp-2 leading-tight">
+        <div className="p-2 dark:bg-slate-800 bg-white flex-shrink-0 min-h-[60px] flex items-center">
+          <h3 className="font-medium text-sm dark:text-white text-slate-900 line-clamp-2 leading-tight">
             {seriesName || series.name || 'Unknown'}
           </h3>
         </div>
@@ -123,6 +124,7 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
   search,
   onSeriesSelect,
 }) => {
+  const { t } = useTranslation();
   // Use SQLite for favorites with full metadata
   const { favorites: dbFavorites, toggleItemFavorite, isLoading } = useFavorites(accountId);
 
@@ -231,7 +233,7 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
           <circle cx="12" cy="12" r="10" stroke="#334155" strokeWidth="2" />
           <path d="M12 2 A10 10 0 0 1 22 12" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
         </svg>
-        <p className="text-slate-400 text-sm">Ładowanie ulubionych seriali…</p>
+        <p className="dark:text-slate-400 text-slate-600 text-sm">Ładowanie ulubionych seriali…</p>
       </div>
     );
   }
@@ -240,21 +242,21 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3">
         <span style={{ fontSize: 48 }}>❤️</span>
-        <p className="text-slate-400 text-sm">Brak ulubionych seriali</p>
-        <p className="text-slate-500 text-xs">Dodaj seriale do ulubionych klikając ❤️ przy serialu</p>
+        <p className="dark:text-slate-400 text-slate-600 text-sm">Brak ulubionych seriali</p>
+        <p className="dark:text-slate-500 text-slate-500 text-xs">Dodaj seriale do ulubionych klikając ❤️ przy serialu</p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
+    <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 bg-slate-800 border-b border-slate-700 px-4 py-3">
+      <div className="flex-shrink-0 border-b dark:border-slate-700 border-gray-300 px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="flex-1">
-            <h2 className="text-base font-bold text-white">Ulubione seriale</h2>
-            <p className="text-xs text-slate-400">
-              {filteredSeries.length} seriali
+            <h2 className="text-base font-bold dark:text-white text-slate-900">{t('favoriteSeries')}</h2>
+            <p className="text-xs dark:text-slate-400 text-slate-600">
+              {filteredSeries.length} {t('seriesCount')}
               {debouncedSearch && favoriteSeries.length !== filteredSeries.length
                 ? ` (z ${favoriteSeries.length})`
                 : ''}

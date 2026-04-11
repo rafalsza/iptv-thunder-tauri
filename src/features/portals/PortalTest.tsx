@@ -123,7 +123,7 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
             <button
               onClick={runTest}
               disabled={isTesting}
-              className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-3 mx-auto shadow-lg"
+              className="px-8 py-3 bg-gradient-to-r from-green-700 to-green-800 text-white rounded-xl hover:from-green-800 hover:to-green-900 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-3 mx-auto shadow-lg"
             >
               {isTesting ? (
                 <>
@@ -182,7 +182,7 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
                   {testResult.channels !== undefined && (
                     <div className="flex justify-between">
                       <span className="text-slate-400">Liczba kanałów:</span>
-                      <span className="font-medium text-blue-400">
+                      <span className="font-medium text-green-700">
                         {testResult.channels.toLocaleString('pl-PL')}
                       </span>
                     </div>

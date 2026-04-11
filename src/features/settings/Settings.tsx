@@ -4,11 +4,11 @@ import { getSettings, setSetting, AppSettings } from '@/hooks/useSettings';
 import { getVersion } from '@tauri-apps/api/app';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings2, MonitorPlay, Tv, Wrench, Info, X } from 'lucide-react';
+import { Settings as SettingsIcon, MonitorPlay, Tv, Wrench, Info, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from '@/hooks/useTranslation';
 import { TranslationKey } from '@/lib/translations';
+import { useTheme } from '@/components/theme-provider';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -18,7 +18,7 @@ interface SettingsProps {
 type TabType = 'general' | 'player' | 'epg' | 'advanced' | 'about';
 
 const useTabs = (t: (key: TranslationKey) => string) => [
-  { id: 'general' as const, label: t('general'), icon: <Settings2 className="w-4 h-4" /> },
+  { id: 'general' as const, label: t('general'), icon: <SettingsIcon className="w-4 h-4" /> },
   { id: 'player' as const, label: t('player'), icon: <MonitorPlay className="w-4 h-4" /> },
   { id: 'epg' as const, label: t('epg'), icon: <Tv className="w-4 h-4" /> },
   { id: 'advanced' as const, label: t('advanced'), icon: <Wrench className="w-4 h-4" /> },
@@ -27,6 +27,7 @@ const useTabs = (t: (key: TranslationKey) => string) => [
 
 export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   const { t, currentLang, changeLanguage } = useTranslation();
+  const { setTheme } = useTheme();
   const TABS = useTabs(t);
 
   const { 
@@ -52,6 +53,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
+  // Sync theme from Tauri Store to ThemeProvider when settings are loaded
+  useEffect(() => {
+    if (settings?.theme) {
+      setTheme(settings.theme as 'dark' | 'light' | 'system');
+    }
+  }, [settings?.theme, setTheme]);
+
   // Sync local EPG state with store values whenever they change
   useEffect(() => {
     setEpgUrl(externalEpgUrl || '');
@@ -59,8 +67,18 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   }, [externalEpgUrl, selectedEpgService]);
 
   const updateSetting = async <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
-    await setSetting(key, value);
+    // Update UI immediately (optimistic update)
     setSettings(prev => prev ? { ...prev, [key]: value } : null);
+
+    // Update theme provider immediately when theme changes
+    if (key === 'theme') {
+      setTheme(value as 'dark' | 'light' | 'system');
+    }
+
+    // Save to Tauri store in background (non-blocking)
+    setSetting(key, value).catch(error => {
+      console.error('Failed to save setting:', error);
+    });
   };
 
   const handleSave = () => {
@@ -95,39 +113,38 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   if (!isOpen || !settings) return null;
 
   const effectiveEpgUrl = getEffectiveEpgUrl();
-  const selectedServiceObj = PREDEFINED_EPG_SERVICES.find(s => s.id === selectedService);
   const showCustomUrl = selectedService === 'custom';
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center dark:bg-black/80 bg-black/40 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-hidden shadow-2xl"
+            className="dark:bg-slate-900 bg-white dark:border border-slate-700 border-gray-300 rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-hidden shadow-2xl"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-8 py-5 border-b border-slate-700">
+            <div className="flex items-center justify-between px-8 py-5 dark:border-b border-slate-700 border-b-gray-300">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-blue-600 rounded-2xl flex items-center justify-center">
-                  <Settings2 className="w-5 h-5 text-white" />
+                <div className="w-9 h-9 bg-green-700 rounded-2xl flex items-center justify-center">
+                  <SettingsIcon className="w-5 h-5 text-white" />
                 </div>
-                <h2 className="text-2xl font-semibold text-white">{t('settings')}</h2>
+                <h2 className="text-2xl font-semibold dark:text-white text-slate-900">{t('settings')}</h2>
               </div>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-slate-800 rounded-xl transition-colors"
+                className="p-2 dark:hover:bg-slate-800 hover:bg-gray-100 rounded-xl transition-colors"
               >
-                <X className="w-5 h-5 text-slate-400" />
+                <X className="w-5 h-5 dark:text-slate-400 text-slate-500" />
               </button>
             </div>
 
             <div className="flex h-[calc(92vh-73px)]">
               {/* Sidebar Tabs */}
-              <div className="w-56 border-r border-slate-700 bg-slate-950 p-4 flex-shrink-0">
+              <div className="w-56 dark:border-r border-slate-700 border-r-gray-300 dark:bg-slate-950 bg-gray-100 p-4 flex-shrink-0">
                 <div className="space-y-1">
                   {TABS.map((tab) => (
                     <button
@@ -135,8 +152,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       onClick={() => setActiveTab(tab.id)}
                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all ${
                         activeTab === tab.id
-                          ? 'bg-slate-800 text-white shadow-sm'
-                          : 'hover:bg-slate-800/50 text-slate-300'
+                          ? 'dark:bg-slate-800 bg-gray-200 dark:text-white text-slate-900 shadow-sm'
+                          : 'dark:hover:bg-slate-800/50 hover:bg-gray-200 dark:text-slate-300 text-slate-600'
                       }`}
                     >
                       {tab.icon}
@@ -151,30 +168,28 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 {activeTab === 'general' && (
                   <div className="max-w-md space-y-8">
                     <div>
-                      <label className="text-sm text-slate-400 mb-2 block">{t('theme')}</label>
-                      <Select value={settings.theme} onValueChange={(v) => updateSetting('theme', v as any)}>
-                        <SelectTrigger className="bg-slate-800 border-slate-700">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="dark">{t('dark')}</SelectItem>
-                          <SelectItem value="light">{t('light')}</SelectItem>
-                          <SelectItem value="system">{t('system')}</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('theme')}</label>
+                      <select
+                        value={settings.theme}
+                        onChange={(e) => updateSetting('theme', e.target.value as any)}
+                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
+                      >
+                        <option value="dark">{t('dark')}</option>
+                        <option value="light">{t('light')}</option>
+                        <option value="system">{t('system')}</option>
+                      </select>
                     </div>
 
                     <div>
-                      <label className="text-sm text-slate-400 mb-2 block">{t('language')}</label>
-                      <Select value={currentLang} onValueChange={(v) => changeLanguage(v as 'pl' | 'en')}>
-                        <SelectTrigger className="bg-slate-800 border-slate-700">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pl">Polski</SelectItem>
-                          <SelectItem value="en">English</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('language')}</label>
+                      <select
+                        value={currentLang}
+                        onChange={(e) => changeLanguage(e.target.value as 'pl' | 'en')}
+                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
+                      >
+                        <option value="pl">Polski</option>
+                        <option value="en">English</option>
+                      </select>
                     </div>
                   </div>
                 )}
@@ -183,27 +198,26 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                   <div className="max-w-md space-y-8">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-white">{t('autoPlay')}</p>
-                        <p className="text-sm text-slate-400">{t('autoPlayDescription')}</p>
+                        <p className="font-medium dark:text-white text-slate-900">{t('autoPlay')}</p>
+                        <p className="text-sm dark:text-slate-400 text-slate-600">{t('autoPlayDescription')}</p>
                       </div>
                       <Switch checked={settings.autoPlay} onCheckedChange={(v) => updateSetting('autoPlay', v)} />
                     </div>
 
                     <div>
-                      <label className="text-sm text-slate-400 mb-3 block">
+                      <label className="text-sm dark:text-slate-400 text-slate-600 mb-3 block">
                         {t('videoQuality')}
                       </label>
-                      <Select value={settings.videoQuality} onValueChange={(v) => updateSetting('videoQuality', v as any)}>
-                        <SelectTrigger className="bg-slate-800 border-slate-700">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="auto">{t('auto')}</SelectItem>
-                          <SelectItem value="1080p">{t('1080p')}</SelectItem>
-                          <SelectItem value="720p">{t('720p')}</SelectItem>
-                          <SelectItem value="480p">{t('480p')}</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <select
+                        value={settings.videoQuality}
+                        onChange={(e) => updateSetting('videoQuality', e.target.value as any)}
+                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
+                      >
+                        <option value="auto">{t('auto')}</option>
+                        <option value="1080p">{t('1080p')}</option>
+                        <option value="720p">{t('720p')}</option>
+                        <option value="480p">{t('480p')}</option>
+                      </select>
                     </div>
 
                     <div>
@@ -218,7 +232,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         step="0.05"
                         value={settings.volume}
                         onChange={(e) => updateSetting('volume', Number.parseFloat(e.target.value))}
-                        className="w-full accent-blue-500"
+                        className="w-full accent-green-700"
                       />
                     </div>
                   </div>
@@ -227,19 +241,18 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 {activeTab === 'epg' && (
                   <div className="max-w-lg space-y-8">
                     <div>
-                      <label className="text-sm text-slate-400 mb-2 block">{t('epgSource')}</label>
-                      <Select value={selectedService} onValueChange={handleEpgServiceChange}>
-                        <SelectTrigger className="bg-slate-800 border-slate-700">
-                          <SelectValue>{selectedServiceObj?.name}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PREDEFINED_EPG_SERVICES.map(service => (
-                            <SelectItem key={service.id} value={service.id}>
-                              {service.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('epgSource')}</label>
+                      <select
+                        value={selectedService}
+                        onChange={(e) => handleEpgServiceChange(e.target.value)}
+                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
+                      >
+                        {PREDEFINED_EPG_SERVICES.map(service => (
+                          <option key={service.id} value={service.id}>
+                            {service.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     {showCustomUrl && (
@@ -257,13 +270,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                             }
                           }}
                           placeholder="https://twoj-serwer.pl/epg.xml"
-                          className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-2xl focus:outline-none focus:border-blue-500"
+                          className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-2xl focus:outline-none focus:border-green-700"
                         />
                       </div>
                     )}
 
-                    <div className="pt-4 border-t border-slate-700">
-                      <p className="text-xs text-slate-400 mb-1">Aktualnie używany EPG:</p>
+                    <div className="pt-4 dark:border-t border-slate-700 border-t-gray-300">
+                      <p className="text-xs dark:text-slate-400 text-slate-600 mb-1">Aktualnie używany EPG:</p>
                       <p className="text-emerald-400 break-all text-sm font-mono">
                         {effectiveEpgUrl || 'Automatyczny z portalu IPTV'}
                       </p>
@@ -282,7 +295,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium">Tryb debugowania</p>
-                        <p className="text-sm text-slate-400">Pokazuje szczegółowe logi w konsoli (Debug Mode)</p>
+                        <p className="text-sm dark:text-slate-400 text-slate-600">Pokazuje szczegółowe logi w konsoli (Debug Mode)</p>
                       </div>
                       <Switch checked={settings.debugMode} onCheckedChange={(v) => updateSetting('debugMode', v)} />
                     </div>
@@ -291,13 +304,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
                 {activeTab === 'about' && (
                   <div className="flex flex-col items-center justify-center h-full py-12 text-center">
-                    <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl flex items-center justify-center text-6xl mb-6 shadow-xl">
+                    <div className="w-24 h-24 bg-gradient-to-br from-green-700 to-green-800 rounded-3xl flex items-center justify-center text-6xl mb-6 shadow-xl">
                       📺
                     </div>
-                    <h3 className="text-3xl font-bold text-white mb-1">IPTV Thunder</h3>
-                    <p className="text-slate-400 mb-8">{t('version')} {version || '—'}</p>
+                    <h3 className="text-3xl font-bold dark:text-white text-slate-900 mb-1">IPTV Thunder</h3>
+                    <p className="dark:text-slate-400 text-slate-600 mb-8">{t('version')} {version || '—'}</p>
                     
-                    <div className="text-sm text-slate-500 max-w-xs">
+                    <div className="text-sm dark:text-slate-500 text-slate-500 max-w-xs">
                       Nowoczesna aplikacja IPTV stworzona z użyciem Tauri + React
                     </div>
                   </div>
@@ -306,7 +319,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             </div>
 
             {/* Footer */}
-            <div className="border-t border-slate-700 px-8 py-5 flex justify-end gap-3">
+            <div className="dark:border-t border-slate-700 border-t-gray-300 px-8 py-5 flex justify-end gap-3">
               <Button variant="outline" onClick={onClose}>
                 {t('cancel')}
               </Button>

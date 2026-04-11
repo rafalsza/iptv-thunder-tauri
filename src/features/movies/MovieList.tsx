@@ -97,10 +97,10 @@ const MovieCard = React.memo<MovieCardProps>(({
       onClick={() => onSelect(movie)}
       className="cursor-pointer group h-full"
     >
-      <div className="relative overflow-hidden rounded-lg border border-slate-700 hover:border-blue-500 hover:shadow-lg transition-all bg-slate-800 h-full flex flex-col">
+      <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
 
         {/* Poster */}
-        <div className="flex-1 bg-slate-700 relative overflow-hidden">
+        <div className="flex-1 dark:bg-slate-700 bg-gray-200 relative overflow-hidden">
           {imgSrc && !imgError ? (
             <img
               src={imgSrc}
@@ -118,7 +118,7 @@ const MovieCard = React.memo<MovieCardProps>(({
           {/* Favorite button */}
           <button
             onClick={e => onToggleFavorite(e, movie)}
-            className="absolute top-2 right-2 text-xl bg-slate-900/50 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-900/80"
+            className="absolute top-2 right-2 text-xl dark:bg-slate-900/50 bg-black/20 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity dark:hover:bg-slate-900/80 hover:bg-black/30"
             aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           >
             {isFavorite ? '❤️' : '🤍'}
@@ -137,13 +137,13 @@ const MovieCard = React.memo<MovieCardProps>(({
           {/* Progress Bar */}
           {isInProgress && displayPercentage > 0 && (
             <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1">
-              <div className="w-full bg-slate-600 rounded-full h-1">
+              <div className="w-full dark:bg-slate-600 bg-gray-400 rounded-full h-1">
                 <div
-                  className="bg-blue-500 h-1 rounded-full transition-all"
+                  className="bg-green-700 h-1 rounded-full transition-all"
                   style={{ width: `${displayPercentage}%` }}
                 />
               </div>
-              <div className="text-white text-xs mt-1 text-center">
+              <div className="dark:text-white text-slate-900 text-xs mt-1 text-center">
                 {displayPercentage}%
               </div>
             </div>
@@ -151,8 +151,8 @@ const MovieCard = React.memo<MovieCardProps>(({
         </div>
 
         {/* Info */}
-        <div className="p-2 bg-slate-800 flex-shrink-0 min-h-[60px] flex items-center">
-          <h3 className="font-medium text-sm text-white line-clamp-2 leading-tight">
+        <div className="p-2 dark:bg-slate-800 bg-white flex-shrink-0 min-h-[60px] flex items-center">
+          <h3 className="font-medium text-sm dark:text-white text-slate-900 line-clamp-2 leading-tight">
             {movie.name}
           </h3>
         </div>
@@ -296,7 +296,7 @@ export const MovieList: React.FC<MovieListProps> = ({
           <circle cx="12" cy="12" r="10" stroke="#334155" strokeWidth="2" />
           <path d="M12 2 A10 10 0 0 1 22 12" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
         </svg>
-        <p className="text-slate-400 text-sm">{t('loading')}</p>
+        <p className="dark:text-slate-400 text-slate-600 text-sm">{t('loading')}</p>
       </div>
     );
   }
@@ -310,7 +310,7 @@ export const MovieList: React.FC<MovieListProps> = ({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
+    <div className="flex-1 flex flex-col overflow-hidden">
       {/* Continue Watching Section - Show when no category selected (all movies) */}
       {!selectedCategory && (
         <ContinueWatching onMovieSelect={onMovieSelect} />
@@ -318,14 +318,14 @@ export const MovieList: React.FC<MovieListProps> = ({
 
       {/* Category header */}
       {selectedCategory && (
-        <div className="flex-shrink-0 bg-slate-800 border-b border-slate-700 px-4 py-3">
+        <div className="flex-shrink-0 border-b dark:border-slate-700 border-gray-300 px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-500 rounded-lg flex items-center justify-center text-lg">
+            <div className="w-9 h-9 bg-green-700 rounded-lg flex items-center justify-center text-lg">
               🎬
             </div>
             <div className="flex-1">
-              <h2 className="text-base font-bold text-white">{selectedCategory.title}</h2>
-              <p className="text-xs text-slate-400">
+              <h2 className="text-base font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+              <p className="text-xs dark:text-slate-400 text-slate-600">
                 {filtered.length} film{filtered.length !== 1 ? 'ów' : ''}
                 {debouncedSearch && movies.length !== filtered.length
                   ? ` (z ${movies.length})`
@@ -335,7 +335,7 @@ export const MovieList: React.FC<MovieListProps> = ({
             {/* Favorite Category Button */}
             <button
               onClick={handleToggleCategoryFavorite}
-              className="text-xl hover:scale-110 transition-transform p-2 rounded-full hover:bg-slate-700"
+              className="text-xl hover:scale-110 transition-transform p-2 rounded-full dark:hover:bg-slate-700 hover:bg-gray-200"
               title={isCategoryFavorite(String(selectedCategory.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
             >
               {isCategoryFavorite(String(selectedCategory.id)) ? '❤️' : '🤍'}

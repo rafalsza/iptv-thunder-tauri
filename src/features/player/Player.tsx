@@ -698,7 +698,7 @@ const EPGProgress: React.FC<EPGProgressProps> = ({ startTime, endTime }) => {
 
   return (
     <div className="w-16 h-1 bg-gray-700 rounded-full overflow-hidden flex-shrink-0" title={`${Math.round(progress)}%`}>
-      <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+      <div className="h-full bg-green-700 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
     </div>
   );
 };
@@ -974,7 +974,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
                           onClick={() => { onSetAudioTrack(track.id); setShowTrackMenu(false); }}
                           className={`w-full text-left px-2 py-1.5 rounded text-sm ${
                             currentAudioId === track.id
-                              ? 'bg-blue-600 text-white'
+                              ? 'bg-green-700 text-white'
                               : 'text-gray-300 hover:bg-slate-800'
                           }`}
                         >
@@ -993,7 +993,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
                         onClick={() => { onSetSubTrack('no'); setShowTrackMenu(false); }}
                         className={`w-full text-left px-2 py-1.5 rounded text-sm ${
                           currentSubId === 'no' || !currentSubId
-                            ? 'bg-blue-600 text-white'
+                            ? 'bg-green-700 text-white'
                             : 'text-gray-300 hover:bg-slate-800'
                         }`}
                       >
@@ -1006,7 +1006,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
                           onClick={() => { onSetSubTrack(track.id); setShowTrackMenu(false); }}
                           className={`w-full text-left px-2 py-1.5 rounded text-sm ${
                             currentSubId === track.id
-                              ? 'bg-blue-600 text-white'
+                              ? 'bg-green-700 text-white'
                               : 'text-gray-300 hover:bg-slate-800'
                           }`}
                         >
@@ -1091,7 +1091,7 @@ const DeadState: React.FC<DeadStateProps> = ({ errorMsg, onRetry, onClose }) => 
     {errorMsg && <p className="text-gray-400 text-sm max-w-sm">{errorMsg}</p>}
     <div className="flex gap-3 mt-2">
       <button onClick={onRetry} data-tv-focusable tabIndex={0}
-        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors">
+        className="px-5 py-2.5 bg-green-700 hover:bg-green-800 text-white rounded-lg text-sm transition-colors">
         Try again
       </button>
       <button onClick={onClose} data-tv-focusable tabIndex={0}
@@ -1193,7 +1193,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
         <div className="flex-1 overflow-y-auto p-4">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+              <div className="animate-spin w-6 h-6 border-2 border-green-700 border-t-transparent rounded-full"></div>
             </div>
           ) : !epgData || epgData.length === 0 ? (
             <div className="text-center py-8">
@@ -1203,7 +1203,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
             <div className="space-y-4">
               {Object.entries(groupedPrograms || {}).map(([date, programs]) => (
                 <div key={date}>
-                  <h4 className="text-sm font-medium text-blue-400 mb-2 sticky top-0 bg-zinc-900 py-1">{date}</h4>
+                  <h4 className="text-sm font-medium text-green-700 mb-2 sticky top-0 bg-zinc-900 py-1">{date}</h4>
                   <div className="space-y-2">
                     {programs.map((program) => {
                       const nowPlaying = isProgramNow(program.start_time, program.end_time);
@@ -1212,7 +1212,7 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
                         <div
                           key={program.id}
                           className={`p-3 rounded-lg transition-colors ${
-                            nowPlaying ? 'bg-blue-600/20 border border-blue-500/50' : 'bg-zinc-800/50 hover:bg-zinc-800'
+                            nowPlaying ? 'bg-green-700/20 border border-green-700/50' : 'bg-zinc-800/50 hover:bg-zinc-800'
                           }`}
                         >
                           <div className="flex items-start gap-3">
@@ -1221,11 +1221,11 @@ const EPGDetailsModal: React.FC<EPGDetailsModalProps> = ({ isOpen, onClose, epgD
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className={`font-medium text-sm ${nowPlaying ? 'text-blue-300' : 'text-gray-200'}`}>
+                                <span className={`font-medium text-sm ${nowPlaying ? 'text-green-700' : 'text-gray-200'}`}>
                                   {program.name}
                                 </span>
                                 {nowPlaying && (
-                                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-600 text-white animate-pulse">
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-700 text-white animate-pulse">
                                     {t('nowPlayingLabel')}
                                   </span>
                                 )}

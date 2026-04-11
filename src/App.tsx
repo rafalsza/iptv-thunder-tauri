@@ -477,7 +477,7 @@ function AppInner({ }: AppProps) {
   const currentPlayer = getCurrentPlayer();
 
   return (
-    <div className={`flex h-full ${currentPlayer.current ? 'bg-transparent' : 'bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900'}`}>
+    <div className={`flex h-full ${currentPlayer.current ? 'bg-transparent' : 'dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 bg-gradient-to-br from-white via-gray-100 to-white'}`}>
       {/* Navigation - hidden when player active */}
       {!currentPlayer.current && (
         <Navigation 
@@ -490,13 +490,13 @@ function AppInner({ }: AppProps) {
         <div className="flex-1 flex flex-col">
           {/* Search Bar - only show for list views */}
           {activeView !== 'portals' && activeView !== 'movie-details' && activeView !== 'series-details' && activePortal && (
-            <div className="p-4 border-b border-slate-700 bg-slate-800 bg-opacity-50 backdrop-blur-sm">
+            <div className="p-4 dark:border-b border-slate-700 border-b-gray-300">
               <input
                 type="text"
                 placeholder={`${t('search')}...`}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 bg-opacity-50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-3 dark:bg-slate-700 bg-gray-200 dark:bg-opacity-50 bg-opacity-50 dark:border border-slate-600 border-gray-300 rounded-lg dark:text-white text-slate-900 dark:placeholder-slate-400 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-700 focus:border-green-700"
               />
             </div>
           )}

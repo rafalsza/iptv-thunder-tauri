@@ -88,7 +88,7 @@ const MovieCardWithProgress: React.FC<MovieCardWithProgressProps> = ({
       onClick={() => onSelect(movie, isWatched ? 0 : progress!.position)}
       className="cursor-pointer group flex-shrink-0 w-[180px]"
     >
-      <div className="relative overflow-hidden rounded-lg border border-slate-700 hover:border-blue-500 hover:shadow-lg transition-all bg-slate-800">
+      <div className="relative overflow-hidden rounded-lg border border-slate-700 hover:border-green-700 hover:shadow-lg transition-all bg-slate-800">
         {/* Poster */}
         <div className="aspect-[2/3] bg-slate-700 relative overflow-hidden">
           {imgSrc && !imgError ? (
@@ -114,7 +114,7 @@ const MovieCardWithProgress: React.FC<MovieCardWithProgressProps> = ({
               Obejrzane
             </div>
           ) : (
-            <div className="absolute top-2 left-2 bg-blue-600/90 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
+            <div className="absolute top-2 left-2 bg-green-700/90 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
@@ -127,7 +127,7 @@ const MovieCardWithProgress: React.FC<MovieCardWithProgressProps> = ({
             <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1">
               <div className="w-full bg-slate-600 rounded-full h-1.5">
                 <div
-                  className="bg-blue-500 h-1.5 rounded-full transition-all"
+                  className="bg-green-700 h-1.5 rounded-full transition-all"
                   style={{ width: `${displayPercentage}%` }}
                 />
               </div>
@@ -229,12 +229,12 @@ export const ContinueWatching: React.FC<ContinueWatchingProps> = ({
   if (inProgressMovies.length === 0) return null;
 
   return (
-    <div className="bg-slate-800 border-b border-slate-700">
+    <div className="border-b border-slate-700">
       {/* In Progress Section */}
       {inProgress.length > 0 && (
         <div className="px-4 py-4">
           <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
-            <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-green-700" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
             </svg>
             Kontynuuj oglądanie

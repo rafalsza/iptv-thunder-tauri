@@ -91,7 +91,7 @@ export const TVList: React.FC<TVListProps> = ({
   if (isLoading && allChannels.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-lg text-white">{t('loading')}</div>
+        <div className="text-lg dark:text-white text-slate-900">{t('loading')}</div>
       </div>
     );
   }
@@ -105,17 +105,17 @@ export const TVList: React.FC<TVListProps> = ({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
+    <div className="flex-1 flex flex-col overflow-hidden">
       {/* Category Header - Unified Style */}
       {selectedCategory && (
-        <div className="bg-slate-800 border-b border-slate-700 p-4">
+        <div className="border-b dark:border-slate-700 border-gray-300 p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-xl">
+            <div className="w-10 h-10 bg-green-700 rounded-lg flex items-center justify-center text-xl">
               {selectedCategory.id === '*' ? '🌍' : '📺'}
             </div>
             <div className="flex-1">
-              <h2 className="text-lg font-bold text-white">{selectedCategory.title}</h2>
-              <p className="text-sm text-slate-400">
+              <h2 className="text-lg font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+              <p className="text-sm dark:text-slate-400 text-slate-600">
                 {allChannels.length} {t('channels').toLowerCase()}
               </p>
             </div>
@@ -129,7 +129,7 @@ export const TVList: React.FC<TVListProps> = ({
                   toggleCategory(String(selectedCategory.id), selectedCategory.title);
                 }
               }}
-              className="text-xl hover:scale-110 transition-transform p-2 rounded-full hover:bg-slate-700 focus:bg-slate-700"
+              className="text-xl hover:scale-110 transition-transform p-2 rounded-full dark:hover:bg-slate-700 dark:focus:bg-slate-700 hover:bg-gray-200 focus:bg-gray-200"
               title={isCategoryFavorite(String(selectedCategory.id)) ? t('removeFromFavorites') : t('addToFavorites')}
             >
               {isCategoryFavorite(String(selectedCategory.id)) ? '❤️' : '🤍'}
@@ -151,15 +151,15 @@ export const TVList: React.FC<TVListProps> = ({
             } : undefined}
             onMouseEnter={() => debouncedPreload(channel)}
             onClick={() => onChannelSelect(channel)}
-            className="p-3 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700 hover:border-blue-500 transition-all focus:bg-slate-700 focus:border-blue-500"
+            className="p-3 dark:border border-slate-700 border-gray-300 rounded-lg cursor-pointer dark:hover:bg-slate-700 hover:bg-gray-200 dark:hover:border-green-700 hover:border-green-700 transition-all dark:focus:bg-slate-700 focus:bg-gray-200 dark:focus:border-green-700 focus:border-green-700"
           >
             <div className="flex justify-between items-start">
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-sm text-white truncate">
+                <h3 className="font-medium text-sm dark:text-white text-slate-900 truncate">
                   {channel.name}
                 </h3>
                 {!!channel.number && (
-                  <p className="text-xs text-slate-400">#{channel.number}</p>
+                  <p className="text-xs dark:text-slate-400 text-slate-600">#{channel.number}</p>
                 )}
               </div>
               <button
@@ -186,7 +186,7 @@ export const TVList: React.FC<TVListProps> = ({
         {/* Infinite scroll trigger and loading state */}
         {isLoading && (
           <div className="flex justify-center py-4">
-            <div className="text-white">{t('loading')}...</div>
+            <div className="dark:text-white text-slate-900">{t('loading')}...</div>
           </div>
         )}
         
@@ -198,15 +198,15 @@ export const TVList: React.FC<TVListProps> = ({
 
         {/* No search results */}
         {!isLoading && search && filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+          <div className="flex flex-col items-center justify-center py-12 dark:text-slate-400 text-slate-600">
             <div className="text-4xl mb-3">🔍</div>
-            <p className="text-lg">Nie znaleziono kanałów</p>
-            <p className="text-sm text-slate-500">Brak wyników dla "{search}"</p>
+            <p className="text-lg dark:text-white text-slate-900">Nie znaleziono kanałów</p>
+            <p className="text-sm dark:text-slate-500 text-slate-500">Brak wyników dla "{search}"</p>
           </div>
         )}
 
         {!isLoading && !hasMore && filtered.length > 0 && (
-          <div className="text-center py-4 text-slate-500">
+          <div className="text-center py-4 dark:text-slate-500 text-slate-500">
             {filtered.length} z {allChannels.length} {t('channels').toLowerCase()}
           </div>
         )}

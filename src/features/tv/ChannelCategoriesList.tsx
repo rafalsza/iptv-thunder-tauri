@@ -51,8 +51,8 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+        <div className="text-center dark:text-white text-slate-900">
+          <div className="animate-spin w-8 h-8 border-2 border-green-700 border-t-transparent rounded-full mx-auto mb-4"></div>
           <p>Ładowanie kategorii kanałów...</p>
         </div>
       </div>
@@ -62,15 +62,15 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-center text-white max-w-md">
+        <div className="text-center dark:text-white text-slate-900 max-w-md">
           <div className="text-6xl mb-4">⚠️</div>
           <h3 className="text-xl font-semibold mb-2">Błąd ładowania kategorii</h3>
-          <p className="text-slate-400 mb-4">
+          <p className="dark:text-slate-400 text-slate-600 mb-4">
             Nie udało się pobrać kategorii kanałów z portalu. Spróbuj ponownie.
           </p>
           <button
             onClick={() => refetch()}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white rounded-lg transition-colors"
           >
             Spróbuj ponownie
           </button>
@@ -82,12 +82,12 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
   if (filteredCategories.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-center text-white">
+        <div className="text-center dark:text-white text-slate-900">
           <div className="text-6xl mb-4">📂</div>
           <h3 className="text-xl font-semibold mb-2">
             {search ? 'Nie znaleziono kategorii' : 'Brak kategorii'}
           </h3>
-          <p className="text-slate-400">
+          <p className="dark:text-slate-400 text-slate-600">
             {search 
               ? `Nie znaleziono kategorii kanałów pasujących do "${search}"`
               : 'Ten portal nie ma zdefiniowanych kategorii kanałów'
@@ -99,15 +99,15 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
+    <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header - Unified Style */}
-      <div className="bg-slate-800 border-b border-slate-700 p-4">
-        <h1 className="text-lg font-bold text-white">Kategorie kanałów</h1>
-        <p className="text-sm text-slate-400">
+      <div className="border-b dark:border-slate-700 border-gray-300 p-4">
+        <h1 className="text-lg font-bold dark:text-white text-slate-900">Kategorie kanałów</h1>
+        <p className="text-sm dark:text-slate-400 text-slate-600">
           Wybierz kategorię, aby zobaczyć dostępne kanały
         </p>
         {search && (
-          <p className="text-blue-400 text-sm mt-2">
+          <p className="text-green-700 text-sm mt-2">
             Wyniki wyszukiwania dla: "{search}"
           </p>
         )}
@@ -121,11 +121,11 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
               key={category.id}
               onClick={() => handleCategoryClick(category)}
               className={`
-                relative bg-slate-800 bg-opacity-50 backdrop-blur-sm border rounded-lg p-4
+                relative dark:bg-slate-800 dark:bg-opacity-50 bg-white bg-opacity-50 backdrop-blur-sm dark:border border-slate-600 border-gray-300 rounded-lg p-4
                 cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl
                 ${selectedCategory?.id === category.id 
-                  ? 'border-blue-500 bg-blue-500 bg-opacity-10 shadow-lg shadow-blue-500/25' 
-                  : 'border-slate-600 hover:border-blue-400'
+                  ? 'border-green-700 bg-green-700 bg-opacity-10 shadow-lg shadow-green-700/25' 
+                  : 'dark:border-slate-600 border-gray-300 hover:border-green-700'
                 }
               `}
             >
@@ -134,15 +134,15 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
                 <div className={`
                   w-10 h-10 rounded-lg flex items-center justify-center text-xl font-bold
                   ${selectedCategory?.id === category.id 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-slate-700 text-slate-300'
+                    ? 'bg-green-700 text-white' 
+                    : 'dark:bg-slate-700 bg-gray-200 dark:text-slate-300 text-slate-600'
                   }
                 `}>
                   {category.id === '*' ? '🌍' : '📺'}
                 </div>
                 <div className="flex items-center gap-2">
                   {selectedCategory?.id === category.id && (
-                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                    <div className="w-2 h-2 bg-green-700 rounded-full animate-pulse"></div>
                   )}
                   {/* Favorite Button */}
                   <button 
@@ -163,13 +163,13 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
               {/* Category Title */}
               <h3 className={`
                 font-semibold text-base mb-1 line-clamp-2
-                ${selectedCategory?.id === category.id ? 'text-blue-400' : 'text-white'}
+                ${selectedCategory?.id === category.id ? 'text-green-700' : 'dark:text-white text-slate-900'}
               `}>
                 {category.title}
               </h3>
 
               {/* Category Description */}
-              <p className="text-slate-400 text-sm mb-2">
+              <p className="dark:text-slate-400 text-slate-600 text-sm mb-2">
                 {category.id === '*' 
                   ? 'Wszystkie dostępne kanały' 
                   : `Kategoria kanałów #${category.id}`
@@ -179,7 +179,7 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
               {/* Selection Indicator */}
               {selectedCategory?.id === category.id && (
                 <div className="absolute top-2 right-2">
-                  <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                  <div className="w-6 h-6 bg-green-700 rounded-full flex items-center justify-center">
                     <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
@@ -188,22 +188,22 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
               )}
 
               {/* Hover Effect Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 hover:opacity-5 transition-opacity duration-200 rounded-xl pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-700 to-transparent opacity-0 hover:opacity-5 transition-opacity duration-200 rounded-xl pointer-events-none" />
             </div>
           ))}
 
         </div>
         {selectedCategory && (
-          <div className="mt-6 p-4 bg-slate-800 bg-opacity-50 backdrop-blur-sm border border-slate-600 rounded-lg">
+          <div className="mt-6 p-4 dark:bg-slate-800 dark:bg-opacity-50 bg-white bg-opacity-50 backdrop-blur-sm dark:border border-slate-600 border-gray-300 rounded-lg">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-blue-500 bg-opacity-20 rounded-lg flex items-center justify-center text-2xl">
+              <div className="w-14 h-14 bg-green-700 bg-opacity-20 rounded-lg flex items-center justify-center text-2xl">
                 {selectedCategory.id === '*' ? '🌍' : '📺'}
               </div>
               <div className="flex-1">
-                <h3 className="text-xl font-bold text-white mb-1">
+                <h3 className="text-xl font-bold dark:text-white text-slate-900 mb-1">
                   {selectedCategory.title}
                 </h3>
-                <p className="text-slate-400">
+                <p className="dark:text-slate-400 text-slate-600">
                   {selectedCategory.id === '*' 
                     ? 'Wybrano wszystkie kanały' 
                     : `Wybrano kategorię kanałów #${selectedCategory.id}`
@@ -212,7 +212,7 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
               </div>
               <button
                 onClick={() => onCategorySelect(selectedCategory)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white rounded-lg transition-colors flex items-center gap-2"
               >
                 <span>📺</span>
                 Pokaż kanały

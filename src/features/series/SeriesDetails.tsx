@@ -162,7 +162,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     : [];
 
   return (
-    <div className="flex-1 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-y-auto">
+    <div className="flex-1  overflow-y-auto">
       <div className="max-w-6xl mx-auto p-8">
         {/* Header z przyciskiem wstecz po prawej */}
         <div className="flex items-start justify-between mb-6">
@@ -219,7 +219,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 <span className="text-slate-400">{seasons.length} {seasons.length === 1 ? t('season') : t('seasons')}</span>
               )}
               {episodes.length > 0 && (
-                <span className="text-slate-400">{episodes.length} {t('episode').toLowerCase()}.</span>
+                <span className="text-slate-400">{episodes.length} {episodes.length === 1 ? t('episode').toLowerCase() : episodes.length >= 2 && episodes.length <= 4 ? t('episodes_2_4') : t('episodes_5_plus')}</span>
               )}
               {(fullSeries.rating_imdb || seriesInfo?.series?.rating_imdb) && (
                 <span className="px-2 py-0.5 bg-yellow-600/80 rounded text-white text-xs flex items-center gap-1">
@@ -303,7 +303,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
             >
               {seasons.map((season: string) => (
                 <option key={season} value={season}>
-                  {t('season')} {season} ({episodesBySeason[season]?.length || 0} {t('episode').toLowerCase()}.)
+                  {t('season')} {season} ({episodesBySeason[season]?.length || 0} {(episodesBySeason[season]?.length || 0) === 1 ? t('episode').toLowerCase() : (episodesBySeason[season]?.length || 0) >= 2 && (episodesBySeason[season]?.length || 0) <= 4 ? t('episodes_2_4') : t('episodes_5_plus')})
                 </option>
               ))}
             </select>
@@ -357,7 +357,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                     <div className="flex-1 min-w-0 py-2">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <h3 className="text-lg font-medium text-white mb-2 group-hover:text-blue-400 transition-colors">
+                          <h3 className="text-lg font-medium text-white mb-2 group-hover:text-green-700 transition-colors">
                             {displayName}
                           </h3>
                           {episode.description && (
@@ -369,7 +369,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         
                         <div className="flex items-center gap-4 flex-shrink-0">
                           {hasResume && (
-                            <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded">
+                            <span className="text-xs bg-green-700 text-white px-2 py-1 rounded">
                               {t('resume')}
                             </span>
                           )}
@@ -416,3 +416,9 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     </div>
   );
 };
+
+
+
+
+
+

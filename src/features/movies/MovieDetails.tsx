@@ -110,7 +110,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
     : [];
 
   return (
-    <div className="flex-1 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-y-auto">
+    <div className="flex-1  overflow-y-auto">
       <div className="max-w-6xl mx-auto p-8">
         <div className="flex gap-8">
           {/* Poster */}
@@ -148,7 +148,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                   <div className="flex items-center gap-2 mb-1">
                     <div className="flex-1 bg-slate-600 rounded-full h-2">
                       <div
-                        className="bg-blue-500 h-2 rounded-full transition-all"
+                        className="bg-green-700 h-2 rounded-full transition-all"
                         style={{ width: `${displayPercentage}%` }}
                       />
                     </div>
@@ -220,7 +220,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                 </span>
               )}
               {movie.rating_kinopoisk && (
-                <span className="px-3 py-1 bg-blue-600/80 rounded-md text-sm flex items-center gap-1">
+                <span className="px-3 py-1 bg-green-700/80 rounded-md text-sm flex items-center gap-1">
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                   </svg>
@@ -236,7 +236,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                 </span>
               )}
               {isInProgress && progress && (
-                <span className="px-3 py-1 bg-blue-600/80 rounded-md text-sm flex items-center gap-1">
+                <span className="px-3 py-1 bg-green-700/80 rounded-md text-sm flex items-center gap-1">
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
                   </svg>
@@ -337,7 +337,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                 tabIndex={0}
                 onClick={handleDownload}
                 disabled={isDownloading}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-3 bg-green-700 text-white rounded-lg font-semibold hover:bg-green-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

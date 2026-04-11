@@ -2,28 +2,84 @@
 
 /* stylelint-disable at-rule-no-unknown */
 @theme {
-  --color-background: hsl(15 23 42 / 1);
-  --color-foreground: hsl(250 250 250 / 1);
-  --color-card: hsl(15 23 42 / 1);
-  --color-card-foreground: hsl(250 250 250 / 1);
-  --color-popover: hsl(15 23 42 / 1);
-  --color-popover-foreground: hsl(250 250 250 / 1);
-  --color-primary: hsl(59 130 246 / 1);
-  --color-primary-foreground: hsl(250 250 250 / 1);
-  --color-secondary: hsl(30 41 59 / 1);
-  --color-secondary-foreground: hsl(250 250 250 / 1);
-  --color-muted: hsl(30 41 59 / 1);
-  --color-muted-foreground: hsl(250 250 250 / 1);
-  --color-accent: hsl(30 41 59 / 1);
-  --color-accent-foreground: hsl(250 250 250 / 1);
-  --color-destructive: hsl(0 62.8% 30.6%);
-  --color-destructive-foreground: hsl(250 250 250 / 1);
-  --color-border: hsl(30 41 59 / 1);
-  --color-input: hsl(30 41 59 / 1);
-  --color-ring: hsl(59 130 246 / 1);
   --radius-sm: 0.5rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.5rem;
+}
+
+@variant dark (.dark &);
+
+/* Theme CSS variables */
+:root {
+  --theme-bg-slate-800: #1e293b;
+  --theme-bg-slate-700: #334155;
+  --theme-bg-slate-900: #0f172a;
+  --theme-bg-slate-950: #020617;
+  --theme-text-white: #ffffff;
+  --theme-text-slate-300: #cbd5e1;
+  --theme-text-slate-400: #94a3b8;
+  --theme-text-slate-500: #64748b;
+  --theme-border-slate-700: #334155;
+  --theme-border-slate-600: #475569;
+}
+
+html.light {
+  --theme-bg-slate-800: #ffffff;
+  --theme-bg-slate-700: #f3f4f6;
+  --theme-bg-slate-900: #f9fafb;
+  --theme-bg-slate-950: #ffffff;
+  --theme-text-white: #111827;
+  --theme-text-slate-300: #4b5563;
+  --theme-text-slate-400: #6b7280;
+  --theme-text-slate-500: #9ca3af;
+  --theme-border-slate-700: #d1d5db;
+  --theme-border-slate-600: #e5e7eb;
+}
+
+/* Dark mode (default) */
+:root {
+  --color-background: hsl(0 0 0 / 1);
+  --color-foreground: hsl(0 0 100 / 1);
+  --color-card: hsl(0 0 5% / 1);
+  --color-card-foreground: hsl(0 0 100 / 1);
+  --color-popover: hsl(0 0 5% / 1);
+  --color-popover-foreground: hsl(0 0 100 / 1);
+  --color-primary: hsl(142 50% 20% / 1);
+  --color-primary-foreground: hsl(0 0 100 / 1);
+  --color-secondary: hsl(0 0 10% / 1);
+  --color-secondary-foreground: hsl(0 0 100 / 1);
+  --color-muted: hsl(0 0 15% / 1);
+  --color-muted-foreground: hsl(0 0 70% / 1);
+  --color-accent: hsl(0 0 15% / 1);
+  --color-accent-foreground: hsl(0 0 100 / 1);
+  --color-destructive: hsl(0 62.8% 30.6%);
+  --color-destructive-foreground: hsl(0 0 100% / 1);
+  --color-border: hsl(0 0 20% / 1);
+  --color-input: hsl(0 0 20% / 1);
+  --color-ring: hsl(142 50% 20% / 1);
+}
+
+/* Light mode */
+:root.light {
+  --color-background: hsl(0 0 100% / 1);
+  --color-foreground: hsl(0 0 9% / 1);
+  --color-card: hsl(0 0 95% / 1);
+  --color-card-foreground: hsl(0 0 9% / 1);
+  --color-popover: hsl(0 0 95% / 1);
+  --color-popover-foreground: hsl(0 0 9% / 1);
+  --color-primary: hsl(142 50% 20% / 1);
+  --color-primary-foreground: hsl(0 0 100% / 1);
+  --color-secondary: hsl(0 0 90% / 1);
+  --color-secondary-foreground: hsl(0 0 9% / 1);
+  --color-muted: hsl(0 0 85% / 1);
+  --color-muted-foreground: hsl(0 0 30% / 1);
+  --color-accent: hsl(0 0 85% / 1);
+  --color-accent-foreground: hsl(0 0 9% / 1);
+  --color-destructive: hsl(0 62.8% 30.6%);
+  --color-destructive-foreground: hsl(0 0 100% / 1);
+  --color-border: hsl(0 0 80% / 1);
+  --color-input: hsl(0 0 80% / 1);
+  --color-ring: hsl(142 50% 20% / 1);
 }
 
 @layer base {
@@ -37,12 +93,29 @@
     background: transparent !important;
   }
   html {
+    color-scheme: light;
+  }
+  html.dark {
     color-scheme: dark;
+  }
+  html.light {
+    color-scheme: light;
   }
   body {
     background: transparent !important;
   }
 }
+
+/* Force style updates when theme changes - removed universal selector for performance */
+
+/* Force Tailwind v4 to respect document class for dark mode */
+html.dark {
+  color-scheme: dark !important;
+}
+html.light {
+  color-scheme: light !important;
+}
+
 
 /* TV Navigation Styles */
 [data-tv-focusable] {
@@ -52,15 +125,15 @@
 
 [data-tv-focusable]:focus,
 [data-tv-focusable].tv-focused {
-  outline: 3px solid #3b82f6;
+  outline: 3px solid #166534;
   outline-offset: 2px;
   transform: scale(1.02);
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 20px rgba(22, 101, 52, 0.5);
   z-index: 10;
 }
 
 [data-tv-focusable]:focus-visible {
-  outline: 3px solid #3b82f6;
+  outline: 3px solid #166534;
   outline-offset: 2px;
 }
 
