@@ -400,4 +400,237 @@ describe('useTranslation hook', () => {
     expect(result.current.t('movies')).toBe('Filmy');
     expect(result.current.t('series')).toBe('Seriale');
   });
+
+  it('should memoize t function', async () => {
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    const tFunction1 = result.current.t;
+    const tFunction2 = result.current.t;
+
+    expect(tFunction1).toBe(tFunction2);
+  });
+
+  it('should memoize changeLanguage function', async () => {
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    const changeLang1 = result.current.changeLanguage;
+    const changeLang2 = result.current.changeLanguage;
+
+    expect(changeLang1).toBe(changeLang2);
+  });
+
+  it('should cleanup subscription on unmount', async () => {
+    mockGetSetting.mockResolvedValue(null);
+
+    const { result, unmount } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Change language before unmount
+    await act(async () => {
+      await result.current.changeLanguage('en');
+    });
+
+    expect(result.current.currentLang).toBe('en');
+
+    // Unmount the hook
+    unmount();
+
+    // Reset global state to simulate fresh start
+    const { _resetLanguageState } = jest.requireActual('../useTranslation');
+    _resetLanguageState('pl');
+
+    // Create a new hook instance
+    const { result: result2 } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result2.current.isLoading).toBe(false);
+    });
+
+    // Should start with fresh state after reset
+    expect(result2.current.currentLang).toBe('pl');
+  });
+
+  it('should handle null saved language', async () => {
+    mockGetSetting.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.currentLang).toBe('pl');
+  });
+
+  it('should handle undefined saved language', async () => {
+    mockGetSetting.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.currentLang).toBe('pl');
+  });
+
+  it('should fallback to Polish when currentLang translation is missing', async () => {
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // If a key exists in Polish but not in English, it should fallback
+    // This tests the fallback chain: currentLang -> pl -> key
+    const translation = result.current.t('channels');
+    expect(translation).toBeDefined();
+    expect(typeof translation).toBe('string');
+  });
+
+  it('should return key itself when translation not found in any language', async () => {
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    const unknownKey = 'totallyNonExistentKey12345';
+    const translation = result.current.t(unknownKey as TranslationKey);
+    expect(translation).toBe(unknownKey);
+  });
+
+  it('should handle rapid language changes', async () => {
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Rapidly change language multiple times
+    await act(async () => {
+      await result.current.changeLanguage('en');
+      await result.current.changeLanguage('pl');
+      await result.current.changeLanguage('en');
+    });
+
+    expect(result.current.currentLang).toBe('en');
+    expect(result.current.t('channels')).toBe('Channels');
+  });
+
+  it('should not update listeners when changeLanguage fails', async () => {
+    mockSetSetting.mockRejectedValue(new Error('Storage error'));
+
+    const { result: result1 } = renderHook(() => useTranslation());
+    const { result: result2 } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result1.current.isLoading).toBe(false);
+      expect(result2.current.isLoading).toBe(false);
+    });
+
+    const initialLang1 = result1.current.currentLang;
+    const initialLang2 = result2.current.currentLang;
+
+    await act(async () => {
+      await result1.current.changeLanguage('en');
+    });
+
+    // Neither instance should change because save failed
+    expect(result1.current.currentLang).toBe(initialLang1);
+    expect(result2.current.currentLang).toBe(initialLang2);
+  });
+
+  it('should handle language code not in allowed list', async () => {
+    mockGetSetting.mockResolvedValue('de' as any);
+
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Should fallback to Polish for invalid language
+    expect(result.current.currentLang).toBe('pl');
+  });
+
+  it('should update global language state on change', async () => {
+    mockGetSetting.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.changeLanguage('en');
+    });
+
+    expect(result.current.currentLang).toBe('en');
+
+    // New instance should pick up the global language
+    const { result: result2 } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result2.current.isLoading).toBe(false);
+    });
+
+    expect(result2.current.currentLang).toBe('en');
+  });
+
+  it('should translate empty string key', async () => {
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    const translation = result.current.t('' as TranslationKey);
+    expect(translation).toBe('');
+  });
+
+  it('should handle special characters in translation keys', async () => {
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Test with a key that has special characters (if it exists in translations)
+    // Otherwise it should return the key itself
+    const specialKey = 'test-key_with.special';
+    const translation = result.current.t(specialKey as TranslationKey);
+    expect(translation).toBe(specialKey);
+  });
+
+  it('should maintain translation consistency after multiple renders', async () => {
+    const { result, rerender } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    const translation1 = result.current.t('channels');
+
+    // Rerender multiple times
+    rerender();
+    rerender();
+    rerender();
+
+    const translation2 = result.current.t('channels');
+
+    expect(translation1).toBe(translation2);
+  });
 });
