@@ -32,6 +32,27 @@ function setCachedImage(key: string, value: string) {
   imageCache.set(key, value);
 }
 
+// ─── SkeletonCard ──────────────────────────────────────────────────────────────
+
+const SkeletonCard = React.memo(() => {
+  return (
+    <div className="h-full">
+      <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 dark:bg-slate-800 bg-white h-full flex flex-col">
+        {/* Poster skeleton */}
+        <div className="flex-1 dark:bg-slate-700 bg-gray-200 relative overflow-hidden">
+          <div className="absolute inset-0 animate-pulse dark:bg-slate-600 bg-gray-300" />
+        </div>
+        {/* Info skeleton */}
+        <div className="p-2 dark:bg-slate-800 bg-white flex-shrink-0 min-h-[60px] flex items-center">
+          <div className="h-4 w-full dark:bg-slate-700 bg-gray-200 rounded animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+});
+
+SkeletonCard.displayName = 'SkeletonCard';
+
 // ─── MovieCard ────────────────────────────────────────────────────────────────
 
 interface MovieCardProps {
@@ -94,6 +115,7 @@ const MovieCard = React.memo<MovieCardProps>(({
   return (
     <div
       onMouseEnter={() => onPrefetch(movie)}
+      onFocus={() => onPrefetch(movie)}
       onClick={() => onSelect(movie)}
       className="cursor-pointer group h-full"
     >
@@ -177,7 +199,7 @@ export const MovieList: React.FC<MovieListProps> = ({
 }) => {
   const { t } = useTranslation();
   // ── Data ──────────────────────────────────────────────────────────────────────
-  const { movies, isLoading, error } = useMoviesAll(client, selectedCategory?.id);
+  const { movies, isLoading, isFetching, error } = useMoviesAll(client, selectedCategory?.id);
   const prefetchStream = usePrefetchMovieStream(client);
 
   // ── Favorites ─────────────────────────────────────────────────────────────────
@@ -289,14 +311,39 @@ export const MovieList: React.FC<MovieListProps> = ({
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
-  if (isLoading) {
+  // Show skeleton grid during initial load or refetch (prevents UI flash)
+  const showSkeleton = isLoading || isFetching;
+  const skeletonCount = cols * 4; // Show 4 rows of skeletons
+
+  if (showSkeleton && movies.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3">
-        <svg className="animate-spin" style={{ width: 32, height: 32 }} viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" stroke="#334155" strokeWidth="2" />
-          <path d="M12 2 A10 10 0 0 1 22 12" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-        <p className="dark:text-slate-400 text-slate-600 text-sm">{t('loading')}</p>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Category header with skeleton */}
+        {selectedCategory && (
+          <div className="flex-shrink-0 border-b dark:border-slate-700 border-gray-300 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-green-700 rounded-lg flex items-center justify-center text-lg">
+                🎬
+              </div>
+              <div className="flex-1">
+                <h2 className="text-base font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+                <div className="h-4 w-24 dark:bg-slate-700 bg-gray-200 rounded animate-pulse mt-1" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Skeleton grid */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div
+            className="grid gap-4"
+            style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+          >
+            {Array.from({ length: skeletonCount }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -369,7 +416,7 @@ export const MovieList: React.FC<MovieListProps> = ({
                 className="grid gap-4 h-full"
                 style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
               >
-                {getRow(vRow.index).map(movie => {
+                {getRow(vRow.index).map((movie) => {
                   const movieId = String(movie.id);
                   const progress = useResumeStore.getState().getProgress(movieId);
                   return (

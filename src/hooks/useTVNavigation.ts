@@ -2,12 +2,14 @@ import { useEffect, useRef, useCallback } from 'react';
 
 interface TVNavigationOptions {
   selector?: string;
+  elements?: HTMLElement[];
   onBack?: () => void;
   onEnter?: (element: HTMLElement) => void;
+  onTVFocus?: (element: HTMLElement) => void;
 }
 
 export function useTVNavigation(options: TVNavigationOptions = {}) {
-  const { selector = '[data-tv-focusable]', onBack, onEnter } = options;
+  const { selector = '[data-tv-focusable]', elements: externalElements, onBack, onEnter, onTVFocus } = options;
   const focusableElementsRef = useRef<HTMLElement[]>([]);
   const currentElementRef = useRef<HTMLElement | null>(null);
   const lastFocusedByContainer = useRef<Map<string, HTMLElement>>(new Map());
@@ -15,8 +17,20 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   const activeContainerRef = useRef<HTMLElement | null>(null);
   const scrollTimeoutRef = useRef<number | null>(null);
   const lastPositionByAxis = useRef({ x: 0, y: 0 });
+  const lastXByRow = useRef<Map<number, number>>(new Map()); // ROW MEMORY: store X position per row
 
   const getFocusableElements = useCallback(() => {
+    // Use external elements if provided (more efficient than DOM query)
+    if (externalElements) {
+      const elements = externalElements;
+      // Filter by active container if set (focus trap for modals, sidebars, etc.)
+      if (activeContainerRef.current) {
+        return elements.filter(el => activeContainerRef.current?.contains(el));
+      }
+      return elements;
+    }
+
+    // Fallback to DOM query
     const elements = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
 
     // Filter by active container if set (focus trap for modals, sidebars, etc.)
@@ -25,7 +39,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     }
 
     return elements;
-  }, [selector]);
+  }, [selector, externalElements]);
 
   const isVisible = (el: HTMLElement) => {
     const style = window.getComputedStyle(el);
@@ -46,7 +60,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     }
 
     scrollTimeoutRef.current = requestAnimationFrame(() => {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      el.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
       scrollTimeoutRef.current = null;
     });
   };
@@ -58,12 +72,15 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     scrollToElement(el);
     currentElementRef.current = el;
 
+    // Call onTVFocus for side effects (preload, analytics, etc.)
+    onTVFocus?.(el);
+
     // Save last focused element per container
     const container = el.closest('[data-tv-container]');
     if (container?.id) {
       lastFocusedByContainer.current.set(container.id, el);
     }
-  }, []);
+  }, [onTVFocus]);
 
   const setActiveContainer = useCallback((container: HTMLElement | null) => {
     activeContainerRef.current = container;
@@ -98,6 +115,12 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       const currentCenterX = currentRect.left + currentRect.width / 2;
       const currentCenterY = currentRect.top + currentRect.height / 2;
 
+      // ROW MEMORY: Store X position for the current row when moving horizontally
+      const currentRow = Math.round(currentCenterY / currentRect.height);
+      if (direction === 'right' || direction === 'left') {
+        lastXByRow.current.set(currentRow, currentCenterX);
+      }
+
       // Store current position before moving (for directional memory)
       if (direction === 'down') {
         lastPositionByAxis.current.x = currentCenterX;
@@ -121,8 +144,9 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         const deltaX = centerX - currentCenterX;
         const deltaY = centerY - currentCenterY;
 
-        const isHorizontallyAligned = Math.abs(deltaY) < currentRect.height * 0.6;
-        const isVerticallyAligned = Math.abs(deltaX) < currentRect.width * 0.6;
+        // Grid-aware: detect if element is in same row/column
+        const sameRow = Math.abs(deltaY) < currentRect.height * 0.5;
+        const sameColumn = Math.abs(deltaX) < currentRect.width * 0.5;
 
         const overlapsVertically =
           rect.top < currentRect.bottom &&
@@ -134,32 +158,39 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
         switch (direction) {
           case 'right':
-            isValid = deltaX > 0 && isHorizontallyAligned;
-            distance = deltaX + Math.abs(deltaY) * 2;
-            if (isHorizontallyAligned) priority += 1000;
+            isValid = deltaX > 0;
+            distance = deltaX + Math.abs(deltaY) * 5; // Heavy penalty for vertical deviation
+            if (sameRow) priority += 3000; // Strong preference for same row
             if (overlapsVertically) priority += 2000;
             break;
           case 'left':
-            isValid = deltaX < 0 && isHorizontallyAligned;
-            distance = Math.abs(deltaX) + Math.abs(deltaY) * 2;
-            if (isHorizontallyAligned) priority += 1000;
+            isValid = deltaX < 0;
+            distance = Math.abs(deltaX) + Math.abs(deltaY) * 5;
+            if (sameRow) priority += 3000;
             if (overlapsVertically) priority += 2000;
             // Prefer elements close to stored Y position (directional memory)
             const yDistanceFromMemory = Math.abs(centerY - lastPositionByAxis.current.y);
-            priority -= yDistanceFromMemory * 0.5;
+            priority -= yDistanceFromMemory * 10;
             break;
           case 'down':
-            isValid = deltaY > 0 && isVerticallyAligned;
-            distance = deltaY + Math.abs(deltaX) * 2;
-            if (isVerticallyAligned) priority += 1000;
+            isValid = deltaY > 0;
+            distance = deltaY + Math.abs(deltaX) * 5;
+            if (sameColumn) priority += 3000; // Strong preference for same column
+            // ROW MEMORY: Prefer elements close to stored X position for target row
+            const targetRowDown = Math.round(centerY / currentRect.height);
+            const rememberedXDown = lastXByRow.current.get(targetRowDown) || lastPositionByAxis.current.x;
+            const xDistanceFromMemoryDown = Math.abs(centerX - rememberedXDown);
+            priority -= xDistanceFromMemoryDown * 20; // Stronger preference for ROW MEMORY
             break;
           case 'up':
-            isValid = deltaY < 0 && isVerticallyAligned;
-            distance = Math.abs(deltaY) + Math.abs(deltaX) * 2;
-            if (isVerticallyAligned) priority += 1000;
-            // Prefer elements close to stored X position (directional memory)
-            const xDistanceFromMemory = Math.abs(centerX - lastPositionByAxis.current.x);
-            priority -= xDistanceFromMemory * 0.5;
+            isValid = deltaY < 0;
+            distance = Math.abs(deltaY) + Math.abs(deltaX) * 5;
+            if (sameColumn) priority += 3000;
+            // ROW MEMORY: Prefer elements close to stored X position for target row
+            const targetRowUp = Math.round(centerY / currentRect.height);
+            const rememberedXUp = lastXByRow.current.get(targetRowUp) || lastPositionByAxis.current.x;
+            const xDistanceFromMemoryUp = Math.abs(centerX - rememberedXUp);
+            priority -= xDistanceFromMemoryUp * 20; // Stronger preference for ROW MEMORY
             break;
         }
 
@@ -226,14 +257,12 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
     update();
 
-    const observer = new MutationObserver(update);
-    observer.observe(document.body, { childList: true, subtree: true });
-
+    // Only listen to resize and scroll, not DOM mutations
+    // Components should pass updated elements list via props
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
 
     return () => {
-      observer.disconnect();
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };

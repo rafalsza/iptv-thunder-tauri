@@ -81,6 +81,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   return (
     <div
       onMouseEnter={() => onPrefetch(series)}
+      onFocus={() => onPrefetch(series)}
       onClick={() => onSelect(String(series.id))}
       className={`cursor-pointer group h-full ${isSelected ? 'ring-2 ring-green-700 rounded-lg' : ''}`}
     >

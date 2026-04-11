@@ -311,7 +311,7 @@ export async function getCachedImage(url: string): Promise<string | null> {
     const filePath = await getFilePath(url);
     await stat(filePath); // Verify file exists (stat is faster than readFile)
     updateLru(filePath);
-    return fileToAssetUrl(filePath);
+    return await fileToAssetUrl(filePath);
   } catch {
     return null;
   }
@@ -457,9 +457,19 @@ export async function fetchAndCacheImage(url: string, signal?: AbortSignal): Pro
 /**
  * Convert file path to asset URL for use in <img> src
  * Uses Tauri's convertFileSrc - avoids 33% base64 memory inflation
+ * Falls back to base64 data URL if convertFileSrc fails (Tauri v2 compatibility)
  */
-function fileToAssetUrl(filePath: string): string {
-  return convertFileSrc(filePath);
+async function fileToAssetUrl(filePath: string): Promise<string> {
+  try {
+    return convertFileSrc(filePath);
+  } catch {
+    // Fallback: read file and convert to base64 data URL
+    const data = await readFile(filePath);
+    const base64 = Array.from(data)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    return `data:image/jpeg;base64,${base64}`;
+  }
 }
 
 /**
@@ -472,16 +482,16 @@ export async function getImageUrl(url: string, fallbackUrl: string = '/fallback/
     if (signal?.aborted) throw new Error('Aborted');
 
     const cachedPath = await getFilePath(url);
-    
+
     try {
       await stat(cachedPath); // Use stat instead of readFile for existence check
       updateLru(cachedPath);
-      return fileToAssetUrl(cachedPath);
+      return await fileToAssetUrl(cachedPath);
     } catch {
       if (signal?.aborted) throw new Error('Aborted');
 
       await fetchAndCacheImage(url, signal);
-      return fileToAssetUrl(await getFilePath(url));
+      return await fileToAssetUrl(await getFilePath(url));
     }
   } catch (e) {
     // Log with deduplication - expected errors (404s, network failures) are silently ignored

@@ -6,6 +6,7 @@ import { useResumeStore } from '@/store/resume.store';
 import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { useMovieDetails } from './movies.hooks';
 
 interface MovieDetailsProps {
   movie: StalkerVOD;
@@ -28,6 +29,14 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
   const { getPosition, clearPosition, getProgress } = useResumeStore();
   const [isHovered, setIsHovered] = useState(false);
 
+  // Fetch full movie details from API (only if we have a valid movie id > 0)
+  const movieId = String(movie.id);
+  const isValidId = movieId && movieId !== '0' && movieId !== 'NaN';
+  const { data: movieDetails } = useMovieDetails(client, isValidId ? movieId : undefined, movie.cmd);
+
+  // Use detailed data if available, otherwise fall back to list/favorites data
+  const displayMovie = movieDetails || movie;
+
   const progress = getProgress(String(movie.id));
   const isWatched = progress?.status === 'watched';
   const isInProgress = progress?.status === 'in_progress';
@@ -35,9 +44,9 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
   // Recalculate percentage using the same source as display time for consistency
   const getDisplayPercentage = () => {
     if (!progress) return 0;
-    if (movie.length && movie.length > 0) {
+    if (displayMovie.length && displayMovie.length > 0) {
       // Use movie.length from API for both percentage and time display
-      const totalSeconds = movie.length * 60;
+      const totalSeconds = displayMovie.length * 60;
       return totalSeconds > 0 ? Math.round((progress.position / totalSeconds) * 100) : 0;
     } else if (progress.duration > 0) {
       // Use progress.duration from player
@@ -100,13 +109,13 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
   const isFavorite = isItemFavorite('vod', String(movie.id));
 
   // Parse actors string into array
-  const actorsList = movie.actors
-    ? movie.actors.split(',').map((a) => a.trim()).filter(Boolean)
+  const actorsList = displayMovie.actors
+    ? displayMovie.actors.split(',').map((a) => a.trim()).filter(Boolean)
     : [];
 
   // Parse directors string into array
-  const directorsList = movie.director
-    ? movie.director.split(',').map((d) => d.trim()).filter(Boolean)
+  const directorsList = displayMovie.director
+    ? displayMovie.director.split(',').map((d) => d.trim()).filter(Boolean)
     : [];
 
   return (
@@ -120,10 +129,10 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
             >
-              {movie.poster ? (
+              {displayMovie.poster ? (
                 <img
-                  src={movie.poster}
-                  alt={movie.name}
+                  src={displayMovie.poster}
+                  alt={displayMovie.name}
                   className="w-full aspect-[2/3] object-cover"
                 />
               ) : (
@@ -155,8 +164,8 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                     <span className="text-white text-xs font-medium">{displayPercentage}%</span>
                   </div>
                   <p className="text-slate-300 text-xs text-center">
-                    {movie.length && movie.length > 0
-                      ? `Obejrzano ${formatTime(progress.position)} z ${formatTime(movie.length * 60)}`
+                    {displayMovie.length && displayMovie.length > 0
+                      ? `Obejrzano ${formatTime(progress.position)} z ${formatTime(displayMovie.length * 60)}`
                       : progress.duration > 0
                         ? `Obejrzano ${formatTime(progress.position)} z ${formatTime(progress.duration)}`
                         : `Obejrzano ${formatTime(progress.position)}`}
@@ -186,7 +195,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
           <div className="flex-1 text-white">
             {/* Title with X button */}
             <div className="flex items-start justify-between mb-4">
-              <h1 className="text-4xl font-bold flex-1 pr-4">{movie.name}</h1>
+              <h1 className="text-4xl font-bold flex-1 pr-4">{displayMovie.name}</h1>
               <button
                 data-tv-focusable
                 tabIndex={0}
@@ -201,30 +210,30 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
 
             {/* Tags */}
             <div className="flex items-center gap-3 mb-6 flex-wrap">
-              {movie.year && (
+              {displayMovie.year && (
                 <span className="px-3 py-1 bg-slate-700/80 rounded-md text-sm">
-                  {movie.year}
+                  {displayMovie.year}
                 </span>
               )}
-              {movie.genres_str?.trim() && (
+              {displayMovie.genres_str?.trim() && (
                 <span className="px-3 py-1 bg-slate-700/80 rounded-md text-sm">
-                  {movie.genres_str}
+                  {displayMovie.genres_str}
                 </span>
               )}
-              {movie.rating_imdb && (
+              {displayMovie.rating_imdb && (
                 <span className="px-3 py-1 bg-yellow-600/80 rounded-md text-sm flex items-center gap-1">
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                   </svg>
-                  {movie.rating_imdb}
+                  {displayMovie.rating_imdb}
                 </span>
               )}
-              {movie.rating_kinopoisk && (
+              {displayMovie.rating_kinopoisk && (
                 <span className="px-3 py-1 bg-green-700/80 rounded-md text-sm flex items-center gap-1">
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                   </svg>
-                  {movie.rating_kinopoisk}
+                  {displayMovie.rating_kinopoisk}
                 </span>
               )}
               {isWatched && (
@@ -246,9 +255,9 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
             </div>
 
             {/* Plot Description */}
-            {movie.description && (
+            {displayMovie.description && (
               <div className="mb-6">
-                <p className="text-slate-300 leading-relaxed">{movie.description}</p>
+                <p className="text-slate-300 leading-relaxed">{displayMovie.description}</p>
               </div>
             )}
 
@@ -272,16 +281,16 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
 
             {/* Additional Info */}
             <div className="flex items-center gap-6 mb-8 text-sm text-slate-400">
-              {movie.country && (
+              {displayMovie.country && (
                 <div>
                   <span className="text-slate-500">{t('country')}: </span>
-                  {movie.country}
+                  {displayMovie.country}
                 </div>
               )}
-              {movie.length && (
+              {displayMovie.length && (
                 <div>
                   <span className="text-slate-500">{t('duration')}: </span>
-                  {Math.floor(movie.length / 60)}h {movie.length % 60}m
+                  {Math.floor(displayMovie.length / 60)}h {displayMovie.length % 60}m
                 </div>
               )}
             </div>
@@ -303,20 +312,20 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               <button
                 data-tv-focusable
                 tabIndex={0}
-                onClick={() => toggleItemFavorite('vod', String(movie.id), {
-                  name: movie.name,
-                  poster: movie.poster,
-                  cmd: movie.cmd,
+                onClick={() => toggleItemFavorite('vod', String(displayMovie.id), {
+                  name: displayMovie.name,
+                  poster: displayMovie.poster,
+                  cmd: displayMovie.cmd,
                   extra: {
-                    description: movie.description,
-                    year: movie.year,
-                    genre: movie.genres_str,
-                    actors: movie.actors,
-                    director: movie.director,
-                    country: movie.country,
-                    length: movie.length,
-                    rating_imdb: movie.rating_imdb,
-                    rating_kinopoisk: movie.rating_kinopoisk,
+                    description: displayMovie.description,
+                    year: displayMovie.year,
+                    genre: displayMovie.genres_str,
+                    actors: displayMovie.actors,
+                    director: displayMovie.director,
+                    country: displayMovie.country,
+                    length: displayMovie.length,
+                    rating_imdb: displayMovie.rating_imdb,
+                    rating_kinopoisk: displayMovie.rating_kinopoisk,
                   },
                 })}
                 className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-lg font-semibold hover:bg-slate-600 transition-colors"

@@ -8,10 +8,33 @@ import { StalkerVOD } from '@/types';
 import { saveVod, getVod } from '@/hooks/useDatabase';
 import { useCategories } from '@/hooks/useCategories';
 
+// Write queue to prevent race conditions in DB writes
+const writeQueue = new Map<string, Promise<void>>();
+
+async function queuedSaveVod(vodList: any[], accountId: string, categoryId: string): Promise<void> {
+  const queueKey = `${accountId}:${categoryId}`;
+
+  // If there's already a write in progress for this category, wait for it
+  const existingWrite = writeQueue.get(queueKey);
+  if (existingWrite) {
+    await existingWrite;
+  }
+
+  // Create new write promise
+  const writePromise = saveVod(vodList, accountId).finally(() => {
+    // Remove from queue when done
+    writeQueue.delete(queueKey);
+  });
+
+  writeQueue.set(queueKey, writePromise);
+  return writePromise;
+}
+
 async function fetchAllMovies(
   client: StalkerClient,
   categoryId: string,
   signal?: AbortSignal,
+  queryClient?: ReturnType<typeof useQueryClient>,
 ): Promise<StalkerVOD[]> {
   // Check if aborted before starting
   if (signal?.aborted) {
@@ -24,58 +47,76 @@ async function fetchAllMovies(
     return first.items;
   }
 
-  // Determine total pages from totalItems and maxPageItems
+  // Process first page immediately for progressive hydration
+  const processItems = (items: StalkerVOD[]) => {
+    const map = new Map<string, StalkerVOD>();
+    for (const item of items) {
+      // Clone object to avoid mutating API response
+      const cloned = {
+        ...item,
+        name: item.o_name && item.o_name !== item.name ? item.o_name : item.name,
+      };
+      map.set(String(item.id), cloned);
+    }
+    const uniqueItems = Array.from(map.values());
+    const withTimestamps = uniqueItems.map(item => ({
+      ...item,
+      _ts: item.added ? new Date(item.added).getTime() : 0,
+    }));
+    withTimestamps.sort((a, b) => b._ts - a._ts);
+    return withTimestamps;
+  };
+
+  // Return first page immediately for progressive hydration
+  const firstPageProcessed = processItems(first.items);
+
+  // Fetch remaining pages in background
   const totalPages = first.totalItems > 0 && first.maxPageItems > 0
     ? Math.ceil(first.totalItems / first.maxPageItems)
     : undefined;
 
-  let allItems: StalkerVOD[];
-
   if (totalPages) {
-    // Fast path — parallel fetch of known page range
+    // Progressive fetch: load pages sequentially in background
     const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
-    const rest = await Promise.all(
-      pageNums.map(p => {
-        if (signal?.aborted) {
-          return Promise.resolve([] as StalkerVOD[]);
-        }
-        return client
-          .getVODListWithPagination(categoryId, p, { signal })
-          .then(r => r.items)
-          .catch(() => [] as StalkerVOD[]);
-      }),
-    );
-    allItems = [...first.items, ...rest.flat()];
-  } else {
-    allItems = first.items;
-  }
+    let allItems = [...first.items];
 
-  // Deduplicate by id (pages can overlap on some servers)
-  const map = new Map<string, StalkerVOD>();
-  for (const item of allItems) {
-    // Use o_name if available (clean title) instead of file-like name
-    if (item.o_name && item.o_name !== item.name) {
-      item.name = item.o_name;
+    // Update query data as each page loads
+    const updateQueryData = (newItems: StalkerVOD[]) => {
+      // Check if aborted before updating UI
+      if (signal?.aborted) return;
+      if (queryClient) {
+        queryClient.setQueryData(['movies-all', client?.getAccount()?.id ?? 'default', categoryId], () => processItems(newItems));
+      }
+    };
+
+    // Fetch pages progressively
+    for (const page of pageNums) {
+      if (signal?.aborted) {
+        throw new DOMException('aborted', 'AbortError');
+      }
+      try {
+        const pageData = await client.getVODListWithPagination(categoryId, page, { signal });
+        allItems = [...allItems, ...pageData.items];
+        updateQueryData(allItems);
+      } catch (e) {
+        // Continue on error for individual pages
+        console.error(`Failed to fetch page ${page}:`, e);
+      }
     }
-    map.set(String(item.id), item);
+
+    return processItems(allItems);
   }
-  const uniqueItems = Array.from(map.values());
 
-  // Sort by added date - newest first
-  uniqueItems.sort((a, b) => {
-    const dateA = a.added ? new Date(a.added).getTime() : 0;
-    const dateB = b.added ? new Date(b.added).getTime() : 0;
-    return dateB - dateA;
-  });
-
-  return uniqueItems;
+  return firstPageProcessed;
 }
 
 // ─── Main hook ────────────────────────────────────────────────────────────────
 
 export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
-  const accountId = client?.getAccount()?.id ?? 'default';
-  const enabled = !!categoryId && !!accountId && accountId !== 'default';
+  const account = client?.getAccount();
+  const accountId = account?.id ?? 'default';
+  const enabled = !!categoryId && !!accountId;
+  const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: ['movies-all', accountId, categoryId],
@@ -86,38 +127,16 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
       const cached = await getVod(accountId, categoryId);
 
       if (cached.length > 0) {
-        // Return cached data immediately, sorted by added date
-        return cached
-          .map(v => ({
-            id: Number(v.id),
-            name: v.name,
-            description: v.description,
-            logo: v.posterUrl,
-            poster: v.posterUrl,
-            cmd: v.streamUrl,
-            year: v.year,
-            rating_imdb: v.rating,
-            rating_kinopoisk: undefined,
-            length: v.duration,
-            genre: v.genre,
-            director: v.director,
-            actors: v.actors,
-            added: v.added ? new Date(v.added).toISOString() : undefined,
-            censored: false,
-          } as StalkerVOD))
-          .sort((a, b) => {
-            const dateA = a.added ? new Date(a.added).getTime() : 0;
-            const dateB = b.added ? new Date(b.added).getTime() : 0;
-            return dateB - dateA;
-          });
+        // Return raw cached data - transformation happens in useMemo
+        return cached;
       }
 
-      // No cache - fetch from API with abort signal
-      const items = await fetchAllMovies(client, categoryId, signal);
+      // No cache - fetch from API with abort signal and progressive hydration
+      const items = await fetchAllMovies(client, categoryId, signal, queryClient);
 
-      // Save to SQLite for future use
+      // Save to SQLite for future use (queued to prevent race conditions)
       if (items.length > 0) {
-        saveVod(
+        queuedSaveVod(
           items.map(vod => ({
             id: vod.id?.toString() || '',
             name: vod.o_name || vod.name || '',
@@ -133,23 +152,67 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
             added: vod.added ? new Date(vod.added).getTime() : undefined,
           })),
           accountId,
+          categoryId,
         ).catch(err => console.error('[DB] Failed to save VOD:', err));
       }
 
       return items;
     },
     enabled,
-    staleTime: 30 * 60 * 1000, // 30 min - cache considered fresh
+    staleTime: 1000 * 60 * 5, // 5 min cache - prevents refetch on scroll/remount
     gcTime: 24 * 60 * 60 * 1000,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: true, // Background refresh on mount if stale
+    refetchOnMount: false,
   });
+
+  // Transform cached data in useMemo to prevent GC spikes on mount
+  const movies = React.useMemo(() => {
+    const data = query.data;
+    if (!data || data.length === 0) return [];
+
+    // Type guard to check if data is from DB (has streamUrl property)
+    const isDbVod = (x: any): x is { streamUrl: string; posterUrl: string } => {
+      return typeof x.streamUrl === 'string' && typeof x.posterUrl === 'string';
+    };
+
+    const isRawDbData = data.length > 0 && isDbVod(data[0]);
+
+    if (isRawDbData) {
+      // Transform DB format to StalkerVOD and precompute timestamps
+      const transformed = (data as any[]).map(v => ({
+        id: Number(v.id),
+        name: v.name,
+        description: v.description,
+        logo: v.posterUrl,
+        poster: v.posterUrl,
+        cmd: v.streamUrl,
+        year: v.year,
+        rating_imdb: v.rating,
+        rating_kinopoisk: undefined,
+        length: v.duration,
+        genre: v.genre,
+        director: v.director,
+        actors: v.actors,
+        added: v.added ? new Date(v.added).toISOString() : undefined,
+        censored: false,
+        _ts: v.added ? new Date(v.added).getTime() : 0,
+      } as StalkerVOD & { _ts: number }));
+
+      // Sort by precomputed timestamp - newest first
+      transformed.sort((a, b) => b._ts - a._ts);
+
+      return transformed;
+    }
+
+    // Data is already in StalkerVOD format (from API)
+    return data as StalkerVOD[];
+  }, [query.data]);
 
   return {
     ...query,
-    movies: query.data || [],
+    movies,
   };
 };
 
@@ -177,10 +240,19 @@ export const useMovieCategories = (client: StalkerClient) => {
 
 // ─── Movie details ────────────────────────────────────────────────────────────
 
-export const useMovieDetails = (client: StalkerClient, movieId?: string) => {
+export const useMovieDetails = (client: StalkerClient, movieId?: string, cmd?: string) => {
   return useQuery({
-    queryKey: ['movie-details', movieId],
-    queryFn: () => client.getVODDetails(movieId!),
+    queryKey: ['movie-details', movieId, cmd],
+    queryFn: async () => {
+      // Try to get details by ID first
+      if (movieId && movieId !== '0' && movieId !== 'NaN') {
+        const result = await client.getVODDetails(movieId);
+        // Ensure we never return undefined
+        return result ?? null;
+      }
+      // Return null as fallback (React Query doesn't allow undefined)
+      return null;
+    },
     enabled: !!movieId,
     staleTime: 60 * 60 * 1000,
     gcTime:    60 * 60 * 1000,
@@ -191,17 +263,48 @@ export const useMovieDetails = (client: StalkerClient, movieId?: string) => {
 
 export const usePrefetchMovieStream = (client: StalkerClient) => {
   const queryClient = useQueryClient();
+  const lastPrefetch = React.useRef(new Map<string, number>());
+  const PREFETCH_DEBOUNCE_MS = 1000; // 1 second debounce per movie
+  const PREFETCH_STALE_MS = 5 * 60 * 1000; // 5 minutes stale time
+  const TTL_MS = 10 * 60 * 1000; // 10 minutes TTL for cleanup
 
   return React.useCallback(
     (movie: StalkerVOD) => {
       if (!movie.cmd) return;
-      const queryKey = ['movie-stream', movie.id];
+      const movieId = String(movie.id);
+      const queryKey = ['movie-stream', movieId];
+      const now = Date.now();
+
+      // Cleanup old entries (TTL) to prevent memory leaks
+      for (const [id, time] of lastPrefetch.current.entries()) {
+        if (now - time > TTL_MS) {
+          lastPrefetch.current.delete(id);
+        }
+      }
+
+      // Check if already fetching
       const state = queryClient.getQueryState(queryKey);
       if (state?.fetchStatus === 'fetching') return;
+
+      // Per-movie debounce: check if we prefetched recently
+      const lastPrefetchTime = lastPrefetch.current.get(movieId);
+      if (lastPrefetchTime && now - lastPrefetchTime < PREFETCH_DEBOUNCE_MS) {
+        return; // Skip prefetch if we recently prefetched this movie
+      }
+
+      // Stale avoidance: check if data is still fresh
+      if (state?.dataUpdatedAt && now - state.dataUpdatedAt < PREFETCH_STALE_MS) {
+        return; // Skip prefetch if data is still fresh
+      }
+
+      // Update last prefetch time
+      lastPrefetch.current.set(movieId, now);
+
+      // Prefetch the stream URL
       queryClient.prefetchQuery({
         queryKey,
         queryFn: () => client.getVODUrl(movie.cmd),
-        staleTime: 5 * 60 * 1000,
+        staleTime: PREFETCH_STALE_MS,
       });
     },
     [client, queryClient],

@@ -37,7 +37,7 @@ export const TVList: React.FC<TVListProps> = ({
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'live');
 
   // Debounce refs
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const lastPreloadedRef = useRef<string | null>(null);
   const prefetchCountRef = useRef(0);
   const MAX_PREFETCHES = 10;
@@ -61,25 +61,35 @@ export const TVList: React.FC<TVListProps> = ({
     };
   }, [hasMore, isLoading, loadMore]);
 
+  // Reset prefetch count when category changes
+  useEffect(() => {
+    prefetchCountRef.current = 0;
+    lastPreloadedRef.current = null;
+    // Clear all pending timeouts
+    timeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+    timeoutsRef.current.clear();
+  }, [selectedCategory?.id]);
+
   // Debounced prefetch - waits 300ms and limits total prefetches
   const debouncedPreload = useCallback((channel: StalkerChannel) => {
     const channelId = String(channel.id);
-    
+
     // Skip if already preloaded this channel
     if (lastPreloadedRef.current === channelId) return;
-    
+
     // Skip if reached max prefetches (prevents spamming server)
     if (prefetchCountRef.current >= MAX_PREFETCHES) return;
 
-    // Clear previous timeout
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    // Clear previous timeout for this specific channel
+    const existingTimeout = timeoutsRef.current.get(channelId);
+    if (existingTimeout) clearTimeout(existingTimeout);
 
-    // Set new timeout (300ms debounce)
-    timeoutRef.current = setTimeout(() => {
+    // Set new timeout for this channel (300ms debounce)
+    timeoutsRef.current.set(channelId, setTimeout(() => {
       preload(channel);
       lastPreloadedRef.current = channelId;
       prefetchCountRef.current++;
-    }, 300);
+    }, 300));
   }, [preload]);
 
   const filtered = useMemo(() =>
@@ -145,11 +155,13 @@ export const TVList: React.FC<TVListProps> = ({
           <div
             key={channel.id}
             data-tv-focusable
+            data-tv-index={index}
             tabIndex={0}
             ref={index === filtered.length - 1 && hasMore ? (el) => {
               if (el && observerRef.current) observerRef.current.observe(el);
             } : undefined}
             onMouseEnter={() => debouncedPreload(channel)}
+            onFocus={() => debouncedPreload(channel)}
             onClick={() => onChannelSelect(channel)}
             className="p-3 dark:border border-slate-700 border-gray-300 rounded-lg cursor-pointer dark:hover:bg-slate-700 hover:bg-gray-200 dark:hover:border-green-700 hover:border-green-700 transition-all dark:focus:bg-slate-700 focus:bg-gray-200 dark:focus:border-green-700 focus:border-green-700"
           >
@@ -163,8 +175,7 @@ export const TVList: React.FC<TVListProps> = ({
                 )}
               </div>
               <button
-                data-tv-focusable
-                tabIndex={0}
+                tabIndex={-1}
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleItemFavorite('live', String(channel.id), {
