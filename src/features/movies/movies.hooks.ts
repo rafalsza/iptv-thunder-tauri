@@ -17,6 +17,13 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
   const enabled = !!categoryId && !!accountId;
   const queryClient = useQueryClient();
 
+  // Streaming state for progressive loading
+  const [streamingState, setStreamingState] = React.useState({
+    isStreaming: false,
+    loadedPages: 0,
+    totalPages: 0,
+  });
+
   const query = useQuery({
     queryKey: ['movies-all', accountId, categoryId],
     queryFn: async ({ signal }) => {
@@ -30,21 +37,29 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
         return cached;
       }
 
+      // Reset streaming state
+      setStreamingState({ isStreaming: true, loadedPages: 0, totalPages: 0 });
+
       // Layer 1: Fetch from API with progressive hydration
       const items = await fetchVODPages(client, categoryId, {
         signal,
-        onProgress: (progressItems) => {
+        onProgress: (progressItems, loadedPages, totalPages) => {
           // Layer 2: Normalize and update UI progressively
           if (signal?.aborted) return;
           if (queryClient) {
             const normalized = normalizeVod(progressItems);
             queryClient.setQueryData(['movies-all', accountId, categoryId], normalized);
+            // Update streaming state
+            setStreamingState({ isStreaming: loadedPages < totalPages, loadedPages, totalPages });
           }
         },
       });
 
       // Layer 2: Normalize API data
       const normalized = normalizeVod(items);
+
+      // Mark streaming as complete
+      setStreamingState({ isStreaming: false, loadedPages: streamingState.totalPages || 1, totalPages: streamingState.totalPages || 1 });
 
       // Layer 3: Persist to SQLite (queued to prevent race conditions)
       if (normalized.length > 0) {
@@ -102,6 +117,7 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
   return {
     ...query,
     movies,
+    streamingState,
   };
 };
 

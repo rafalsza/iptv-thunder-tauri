@@ -8,7 +8,7 @@ import { StalkerVOD, StalkerGenre } from '@/types';
 
 export interface FetchVODPagesOptions {
   signal?: AbortSignal;
-  onProgress?: (items: StalkerVOD[]) => void;
+  onProgress?: (items: StalkerVOD[], loadedPages: number, totalPages: number) => void;
 }
 
 /**
@@ -45,20 +45,21 @@ export async function fetchVODPages(
 
     // Emit first page immediately for progressive hydration
     if (onProgress) {
-      onProgress(first.items);
+      onProgress(first.items, 1, totalPages);
     }
 
     // Fetch pages progressively
-    for (const page of pageNums) {
+    for (let i = 0; i < pageNums.length; i++) {
+      const page = pageNums[i];
       if (signal?.aborted) {
         throw new DOMException('aborted', 'AbortError');
       }
       try {
         const pageData = await client.getVODListWithPagination(categoryId, page, { signal });
         allItems = [...allItems, ...pageData.items];
-        // Emit progress after each page
+        // Emit progress after each page (loadedPages = current page number)
         if (onProgress) {
-          onProgress(allItems);
+          onProgress(allItems, i + 2, totalPages);
         }
       } catch (e) {
         // Continue on error for individual pages
