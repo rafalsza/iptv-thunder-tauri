@@ -101,11 +101,22 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
       {/* Channels Grid - same layout as TVList */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {filtered.map((channel: StalkerChannel) => (
+          {filtered.map((channel: StalkerChannel, index: number) => (
             <div
               key={channel.id}
+              data-tv-focusable
+              data-tv-group="favorite-channels"
+              data-tv-index={index}
+              data-tv-initial={index === 0}
+              tabIndex={0}
               onClick={() => onChannelSelect(channel)}
-              className="p-3 dark:border border-slate-700 border-gray-300 rounded-lg cursor-pointer dark:hover:bg-slate-700 hover:bg-gray-200 hover:border-green-700 transition-all dark:bg-slate-800 bg-white"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+                  e.preventDefault();
+                  onChannelSelect(channel);
+                }
+              }}
+              className="p-3 dark:border border-slate-700 border-gray-300 rounded-lg cursor-pointer dark:hover:bg-slate-700 hover:bg-gray-200 hover:border-green-700 transition-all dark:bg-slate-800 bg-white dark:focus:bg-slate-700 focus:bg-gray-200 dark:focus:border-green-700 focus:border-green-700"
             >
               <div className="flex justify-between items-start">
                 <div className="flex-1 min-w-0">

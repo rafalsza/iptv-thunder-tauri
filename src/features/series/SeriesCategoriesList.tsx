@@ -140,10 +140,21 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
       {/* Series Categories Grid */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-          {filteredCategories.map((category) => (
+          {filteredCategories.map((category, categoryIndex) => (
             <div
               key={category.id}
+              data-tv-focusable
+              data-tv-group="series-categories"
+              data-tv-index={categoryIndex}
+              data-tv-initial={categoryIndex === 0}
+              tabIndex={0}
               onClick={() => handleCategoryClick(category)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+                  e.preventDefault();
+                  handleCategoryClick(category);
+                }
+              }}
               className={`
                 relative dark:bg-slate-800 dark:bg-opacity-50 bg-white bg-opacity-50 backdrop-blur-sm dark:border border-slate-600 border-gray-300 rounded-lg p-4
                 cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl
@@ -169,7 +180,7 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
                     <div className="w-2 h-2 bg-green-700 rounded-full animate-pulse"></div>
                   )}
                   {/* Favorite Button */}
-                  <button 
+                  <button
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();

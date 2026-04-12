@@ -155,7 +155,9 @@ export const TVList: React.FC<TVListProps> = ({
           <div
             key={channel.id}
             data-tv-focusable
+            data-tv-group="tv-channels"
             data-tv-index={index}
+            data-tv-initial={index === 0}
             tabIndex={0}
             ref={index === filtered.length - 1 && hasMore ? (el) => {
               if (el && observerRef.current) observerRef.current.observe(el);

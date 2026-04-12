@@ -30,13 +30,14 @@ function setCachedImage(key: string, value: string) {
 
 interface MovieCardProps {
   movie: StalkerVOD;
+  index: number;
   posterUrl: string;
   onSelect: (movie: StalkerVOD) => void;
   onToggleFavorite: (e: React.MouseEvent, movie: StalkerVOD) => void;
 }
 
 const MovieCard = React.memo<MovieCardProps>(({
-  movie, posterUrl, onSelect, onToggleFavorite,
+  movie, index, posterUrl, onSelect, onToggleFavorite,
 }) => {
   const [imgSrc, setImgSrc] = useState<string | null>(() => imageCache.get(posterUrl) ?? null);
   const [imgError, setImgError] = useState(false);
@@ -64,8 +65,19 @@ const MovieCard = React.memo<MovieCardProps>(({
 
   return (
     <div
+      data-tv-focusable
+      data-tv-group="favorite-movies"
+      data-tv-index={index}
+      data-tv-initial={index === 0}
+      tabIndex={0}
       onClick={() => onSelect(movie)}
-      className="cursor-pointer group h-full"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+          e.preventDefault();
+          onSelect(movie);
+        }
+      }}
+      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)]"
     >
       <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
         {/* Poster */}
@@ -244,13 +256,13 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
         <div>
           <h2 className="text-base font-bold dark:text-white text-slate-900">{t('favoriteMovies')}</h2>
           <p className="text-xs dark:text-slate-400 text-slate-600">
-            {filtered.length} z {favoriteMovies.length} {t('moviesCount')}
+            {t('moviesCount').replace('{{count}}', String(favoriteMovies.length))}
           </p>
         </div>
       </div>
 
       {/* Virtualized grid */}
-      <div ref={parentRef} className="flex-1 overflow-y-auto p-4">
+      <div ref={parentRef} className="flex-1 overflow-y-auto p-2 overflow-x-visible pb-4">
         <div
           style={{
             height: virtualizer.getTotalSize(),
@@ -268,21 +280,27 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
                 width: '100%',
                 height: ROW_HEIGHT,
                 transform: `translateY(${vRow.start}px)`,
+                overflow: 'visible',
+                zIndex: 1,
               }}
             >
               <div
                 className="grid gap-4 h-full"
-                style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+                style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, rowGap: '2px' }}
               >
-                {getRow(vRow.index).map(movie => (
-                  <MovieCard
-                    key={String(movie.id)}
-                    movie={movie}
-                    posterUrl={movie.poster || movie.logo || ''}
-                    onSelect={onMovieSelect}
-                    onToggleFavorite={handleToggleFavorite}
-                  />
-                ))}
+                {getRow(vRow.index).map((movie, colIndex) => {
+                  const itemIndex = vRow.index * cols + colIndex;
+                  return (
+                    <MovieCard
+                      key={String(movie.id)}
+                      movie={movie}
+                      index={itemIndex}
+                      posterUrl={movie.poster || movie.logo || ''}
+                      onSelect={onMovieSelect}
+                      onToggleFavorite={handleToggleFavorite}
+                    />
+                  );
+                })}
               </div>
             </div>
           ))}

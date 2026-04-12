@@ -8,6 +8,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useSeriesAll, usePrefetchSeriesStream } from './series.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { usePortalsStore } from '@/store/portals.store';
+import { useTranslation } from '@/hooks/useTranslation';
 import { getImageUrl } from '@/hooks/useImageCache';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerVOD, StalkerGenre } from '@/types';
@@ -32,15 +33,15 @@ function setCachedImage(key: string, value: string) {
 
 interface SeriesCardProps {
   series: StalkerVOD;
-  isSelected: boolean;
   onSelect: (seriesName: string) => void;
   onPrefetch: (series: StalkerVOD) => void;
   favoriteIds: Set<string>;
   onToggleFavorite: (e: React.MouseEvent, series: StalkerVOD) => void;
+  seriesIndex: number;
 }
 
 const SeriesCard = React.memo<SeriesCardProps>(({
-  series, isSelected, onSelect, onPrefetch, favoriteIds, onToggleFavorite,
+  series, onSelect, onPrefetch, favoriteIds, onToggleFavorite, seriesIndex,
 }) => {
   const posterUrl = useMemo(
     () => series.poster || series.logo || '',
@@ -80,10 +81,21 @@ const SeriesCard = React.memo<SeriesCardProps>(({
 
   return (
     <div
+      data-tv-focusable
+      data-tv-group="series"
+      data-tv-index={seriesIndex}
+      data-tv-initial={seriesIndex === 0}
+      tabIndex={0}
       onMouseEnter={() => onPrefetch(series)}
       onFocus={() => onPrefetch(series)}
       onClick={() => onSelect(String(series.id))}
-      className={`cursor-pointer group h-full ${isSelected ? 'ring-2 ring-green-700 rounded-lg' : ''}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+          e.preventDefault();
+          onSelect(String(series.id));
+        }
+      }}
+      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)]"
     >
       <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
 
@@ -136,6 +148,7 @@ interface SeriesListProps {
 export const SeriesList: React.FC<SeriesListProps> = ({
   client, onSeriesSelect, selectedCategory, search,
 }) => {
+  const { t } = useTranslation();
   // ── Data ──────────────────────────────────────────────────────────────────────
   const { series: seriesData, isLoading, error } = useSeriesAll(client, selectedCategory?.id);
   const prefetchStream = usePrefetchSeriesStream(client);
@@ -259,7 +272,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
           <circle cx="12" cy="12" r="10" stroke="#334155" strokeWidth="2" />
           <path d="M12 2 A10 10 0 0 1 22 12" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
         </svg>
-        <p className="dark:text-slate-400 text-slate-600 text-sm">Loading series…</p>
+        <p className="dark:text-slate-400 text-slate-600 text-sm">{t('loadingSeries')}</p>
       </div>
     );
   }
@@ -267,7 +280,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <p className="text-red-400">Error loading series</p>
+        <p className="text-red-400">{t('errorLoadingSeries')}</p>
       </div>
     );
   }
@@ -286,7 +299,12 @@ export const SeriesList: React.FC<SeriesListProps> = ({
               <div className="flex-1">
                 <h2 className="text-base font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
                 <p className="text-xs dark:text-slate-400 text-slate-600">
-                  {filteredSeries.length} series
+                  {filteredSeries.length} {(() => {
+                    const count = filteredSeries.length;
+                    if (count === 1) return t('seriesCount_1');
+                    if (count >= 2 && count <= 4) return t('seriesCount_2_4');
+                    return t('seriesCount_5_plus');
+                  })()}
                   {debouncedSearch && seriesData && seriesData.length !== filteredSeries.length
                     ? ` (z ${seriesData.length})`
                     : ''}
@@ -296,7 +314,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
               <button
                 onClick={handleToggleCategoryFavorite}
                 className="text-xl hover:scale-110 transition-transform p-2 rounded-full dark:hover:bg-slate-700 hover:bg-gray-200"
-                title={isCategoryFavorite(String(selectedCategory.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+                title={isCategoryFavorite(String(selectedCategory.id)) ? t('removeFromFavorites') : t('addToFavorites')}
               >
                 {isCategoryFavorite(String(selectedCategory.id)) ? '❤️' : '🤍'}
               </button>
@@ -333,17 +351,18 @@ export const SeriesList: React.FC<SeriesListProps> = ({
                     const startIndex = vRow.index * columnCount;
                     const endIndex = Math.min(startIndex + columnCount, filteredSeries.length);
                     const items = filteredSeries.slice(startIndex, endIndex);
-                    return items.map((series: StalkerVOD) => {
+                    return items.map((series: StalkerVOD, idx) => {
                       const seriesId = String(series.id);
+                      const seriesIndex = startIndex + idx;
                       return (
                         <SeriesCard
                           key={seriesId}
                           series={series}
-                          isSelected={false}
                           onSelect={handleSeriesSelect}
                           onPrefetch={handlePrefetch}
                           favoriteIds={favoriteIds}
                           onToggleFavorite={handleToggleFavorite}
+                          seriesIndex={seriesIndex}
                         />
                       );
                     });

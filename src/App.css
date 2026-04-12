@@ -132,6 +132,14 @@ html.light {
   z-index: 10;
 }
 
+/* Override for search input - no scale transform */
+[data-tv-search]:focus {
+  transform: scale(1);
+  outline: none;
+  box-shadow: none;
+  z-index: auto;
+}
+
 [data-tv-focusable]:focus-visible {
   outline: 3px solid #166534;
   outline-offset: 2px;

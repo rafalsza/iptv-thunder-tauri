@@ -133,15 +133,26 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
       {/* Movie Categories Grid */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-          {filteredCategories.map((category) => (
+          {filteredCategories.map((category, categoryIndex) => (
             <div
               key={category.id}
+              data-tv-focusable
+              data-tv-group="movie-categories"
+              data-tv-index={categoryIndex}
+              data-tv-initial={categoryIndex === 0}
+              tabIndex={0}
               onClick={() => handleCategoryClick(category)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+                  e.preventDefault();
+                  handleCategoryClick(category);
+                }
+              }}
               className={`
                 relative dark:bg-slate-800 dark:bg-opacity-50 bg-white bg-opacity-50 backdrop-blur-sm dark:border border-slate-600 border-gray-300 rounded-lg p-4
                 cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl
-                ${selectedCategory?.id === category.id 
-                  ? 'border-green-700 bg-green-700 bg-opacity-10 shadow-lg shadow-green-700/25' 
+                ${selectedCategory?.id === category.id
+                  ? 'border-green-700 bg-green-700 bg-opacity-10 shadow-lg shadow-green-700/25'
                   : 'dark:border-slate-600 border-gray-300 hover:border-green-700'
                 }
               `}

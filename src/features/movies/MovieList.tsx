@@ -64,12 +64,14 @@ interface MovieCardProps {
   onToggleFavorite: (e: React.MouseEvent, movie: StalkerVOD) => void;
   watchStatus?: WatchStatus;
   progressPercentage?: number;
+  moviesIndex?: number;
 }
 
 const MovieCard = React.memo<MovieCardProps>(({
   movie, posterUrl, onSelect, onPrefetch, favoriteIds, onToggleFavorite,
-  watchStatus, progressPercentage = 0,
+  watchStatus, progressPercentage = 0, moviesIndex,
 }) => {
+  const { t } = useTranslation();
   const [imgSrc,  setImgSrc]  = useState<string | null>(() => imageCache.get(posterUrl) ?? null);
   const [imgError, setImgError] = useState(false);
   const isFavorite = favoriteIds.has(String(movie.id));
@@ -114,10 +116,15 @@ const MovieCard = React.memo<MovieCardProps>(({
 
   return (
     <div
+      data-tv-focusable
+      data-tv-group="movies"
+      data-tv-index={moviesIndex}
+      data-tv-initial={moviesIndex === 0}
+      tabIndex={0}
       onMouseEnter={() => onPrefetch(movie)}
       onFocus={() => onPrefetch(movie)}
       onClick={() => onSelect(movie)}
-      className="cursor-pointer group h-full"
+      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)]"
     >
       <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
 
@@ -152,7 +159,7 @@ const MovieCard = React.memo<MovieCardProps>(({
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
               </svg>
-              Obejrzane
+              {t('watched')}
             </div>
           )}
 
@@ -373,7 +380,12 @@ export const MovieList: React.FC<MovieListProps> = ({
             <div className="flex-1">
               <h2 className="text-base font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
               <p className="text-xs dark:text-slate-400 text-slate-600">
-                {filtered.length} film{filtered.length !== 1 ? 'ów' : ''}
+                {filtered.length} {(() => {
+                  const count = filtered.length;
+                  if (count === 1) return t('moviesCount_1');
+                  if (count >= 2 && count <= 4) return t('moviesCount_2_4');
+                  return t('moviesCount_5_plus');
+                })()}
                 {debouncedSearch && movies.length !== filtered.length
                   ? ` (z ${movies.length})`
                   : ''}
@@ -383,7 +395,7 @@ export const MovieList: React.FC<MovieListProps> = ({
             <button
               onClick={handleToggleCategoryFavorite}
               className="text-xl hover:scale-110 transition-transform p-2 rounded-full dark:hover:bg-slate-700 hover:bg-gray-200"
-              title={isCategoryFavorite(String(selectedCategory.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+              title={isCategoryFavorite(String(selectedCategory.id)) ? t('removeFromFavorites') : t('addToFavorites')}
             >
               {isCategoryFavorite(String(selectedCategory.id)) ? '❤️' : '🤍'}
             </button>
@@ -392,7 +404,7 @@ export const MovieList: React.FC<MovieListProps> = ({
       )}
 
       {/* Virtualized grid */}
-      <div ref={parentRef} className="flex-1 overflow-y-auto p-4">
+      <div ref={parentRef} className="flex-1 overflow-y-auto p-2 overflow-x-visible pb-4">
         <div
           style={{
             height: virtualizer.getTotalSize(),
@@ -410,14 +422,17 @@ export const MovieList: React.FC<MovieListProps> = ({
                 width: '100%',
                 height: ROW_HEIGHT,
                 transform: `translateY(${vRow.start}px)`,
+                overflow: 'visible',
+                zIndex: 1,
               }}
             >
               <div
                 className="grid gap-4 h-full"
-                style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+                style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, rowGap: '2px' }}
               >
-                {getRow(vRow.index).map((movie) => {
+                {getRow(vRow.index).map((movie, colIndex) => {
                   const movieId = String(movie.id);
+                  const moviesIndex = vRow.index * cols + colIndex;
                   const progress = useResumeStore.getState().getProgress(movieId);
                   return (
                     <MovieCard
@@ -430,6 +445,7 @@ export const MovieList: React.FC<MovieListProps> = ({
                       onToggleFavorite={handleToggleFavorite}
                       watchStatus={progress?.status}
                       progressPercentage={progress?.percentage}
+                      moviesIndex={moviesIndex}
                     />
                   );
                 })}
@@ -446,7 +462,7 @@ export const MovieList: React.FC<MovieListProps> = ({
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
                 <path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
-              Ładowanie więcej tytułów... ({streamingState.loadedPages}/{streamingState.totalPages})
+              {t('loadingMoreTitles')} ({streamingState.loadedPages}/{streamingState.totalPages})
             </span>
           </div>
         )}

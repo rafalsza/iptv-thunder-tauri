@@ -32,18 +32,32 @@ const OBSERVED_PROPERTIES = [
   ['sid', 'string', 'none'],
   ['cache-buffering-state', 'double', 'none'],
   ['video-bitrate', 'double', 'none'],
+  ['volume', 'double', 'none'],
 ] as const satisfies MpvObservableProperty[];
 
 // ─── Helper Functions ───────────────────────────────────────────────────────────
 
+const timeCache = new Map<string, string>();
+const dateCache = new Map<string, string>();
+
 function formatEPGTime(timestamp: string): string {
+  if (timeCache.has(timestamp)) {
+    return timeCache.get(timestamp)!;
+  }
   const date = new Date(Number.parseInt(timestamp) * 1000);
-  return date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const formatted = date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', hour12: false });
+  timeCache.set(timestamp, formatted);
+  return formatted;
 }
 
 function formatEPGDate(timestamp: string): string {
+  if (dateCache.has(timestamp)) {
+    return dateCache.get(timestamp)!;
+  }
   const date = new Date(Number.parseInt(timestamp) * 1000);
-  return date.toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'short' });
+  const formatted = date.toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'short' });
+  dateCache.set(timestamp, formatted);
+  return formatted;
 }
 
 function isProgramNow(start: string, end: string): boolean {
@@ -146,6 +160,10 @@ function useMpvPlayer(
   const requestIdRef = useRef(0);
   const lastRetryRef = useRef(0);
   const lastManualRetryRef = useRef(0);
+  const handleManualRetryRef = useRef<((preserveIndex?: boolean) => void) | null>(null);
+  const lastBufferingRef = useRef(0);
+  const videoParamsReceivedRef = useRef(false);
+  const firstTimePosRef = useRef(0);
 
   // Smart retry metrics per URL
   interface UrlMetrics {
@@ -156,6 +174,7 @@ function useMpvPlayer(
     lastUsed: number;     // last attempt timestamp
     bufferingCount: number; // number of buffering events
     avgBitrate: number;   // average bitrate in kbps
+    bitrateSampleCount: number; // number of bitrate samples
   }
   const urlMetricsRef = useRef<Map<string, UrlMetrics>>(new Map());
   const urlStartTimeRef = useRef<Map<string, number>>(new Map());
@@ -179,6 +198,11 @@ function useMpvPlayer(
     isMountedRef.current = true;
     return () => { isMountedRef.current = false; };
   }, []);
+
+  // Update allUrlsRef when props change
+  useEffect(() => {
+    allUrlsRef.current = [url, ...fallbackUrls];
+  }, [url, fallbackUrls]);
 
   // Smart URL ranking based on metrics + stream store
   const getRankedUrls = useCallback(() => {
@@ -233,6 +257,7 @@ function useMpvPlayer(
         lastUsed: Date.now(),
         bufferingCount: existing.bufferingCount,
         avgBitrate: existing.avgBitrate,
+        bitrateSampleCount: existing.bitrateSampleCount,
       });
     } else {
       urlMetricsRef.current.set(streamUrl, {
@@ -243,6 +268,7 @@ function useMpvPlayer(
         lastUsed: Date.now(),
         bufferingCount: 0,
         avgBitrate: 0,
+        bitrateSampleCount: 0,
       });
     }
   }, []);
@@ -265,6 +291,7 @@ function useMpvPlayer(
         lastUsed: Date.now(),
         bufferingCount: 0,
         avgBitrate: 0,
+        bitrateSampleCount: 0,
       });
     }
   }, []);
@@ -285,11 +312,13 @@ function useMpvPlayer(
   const recordBitrate = useCallback((streamUrl: string, bitrate: number) => {
     const existing = urlMetricsRef.current.get(streamUrl);
     if (existing) {
-      // Exponential moving average for bitrate
-      const newBitrate = existing.avgBitrate * 0.8 + bitrate * 0.2;
+      // Weighted average based on sample count to handle irregular events
+      const sampleCount = existing.bitrateSampleCount || 1;
+      const newBitrate = (existing.avgBitrate * sampleCount + bitrate) / (sampleCount + 1);
       urlMetricsRef.current.set(streamUrl, {
         ...existing,
         avgBitrate: newBitrate,
+        bitrateSampleCount: sampleCount + 1,
         lastUsed: Date.now(),
       });
     }
@@ -320,6 +349,11 @@ function useMpvPlayer(
     await safeDestroyMpv();
   }, [isVod, movieId, setPosition, clearAllTimers, safeDestroyMpv]);
 
+  // Success callback - defined outside loadUrl to avoid closure staleness
+  const onSuccessRef = useRef<(() => void) | null>(null);
+  const currentStreamUrlRef = useRef<string>('');
+  const successCalledRef = useRef(false);
+
 
   const streamStateRef = useRef(streamState);
   useEffect(() => { streamStateRef.current = streamState; }, [streamState]);
@@ -329,6 +363,8 @@ function useMpvPlayer(
   // clearAllTimers and safeDestroyMpv also use refs internally, making them safe.
   const loadUrl = useCallback(async (streamUrl: string, urlIdx: number, retry: number) => {
     const requestId = ++requestIdRef.current;
+    currentStreamUrlRef.current = streamUrl;
+    successCalledRef.current = false;
 
     if (isLoadingRef.current) {
       console.log('⏭️ loadUrl skipped - already loading');
@@ -342,9 +378,6 @@ function useMpvPlayer(
       isLoadingRef.current = false;
       return true;
     };
-
-    // Track if onSuccess was already called for this request (avoids stale ref issues)
-    let successCalled = false;
 
     if (!isMountedRef.current) {
       finishLoading();
@@ -383,6 +416,10 @@ function useMpvPlayer(
     );
     setErrorMsg(null);
 
+    // Reset video params tracking for new load
+    videoParamsReceivedRef.current = false;
+    firstTimePosRef.current = 0;
+
     recordUrlStart(streamUrl);
 
     connTimeoutRef.current = setTimeout(() => {
@@ -399,7 +436,9 @@ function useMpvPlayer(
       if (retryCountRef.current < MAX_RETRIES_PER_URL) {
         console.log('🔄 Retrying same URL, attempt:', retryCountRef.current);
         setStreamState('retrying');
-        loadUrl(streamUrl, urlIdx, retryCountRef.current);
+        retryTimerRef.current = setTimeout(() => {
+          loadUrl(streamUrl, urlIdx, retryCountRef.current);
+        }, 0);
       } else {
         currentIdxRef.current++;
 
@@ -408,13 +447,14 @@ function useMpvPlayer(
           retryCountRef.current = 0;
           setCurrentUrlIdx(currentIdxRef.current);
 
-          loadUrl(
-            allUrlsRef.current[currentIdxRef.current],
-            currentIdxRef.current,
-            0
-          );
+          retryTimerRef.current = setTimeout(() => {
+            loadUrl(
+              allUrlsRef.current[currentIdxRef.current],
+              currentIdxRef.current,
+              0
+            );
+          }, 0);
         } else {
-          console.log('💀 All URLs exhausted');
           finishLoading();
           setStreamState('dead');
           setErrorMsg('All streams failed');
@@ -422,21 +462,40 @@ function useMpvPlayer(
       }
     }, DEAD_TIMEOUT_MS);
 
-    const onSuccess = () => {
-      if (!isMountedRef.current) return;
-      if (requestId !== requestIdRef.current) return;
-      if (successCalled) return; // already succeeded
-      successCalled = true;
+    // Set onSuccess callback for this request using refs to avoid closure staleness
+    onSuccessRef.current = () => {
+      if (!isMountedRef.current) {
+        return;
+      }
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
+      if (successCalledRef.current) {
+        return; // already succeeded
+      }
+      successCalledRef.current = true;
 
       if (connTimeoutRef.current) {
         clearTimeout(connTimeoutRef.current);
         connTimeoutRef.current = null;
       }
-      useStreamStore.getState().success(streamUrl);
-      recordUrlSuccess(streamUrl);
+
+      // Update state first - this must happen regardless of store errors
       retryCountRef.current = 0;
       setStreamState('playing');
       setStatusMsg('');
+
+      // Reset loading state
+      finishLoading();
+
+      // Store operations are non-critical - wrap in try-catch to prevent blocking
+      try {
+        useStreamStore.getState().success(currentStreamUrlRef.current);
+        recordUrlSuccess(currentStreamUrlRef.current);
+      } catch (err) {
+        // Store operations are non-critical - log but don't block
+        console.error('Store operation failed:', err);
+      }
     };
 
     setUsingMpv(true);
@@ -474,7 +533,6 @@ function useMpvPlayer(
 
       // Guard: new request may have started during init - check before marking as running
       if (localRequestId !== requestIdRef.current) {
-        console.log('⏭️ Request changed during init, destroying fresh MPV');
         await safeDestroyMpv();
         finishLoading();
         return;
@@ -491,10 +549,21 @@ function useMpvPlayer(
           if (name === 'time-pos' && typeof data === 'number') {
             currentTimeRef.current = data;
             lastTimeUpdateRef.current = Date.now();
+            // Track first time-pos for fallback success detection
+            if (firstTimePosRef.current === 0 && data > 0) {
+              firstTimePosRef.current = Date.now();
+            }
             // Update state max 1x/s for UI
             if (Date.now() - lastUiUpdateRef.current > 1000) {
               lastUiUpdateRef.current = Date.now();
               setCurrentTime(data);
+            }
+            // Fallback: if video-params never received, trigger success after 2s of playback
+            if (onSuccessRef.current && data > 0 && !videoParamsReceivedRef.current && firstTimePosRef.current > 0) {
+              const now = Date.now();
+              if (now - firstTimePosRef.current > 2000) {
+                onSuccessRef.current();
+              }
             }
           }
           if (name === 'duration' && typeof data === 'number') {
@@ -507,9 +576,11 @@ function useMpvPlayer(
               if (prev?.width === params.w && prev?.height === params.h && prev?.fps === params.fps) return prev;
               return { width: params.w, height: params.h, fps: Math.round(params.fps ?? 0) };
             });
+            // Mark that we received video params (primary success indicator)
+            videoParamsReceivedRef.current = true;
             // Video actually started rendering - success!
-            if (!successCalled) {
-              onSuccess();
+            if (onSuccessRef.current) {
+              onSuccessRef.current();
             }
           }
           if (name === 'pause' && typeof data === 'boolean') {
@@ -532,21 +603,33 @@ function useMpvPlayer(
             setCurrentSubId(data ? String(data) : null);
           }
           if (name === 'cache-buffering-state' && typeof data === 'number') {
-            // Track buffering events - state > 0 means buffering
+            // Track buffering events - state > 0 means buffering (debounced to 2s)
             if (data > 0) {
-              recordBufferingEvent(streamUrl);
+              const now = Date.now();
+              if (now - lastBufferingRef.current > 2000) {
+                lastBufferingRef.current = now;
+                recordBufferingEvent(currentStreamUrlRef.current);
+              }
             }
           }
           if (name === 'video-bitrate' && typeof data === 'number') {
             // Track bitrate (in bits per second, convert to kbps)
-            recordBitrate(streamUrl, data / 1000);
+            recordBitrate(currentStreamUrlRef.current, data / 1000);
           }
         });
         unobserveRef.current = unobserve;
       } catch (e) {
-        if (unobserve) unobserve();
-        console.error('❌ observeProperties failed:', e);
+        try { unobserve?.(); } catch {}
         unobserveRef.current = null;
+        mpvRunningRef.current = false;
+        console.error('❌ observeProperties failed:', e);
+      }
+
+      // Guard: new request may have started during observeProperties - check before loadfile
+      if (localRequestId !== requestIdRef.current) {
+        await safeDestroyMpv();
+        finishLoading();
+        return;
       }
 
       await command('loadfile', [streamUrl]);
@@ -561,7 +644,6 @@ function useMpvPlayer(
       setUsingMpv(false);
       setStreamState('dead');
       setErrorMsg('MPV initialization failed. Native player required.');
-    } finally {
       finishLoading();
     }
   }, [clearAllTimers, safeDestroyMpv]);
@@ -583,6 +665,11 @@ function useMpvPlayer(
     loadUrl(allUrlsRef.current[currentIdxRef.current], currentIdxRef.current, 0);
   }, [getRankedUrls, loadUrl]);
 
+  // Keep handleManualRetryRef updated
+  useEffect(() => {
+    handleManualRetryRef.current = handleManualRetry;
+  }, [handleManualRetry]);
+
   const isLoading = streamState === 'connecting' || streamState === 'retrying' || streamState === 'stalled';
 
   // Stall detection watchdog
@@ -591,6 +678,7 @@ function useMpvPlayer(
       if (streamStateRef.current !== 'playing') return;
       if (isLoadingRef.current) return; // still loading, don't trigger stall
       if (!mpvRunningRef.current) return; // MPV not initialized yet
+      if (retryCountRef.current > 0) return; // don't retry during retry
 
       const now = Date.now();
       if (now - lastTimeUpdateRef.current > 8000) {
@@ -600,12 +688,12 @@ function useMpvPlayer(
 
         console.warn('⚠️ Stream stalled - no time update for 8s');
         setStreamState('stalled');
-        handleManualRetry(true); // soft retry - preserve current URL index
+        handleManualRetryRef.current?.(true); // soft retry - preserve current URL index
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [handleManualRetry]);
+  }, []);
 
   const setAudioTrack = useCallback(async (id: string) => {
     try {
@@ -617,7 +705,7 @@ function useMpvPlayer(
     try {
       await setProperty('sid', id);
       // Enable subtitle visibility when selecting a track, disable when 'no'
-      await setProperty('sub-visibility', id === 'no' ? false : true);
+      await setProperty('sub-visibility', id !== 'no');
     } catch (e) { console.error('Set sub track failed:', e); }
   }, []);
 
@@ -1395,7 +1483,7 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
   // Memoized URL list to avoid re-calculation on every render
   const allUrls = useMemo(() => [url, ...fallbackUrls], [url, fallbackUrls]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       if (controls.isFullscreen) {
         void controls.handleFullscreen();
@@ -1415,6 +1503,12 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
       void controls.handleSeek(10);
     }
   }, [controls.isFullscreen, controls.handleFullscreen, controls.handleClose, controls.handleSeek, isVod, onClose]);
+
+  // Global keyboard handling
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!isVod || !mpv.duration) return;
@@ -1451,10 +1545,8 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
     <main
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ background: 'transparent' }}
-      onKeyDown={handleKeyDown}
-      aria-modal="true"
       aria-labelledby="player-title"
-      tabIndex={0}
+      role="application"
     >
       <div
         className="relative w-full h-full flex flex-col"
@@ -1479,7 +1571,7 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
         />
 
         <div className="flex-1 relative overflow-hidden" style={{ background: 'transparent' }}>
-          {(mpv.isLoading || buffering) && mpv.streamState !== 'playing' && (
+          {mpv.isLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10 gap-3"
               style={{ background: 'rgba(0,0,0,0.6)' }}>
               <svg className="animate-spin" style={{ width: 36, height: 36 }} viewBox="0 0 24 24" fill="none">

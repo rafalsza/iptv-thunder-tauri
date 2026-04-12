@@ -178,6 +178,7 @@ async fn exoplayer_init() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+#[allow(unused_variables)]
 async fn exoplayer_play(url: String, resume_position: Option<i64>) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "android")]
     {
@@ -228,6 +229,7 @@ async fn exoplayer_stop() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+#[allow(unused_variables)]
 async fn exoplayer_seek(position: i64) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "android")]
     {
@@ -240,6 +242,7 @@ async fn exoplayer_seek(position: i64) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+#[allow(unused_variables)]
 async fn exoplayer_set_speed(speed: f32) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "android")]
     {
@@ -252,6 +255,7 @@ async fn exoplayer_set_speed(speed: f32) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+#[allow(unused_variables)]
 async fn exoplayer_set_volume(volume: f32) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "android")]
     {
@@ -264,6 +268,7 @@ async fn exoplayer_set_volume(volume: f32) -> Result<serde_json::Value, String> 
 }
 
 #[tauri::command]
+#[allow(unused_variables)]
 async fn exoplayer_set_track(track_id: i32, track_type: String) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "android")]
     {

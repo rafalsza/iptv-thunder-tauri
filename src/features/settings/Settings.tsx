@@ -50,6 +50,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     if (isOpen) {
       getSettings().then(setSettings);
       getVersion().then(setVersion);
+      // Auto-focus first element when modal opens
+      setTimeout(() => {
+        const firstFocusable = document.querySelector('[data-tv-container="settings-modal"] [data-tv-focusable]') as HTMLElement;
+        if (firstFocusable) {
+          firstFocusable.focus();
+        }
+      }, 100);
     }
   }, [isOpen]);
 
@@ -95,7 +102,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     // For predefined services (not custom), clear custom URL
     if (serviceId !== 'custom') {
       const service = PREDEFINED_EPG_SERVICES.find(s => s.id === serviceId);
-      if (service && service.url) {
+      if (service?.url) {
         setExternalEpgUrl(service.url);
       } else if (serviceId === 'auto') {
         setExternalEpgUrl(null);
@@ -118,13 +125,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center dark:bg-black/80 bg-black/40 backdrop-blur-sm">
+        <div data-tv-container="settings-modal" className="fixed inset-0 z-50 flex items-center justify-center dark:bg-black/80 bg-black/40 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="dark:bg-slate-900 bg-white dark:border border-slate-700 border-gray-300 rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-hidden shadow-2xl"
+            className="dark:bg-slate-900 bg-white dark:border border-slate-700 border-gray-300 rounded-3xl w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-8 py-5 dark:border-b border-slate-700 border-b-gray-300">
@@ -135,6 +142,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 <h2 className="text-2xl font-semibold dark:text-white text-slate-900">{t('settings')}</h2>
               </div>
               <button
+                data-tv-focusable
+                data-tv-group="settings-header"
+                data-tv-index={0}
+                tabIndex={0}
                 onClick={onClose}
                 className="p-2 dark:hover:bg-slate-800 hover:bg-gray-100 rounded-xl transition-colors"
               >
@@ -142,13 +153,18 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
               </button>
             </div>
 
-            <div className="flex h-[calc(92vh-73px)]">
+            <div className="flex flex-1 overflow-hidden">
               {/* Sidebar Tabs */}
               <div className="w-56 dark:border-r border-slate-700 border-r-gray-300 dark:bg-slate-950 bg-gray-100 p-4 flex-shrink-0">
                 <div className="space-y-1">
-                  {TABS.map((tab) => (
+                  {TABS.map((tab, tabIndex) => (
                     <button
                       key={tab.id}
+                      data-tv-focusable
+                      data-tv-group="settings-tabs"
+                      data-tv-index={tabIndex + 1}
+                      data-tv-initial={tabIndex === 0}
+                      tabIndex={0}
                       onClick={() => setActiveTab(tab.id)}
                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all ${
                         activeTab === tab.id
@@ -170,8 +186,31 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     <div>
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('theme')}</label>
                       <select
+                        data-tv-focusable
+                        data-tv-group="settings-content"
+                        data-tv-initial
+                        data-tv-index="10"
+                        tabIndex={0}
                         value={settings.theme}
                         onChange={(e) => updateSetting('theme', e.target.value as any)}
+                        onKeyDown={(e: React.KeyboardEvent<HTMLSelectElement>) => {
+                          if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+                            e.preventDefault();
+                            // Try to open select dropdown using showPicker API
+                            const select = e.currentTarget;
+                            if ('showPicker' in select) {
+                              select.showPicker();
+                            } else {
+                              // Fallback: focus and expand size to show all options
+                              const fallbackSelect = select as HTMLSelectElement;
+                              fallbackSelect.size = fallbackSelect.options.length;
+                              fallbackSelect.focus();
+                            }
+                          } else if (e.key === 'Escape' || e.key === 'Back') {
+                            // Close expanded select
+                            e.currentTarget.size = 0;
+                          }
+                        }}
                         className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
                       >
                         <option value="dark">{t('dark')}</option>
@@ -183,8 +222,30 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     <div>
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('language')}</label>
                       <select
+                        data-tv-focusable
+                        data-tv-group="settings-content"
+                        data-tv-index="11"
+                        tabIndex={0}
                         value={currentLang}
                         onChange={(e) => changeLanguage(e.target.value as 'pl' | 'en')}
+                        onKeyDown={(e: React.KeyboardEvent<HTMLSelectElement>) => {
+                          if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+                            e.preventDefault();
+                            // Try to open select dropdown using showPicker API
+                            const select = e.currentTarget;
+                            if ('showPicker' in select) {
+                              select.showPicker();
+                            } else {
+                              // Fallback: focus and expand size to show all options
+                              const fallbackSelect = select as HTMLSelectElement;
+                              fallbackSelect.size = fallbackSelect.options.length;
+                              fallbackSelect.focus();
+                            }
+                          } else if (e.key === 'Escape' || e.key === 'Back') {
+                            // Close expanded select
+                            e.currentTarget.size = 0;
+                          }
+                        }}
                         className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
                       >
                         <option value="pl">Polski</option>
@@ -243,8 +304,28 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     <div>
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('epgSource')}</label>
                       <select
+                        data-tv-focusable
+                        data-tv-group="settings-content"
+                        data-tv-initial
+                        data-tv-index="20"
+                        tabIndex={0}
                         value={selectedService}
                         onChange={(e) => handleEpgServiceChange(e.target.value)}
+                        onKeyDown={(e: React.KeyboardEvent<HTMLSelectElement>) => {
+                          if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+                            e.preventDefault();
+                            const select = e.currentTarget;
+                            if ('showPicker' in select) {
+                              select.showPicker();
+                            } else {
+                              const fallbackSelect = select as HTMLSelectElement;
+                              fallbackSelect.size = fallbackSelect.options.length;
+                              fallbackSelect.focus();
+                            }
+                          } else if (e.key === 'Escape' || e.key === 'Back') {
+                            e.currentTarget.size = 0;
+                          }
+                        }}
                         className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
                       >
                         {PREDEFINED_EPG_SERVICES.map(service => (
@@ -319,11 +400,22 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             </div>
 
             {/* Footer */}
-            <div className="dark:border-t border-slate-700 border-t-gray-300 px-8 py-5 flex justify-end gap-3">
-              <Button variant="outline" onClick={onClose}>
+            <div data-tv-container="settings-footer" className="dark:border-t border-slate-700 border-t-gray-300 px-8 py-5 flex justify-end gap-3">
+              <Button
+                data-tv-focusable
+                data-tv-index={100}
+                tabIndex={0}
+                variant="outline"
+                onClick={onClose}
+              >
                 {t('cancel')}
               </Button>
-              <Button onClick={handleSave}>
+              <Button
+                data-tv-focusable
+                data-tv-index={101}
+                tabIndex={0}
+                onClick={handleSave}
+              >
                 {t('saveChanges')}
               </Button>
             </div>

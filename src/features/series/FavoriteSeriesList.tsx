@@ -30,13 +30,13 @@ function setCachedImage(key: string, value: string) {
 
 interface SeriesCardProps {
   series: StalkerVOD;
-  isSelected: boolean;
   onSelect: (series: StalkerVOD) => void;
   onToggleFavorite: (e: React.MouseEvent, series: StalkerVOD) => void;
+  seriesIndex: number;
 }
 
 const SeriesCard = React.memo<SeriesCardProps>(({
-  series, isSelected, onSelect, onToggleFavorite,
+  series, onSelect, onToggleFavorite, seriesIndex,
 }) => {
   const posterUrl = useMemo(
     () => series.poster || series.logo || '',
@@ -69,8 +69,19 @@ const SeriesCard = React.memo<SeriesCardProps>(({
 
   return (
     <div
+      data-tv-focusable
+      data-tv-group="favorite-series"
+      data-tv-index={seriesIndex}
+      data-tv-initial={seriesIndex === 0}
+      tabIndex={0}
       onClick={() => onSelect(series)}
-      className={`cursor-pointer group h-full ${isSelected ? 'ring-2 ring-green-700 rounded-lg' : ''}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+          e.preventDefault();
+          onSelect(series);
+        }
+      }}
+      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)]"
     >
       <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
 
@@ -294,15 +305,16 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
                   const startIndex = vRow.index * columnCount;
                   const endIndex = Math.min(startIndex + columnCount, filteredSeries.length);
                   const items = filteredSeries.slice(startIndex, endIndex);
-                  return items.map((series: StalkerVOD) => {
+                  return items.map((series: StalkerVOD, idx) => {
                     const seriesId = String(series.id);
+                    const seriesIndex = startIndex + idx;
                     return (
                       <SeriesCard
                         key={seriesId}
                         series={series}
-                        isSelected={false}
                         onSelect={onSeriesSelect}
                         onToggleFavorite={handleToggleFavorite}
+                        seriesIndex={seriesIndex}
                       />
                     );
                   });

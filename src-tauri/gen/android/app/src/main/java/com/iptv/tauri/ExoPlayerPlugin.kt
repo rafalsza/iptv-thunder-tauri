@@ -12,7 +12,11 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -21,8 +25,6 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSArray
-import app.tauri.plugin.Event
-import app.tauri.plugin.Listener
 
 @InvokeArg
 class PlayArgs {
@@ -57,7 +59,7 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
     private var listener: Player.Listener? = null
-    private var eventListener: Listener? = null
+    private var timeUpdateJob: java.util.Timer? = null
 
     companion object {
         const val EVENT_PLAYBACK_STATE = "playback_state"
@@ -106,9 +108,14 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
                         val payload = JSObject()
                         payload.put("isPlaying", isPlaying)
                         emitEvent(EVENT_PLAYBACK_STATE, if (isPlaying) "playing" else "paused")
+                        if (isPlaying) {
+                            startTimeUpdates()
+                        } else {
+                            stopTimeUpdates()
+                        }
                     }
 
-                    override fun onPlaybackError(error: PlaybackException) {
+                    override fun onPlayerError(error: PlaybackException) {
                         val payload = JSObject()
                         payload.put("errorCode", error.errorCode)
                         payload.put("errorMessage", error.message ?: "Unknown error")
@@ -118,13 +125,13 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
                     override fun onTracksChanged(tracks: Tracks) {
                         val trackList = JSArray()
                         tracks.groups.forEach { group ->
-                            group.mediaTrackGroup.forEachIndexed { index, _ ->
+                            for (i in 0 until group.mediaTrackGroup.length) {
                                 val track = JSObject()
-                                track.put("id", group.id)
+                                track.put("id", i)
                                 track.put("type", getTrackTypeString(group.type))
-                                track.put("selectedIndex", if (group.isSelected) index else -1)
-                                track.put("language", group.getTrackFormat(index)?.language ?: "")
-                                track.put("label", group.getTrackFormat(index)?.label ?: "")
+                                track.put("selected", group.isTrackSelected(i))
+                                track.put("language", group.getTrackFormat(i)?.language ?: "")
+                                track.put("label", group.getTrackFormat(i)?.label ?: "")
                                 trackList.put(track)
                             }
                         }
@@ -155,15 +162,25 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
                     return@runOnUiThread
                 }
 
-                val mediaItemBuilder = MediaItem.Builder()
+                // Create data source factory with headers for Stalker portals
+                val dataSourceFactory = DefaultHttpDataSource.Factory()
+                    .setDefaultRequestProperties(args.headers ?: emptyMap())
+
+                val mediaItem = MediaItem.Builder()
                     .setUri(Uri.parse(url))
+                    .build()
 
-                // Add metadata for IPTV
-                val metadataBuilder = MediaMetadata.Builder()
-                mediaItemBuilder.setMetadata(metadataBuilder.build())
+                // Use appropriate media source based on URL
+                val mediaSource: MediaSource = when {
+                    url.contains(".m3u8") -> {
+                        HlsMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+                    }
+                    else -> {
+                        ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+                    }
+                }
 
-                val mediaItem = mediaItemBuilder.build()
-                player?.setMediaItem(mediaItem)
+                player?.setMediaSource(mediaSource)
                 player?.prepare()
 
                 // Seek to resume position if provided
@@ -269,9 +286,14 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
                     // Build new track selection
                     val builder = parameters.buildUpon()
                     if (args.trackId >= 0) {
-                        val trackGroup = TrackGroup()
-                        val override = TrackSelectionOverride(trackGroup, args.trackId)
-                        builder.setOverrideForType(trackType, override)
+                        // Use trackId as group index to support multiple groups of same type
+                        val trackGroups = player?.currentTracks?.groups ?: emptyList()
+                        val filteredGroups = trackGroups.filter { it.type == trackType }
+                        if (args.trackId < filteredGroups.size) {
+                            val targetGroup = filteredGroups[args.trackId]
+                            val override = TrackSelectionOverride(targetGroup.mediaTrackGroup, 0)
+                            builder.setOverrideForType(override)
+                        }
                     } else {
                         builder.clearOverridesOfType(trackType)
                     }
@@ -292,7 +314,7 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
     fun getPosition(invoke: Invoke) {
         activity.runOnUiThread {
             val position = player?.currentPosition ?: 0
-            val duration = player?.duration ?: 0
+            val duration = player?.duration?.takeIf { it != C.TIME_UNSET } ?: 0
             val result = JSObject()
             result.put("position", position)
             result.put("duration", duration)
@@ -319,17 +341,17 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
 
             tracks?.groups?.forEach { group ->
                 val track = JSObject()
-                track.put("id", group.id)
+                track.put("id", 0)
                 track.put("type", getTrackTypeString(group.type))
                 track.put("selected", group.isSelected)
                 track.put("trackCount", group.length)
 
                 // Add track details
                 val trackArray = JSArray()
-                group.mediaTrackGroup.forEachIndexed { index, _ ->
-                    val format = group.getTrackFormat(index)
+                for (i in 0 until group.mediaTrackGroup.length) {
+                    val format = group.getTrackFormat(i)
                     val trackInfo = JSObject()
-                    trackInfo.put("index", index)
+                    trackInfo.put("index", i)
                     trackInfo.put("language", format?.language ?: "")
                     trackInfo.put("label", format?.label ?: "")
                     trackInfo.put("bitrate", format?.bitrate ?: 0)
@@ -346,7 +368,7 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
-    private fun getTrackTypeString(@C.TrackType type: Int): String {
+    private fun getTrackTypeString(type: Int): String {
         return when (type) {
             C.TRACK_TYPE_AUDIO -> "audio"
             C.TRACK_TYPE_VIDEO -> "video"
@@ -361,29 +383,57 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     private fun emitEvent(event: String, data: Any) {
-        val payload = when (data) {
-            is String -> {
-                val obj = JSObject()
-                obj.put("data", data)
-                obj
-            }
-            is JSObject -> data
-            is JSArray -> {
-                val obj = JSObject()
-                obj.put("data", data)
-                obj
-            }
-            else -> {
-                val obj = JSObject()
-                obj.put("data", data.toString())
-                obj
+        activity.runOnUiThread {
+            try {
+                when (data) {
+                    is JSObject -> trigger(event, data)
+                    is JSArray -> {
+                        val wrapper = JSObject()
+                        wrapper.put("data", data)
+                        trigger(event, wrapper)
+                    }
+                    is String -> {
+                        val payload = JSObject()
+                        payload.put("state", data)
+                        trigger(event, payload)
+                    }
+                    else -> {
+                        val payload = JSObject()
+                        payload.put("value", data.toString())
+                        trigger(event, payload)
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore emit errors — player may be destroyed
             }
         }
-        eventListener?.emit(event, payload)
+    }
+
+    private fun startTimeUpdates() {
+        timeUpdateJob?.cancel()
+        timeUpdateJob = java.util.Timer()
+        timeUpdateJob?.scheduleAtFixedRate(object : java.util.TimerTask() {
+            override fun run() {
+                val p = player ?: return
+                if (p.isPlaying) {
+                    val payload = JSObject()
+                    payload.put("position", p.currentPosition)
+                    payload.put("duration", p.duration)
+                    payload.put("bufferedPosition", p.bufferedPosition)
+                    emitEvent(EVENT_TIME_UPDATE, payload)
+                }
+            }
+        }, 0, 1000) // co 1 sekundę
+    }
+
+    private fun stopTimeUpdates() {
+        timeUpdateJob?.cancel()
+        timeUpdateJob = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        stopTimeUpdates()
         listener?.let { player?.removeListener(it) }
         player?.release()
         player = null

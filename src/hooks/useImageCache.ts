@@ -7,6 +7,7 @@ import { useCallback } from 'react';
 const MAX_CACHE_SIZE = 200 * 1024 * 1024; // 200MB
 const FETCH_TIMEOUT_MS = 10000; // 10 seconds
 const MAX_RETRIES = 2;
+const MAX_CONCURRENT_FETCHES = 6; // Limit concurrent image downloads
 
 let cacheDir: string | null = null;
 let lruInitialized = false;
@@ -14,6 +15,29 @@ let isClearing = false; // Atomic flag to prevent writes during cache clearing
 
 // In-flight request deduplication with cleanup and abort support
 const pendingRequests = new Map<string, { promise: Promise<Uint8Array>; timeout: number; abortController: AbortController }>();
+
+// Concurrency control: semaphore for limiting parallel fetches
+let activeFetches = 0;
+const fetchQueue: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
+
+function acquireFetchSlot(): Promise<void> {
+  if (activeFetches < MAX_CONCURRENT_FETCHES) {
+    activeFetches++;
+    return Promise.resolve();
+  }
+  
+  return new Promise((resolve, reject) => {
+    fetchQueue.push({ resolve: () => { activeFetches++; resolve(); }, reject });
+  });
+}
+
+function releaseFetchSlot(): void {
+  activeFetches--;
+  if (fetchQueue.length > 0 && activeFetches < MAX_CONCURRENT_FETCHES) {
+    const next = fetchQueue.shift();
+    if (next) next.resolve();
+  }
+}
 
 // Track logged errors to prevent spam
 const loggedErrors = new Set<string>();
@@ -363,6 +387,7 @@ async function fetchWithRetry(url: string, timeoutMs: number = FETCH_TIMEOUT_MS,
 
 /**
  * Fetch and cache image with deduplication, retry, and cancellation support
+ * Uses concurrency control to limit parallel downloads
  */
 export async function fetchAndCacheImage(url: string, signal?: AbortSignal): Promise<Uint8Array> {
   // Check for abortion before starting
@@ -388,21 +413,23 @@ export async function fetchAndCacheImage(url: string, signal?: AbortSignal): Pro
   // Set cleanup timeout to prevent memory leak if promise never resolves
   const cleanupTimeout = globalThis.window.setTimeout(() => {
     pendingRequests.delete(url);
+    releaseFetchSlot();
     rejectPromise(new Error('Timeout'));
   }, FETCH_TIMEOUT_MS + 5000);
 
   // Register immediately (synchronously) to prevent race condition
   pendingRequests.set(url, { promise, timeout: cleanupTimeout, abortController });
 
-  // Execute async logic
+  // Execute async logic with concurrency control
   await (async () => {
+    let fetchSlotAcquired = false;
     try {
       // Check for abortion
       if (signal?.aborted || abortController.signal.aborted) {
         throw new Error('Aborted');
       }
 
-      // Try cache first (without content type check)
+      // Try cache first (without content type check) - no slot needed for cache hit
       const cachedData = await getCachedImageData(url);
       if (cachedData) {
         resolvePromise(cachedData);
@@ -410,6 +437,15 @@ export async function fetchAndCacheImage(url: string, signal?: AbortSignal): Pro
       }
 
       // Check for abortion before network request
+      if (signal?.aborted || abortController.signal.aborted) {
+        throw new Error('Aborted');
+      }
+
+      // Acquire concurrency slot before network request
+      await acquireFetchSlot();
+      fetchSlotAcquired = true;
+
+      // Check for abortion again after acquiring slot
       if (signal?.aborted || abortController.signal.aborted) {
         throw new Error('Aborted');
       }
@@ -440,6 +476,11 @@ export async function fetchAndCacheImage(url: string, signal?: AbortSignal): Pro
       resolvePromise(data);
     } catch (error) {
       rejectPromise(error);
+    } finally {
+      // Release slot if we acquired it
+      if (fetchSlotAcquired) {
+        releaseFetchSlot();
+      }
     }
   })();
 

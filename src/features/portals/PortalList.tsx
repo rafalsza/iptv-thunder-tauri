@@ -1,7 +1,7 @@
 // =========================
 // 🌐 PORTAL LIST COMPONENT
 // =========================
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { usePortalsStore } from '@/store/portals.store';
 import { useTranslation } from '@/hooks/useTranslation';
 import { PortalAccount } from './portals.types';
@@ -13,6 +13,7 @@ export const PortalList: React.FC = () => {
   const [editingPortal, setEditingPortal] = useState<PortalAccount | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [testingPortal, setTestingPortal] = useState<string | null>(null);
+  const [activeMenuPortal, setActiveMenuPortal] = useState<string | null>(null);
 
   const {
     portals,
@@ -24,6 +25,32 @@ export const PortalList: React.FC = () => {
   const testingPortalData = usePortalsStore(s =>
     testingPortal ? s.portals.find(p => p.id === testingPortal) : undefined
   );
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!activeMenuPortal) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setActiveMenuPortal(null);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveMenuPortal(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeMenuPortal]);
 
   const handleEdit = (portal: PortalAccount) => {
     setEditingPortal(portal);
@@ -70,6 +97,9 @@ export const PortalList: React.FC = () => {
           </div>
           <button
             data-tv-focusable
+            data-tv-index={100}
+            data-tv-group="portals-content"
+            data-tv-initial
             tabIndex={0}
             onClick={() => setShowForm(true)}
             className="group relative px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl font-semibold shadow-xl shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 flex items-center gap-3 overflow-hidden"
@@ -84,10 +114,25 @@ export const PortalList: React.FC = () => {
       {/* Portals Grid */}
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {portals.map((portal) => (
+          {portals.map((portal, portalIndex) => (
             <div
               key={portal.id}
-              className={`group relative backdrop-blur-xl rounded-3xl p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 ${getStatusColor(portal)} dark:border border-white/10 border-gray-300/20`}
+              data-tv-focusable
+              data-tv-index={portalIndex}
+              data-tv-group="portals-content"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                // TV remote: Enter opens action menu, Escape closes it
+                if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+                  e.preventDefault();
+                  setActiveMenuPortal(portal.id);
+                } else if (e.key === 'Escape' || e.key === 'Back') {
+                  e.preventDefault();
+                  setActiveMenuPortal(null);
+                }
+              }}
+              onClick={() => setActiveMenuPortal(portal.id)}
+              className={`group relative backdrop-blur-xl rounded-3xl p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 cursor-pointer ${getStatusColor(portal)} dark:border border-white/10 border-gray-300/20`}
             >
             {/* Header */}
             <div className="flex justify-between items-start mb-6">
@@ -103,47 +148,75 @@ export const PortalList: React.FC = () => {
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-2">
-                {portal.id !== activePortalId && (
-                  <button
-                    data-tv-focusable
-                    tabIndex={0}
-                    onClick={() => handleSetActive(portal)}
-                    className="p-2.5 dark:bg-slate-700/50 bg-gray-200/50 hover:bg-emerald-500/20 text-emerald-400 rounded-xl transition-all duration-200 hover:scale-110 dark:border border-slate-600/50 border-gray-300/50 hover:border-emerald-400/30"
-                    title={t('setActive')}
-                  >
-                    🎯
-                  </button>
-                )}
-                <button
+              {/* Action Menu Overlay */}
+              {activeMenuPortal === portal.id && (
+                <div
+                  ref={menuRef}
+                  className="absolute inset-0 z-20 bg-slate-900/95 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center gap-3 p-4"
                   data-tv-focusable
+                  data-tv-group="portal-actions"
                   tabIndex={0}
-                  onClick={() => setTestingPortal(portal.id)}
-                  className="p-2.5 bg-slate-700/50 hover:bg-blue-500/20 text-blue-400 rounded-xl transition-all duration-200 hover:scale-110 border border-slate-600/50 hover:border-blue-400/30"
-                  title={t('testConnection')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape' || e.key === 'Back') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setActiveMenuPortal(null);
+                    }
+                  }}
                 >
-                  🔄
-                </button>
-                <button
-                  data-tv-focusable
-                  tabIndex={0}
-                  onClick={() => handleEdit(portal)}
-                  className="p-2.5 bg-slate-700/50 hover:bg-amber-500/20 text-amber-400 rounded-xl transition-all duration-200 hover:scale-110 border border-slate-600/50 hover:border-amber-400/30"
-                  title={t('edit')}
-                >
-                  ✏️
-                </button>
-                <button
-                  data-tv-focusable
-                  tabIndex={0}
-                  onClick={() => handleDelete(portal)}
-                  className="p-2.5 bg-slate-700/50 hover:bg-red-500/20 text-red-400 rounded-xl transition-all duration-200 hover:scale-110 border border-slate-600/50 hover:border-red-400/30"
-                  title={t('delete')}
-                >
-                  🗑️
-                </button>
-              </div>
+                  <p className="text-white font-semibold mb-2">{portal.name}</p>
+                  <div className="flex flex-col gap-2 w-full max-w-[200px]">
+                    {portal.id !== activePortalId && (
+                      <button
+                        data-tv-focusable
+                        data-tv-index={0}
+                        onClick={() => { handleSetActive(portal); setActiveMenuPortal(null); }}
+                        className="flex items-center gap-3 px-4 py-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-xl transition-all"
+                      >
+                        <span>🎯</span>
+                        <span>{t('setActive')}</span>
+                      </button>
+                    )}
+                    <button
+                      data-tv-focusable
+                      data-tv-index={1}
+                      onClick={() => { setTestingPortal(portal.id); setActiveMenuPortal(null); }}
+                      className="flex items-center gap-3 px-4 py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-xl transition-all"
+                    >
+                      <span>🔄</span>
+                      <span>{t('testConnection')}</span>
+                    </button>
+                    <button
+                      data-tv-focusable
+                      data-tv-index={2}
+                      onClick={() => { handleEdit(portal); setActiveMenuPortal(null); }}
+                      className="flex items-center gap-3 px-4 py-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-xl transition-all"
+                    >
+                      <span>✏️</span>
+                      <span>{t('edit')}</span>
+                    </button>
+                    <button
+                      data-tv-focusable
+                      data-tv-index={3}
+                      onClick={() => { handleDelete(portal); setActiveMenuPortal(null); }}
+                      className="flex items-center gap-3 px-4 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-xl transition-all"
+                    >
+                      <span>🗑️</span>
+                      <span>{t('delete')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-tv-focusable
+                      data-tv-index={4}
+                      onClick={(e) => { e.stopPropagation(); setActiveMenuPortal(null); }}
+                      className="flex items-center gap-3 px-4 py-3 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 rounded-xl transition-all mt-2"
+                    >
+                      <span>✕</span>
+                      <span>{t('cancel')}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Portal Info */}
@@ -199,6 +272,13 @@ export const PortalList: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Help text */}
+      {portals.length > 0 && (
+        <div className="max-w-7xl mx-auto mt-8 text-center text-sm dark:text-slate-500 text-slate-500">
+          {t('clickPortalForActions') || 'Kliknij w portal lub naciśnij Enter, aby otworzyć menu akcji'}
+        </div>
+      )}
 
       {/* Empty State */}
       {portals.length === 0 && (

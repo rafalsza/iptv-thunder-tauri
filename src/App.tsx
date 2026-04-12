@@ -1,7 +1,7 @@
 // =========================
 // 🧠 COMPLETE APP WITH ALL FEATURES
 // =========================
-import React, { useState, useRef, Suspense, lazy } from 'react';
+import React, { useState, useRef, useEffect, Suspense, lazy } from 'react';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
@@ -109,7 +109,7 @@ function AppInner({ }: AppProps) {
   };
 
   // TV Navigation (D-pad support for Android TV)
-  useTVNavigation({
+  const { setActiveContainer } = useTVNavigation({
     selector: '[data-tv-focusable]',
     onBack: () => {
       if (activeView === 'movie-details' && selectedMovie) {
@@ -118,7 +118,35 @@ function AppInner({ }: AppProps) {
         handleSeriesBack();
       }
     },
+    onEnter: (_element) => {
+      // Element click is handled by the hook, this is for additional logic if needed
+    },
   });
+
+  // Set active container based on current view
+  // Note: We don't set active container for main layout to allow free navigation
+  // between sidebar and main content. Container system is only for modals/popups.
+  const wasSettingsOpenRef = useRef(false);
+  useEffect(() => {
+    if (isSettingsOpen) {
+      wasSettingsOpenRef.current = true;
+      // Focus trap for Settings modal
+      const settingsModal = document.querySelector('[data-tv-container="settings-modal"]') as HTMLElement;
+      setActiveContainer(settingsModal);
+    } else {
+      setActiveContainer(null);
+      // Restore focus to sidebar when Settings closes (but not on initial load)
+      if (wasSettingsOpenRef.current) {
+        wasSettingsOpenRef.current = false;
+        setTimeout(() => {
+          const settingsButton = document.querySelector('[data-tv-index="40"]') as HTMLElement;
+          if (settingsButton) {
+            settingsButton.focus();
+          }
+        }, 100);
+      }
+    }
+  }, [activeView, isSettingsOpen, setActiveContainer]);
 
   const handleEpisodeSelect = async (episode: StalkerVOD, resumePosition?: number) => {
     if (!client) return;
@@ -487,7 +515,7 @@ function AppInner({ }: AppProps) {
 
       {/* Main Content - hidden when player active */}
       {!currentPlayer.current && (
-        <div className="flex-1 flex flex-col">
+        <div data-tv-container="main" className="flex-1 flex flex-col">
           {/* Search Bar - only show for list views */}
           {activeView !== 'portals' && activeView !== 'movie-details' && activeView !== 'series-details' && activePortal && (
             <div className="p-4 dark:border-b border-slate-700 border-b-gray-300">
@@ -496,6 +524,9 @@ function AppInner({ }: AppProps) {
                 placeholder={`${t('search')}...`}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                data-tv-focusable
+                data-tv-search
+                tabIndex={0}
                 className="w-full px-4 py-3 dark:bg-slate-700 bg-gray-200 dark:bg-opacity-50 bg-opacity-50 dark:border border-slate-600 border-gray-300 rounded-lg dark:text-white text-slate-900 dark:placeholder-slate-400 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-700 focus:border-green-700"
               />
             </div>

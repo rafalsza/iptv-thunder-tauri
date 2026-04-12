@@ -4,12 +4,20 @@
   "version": "1.0.0",
   "identifier": "com.iptv.tauri",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "pnpm run dev",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "pnpm run build",
     "frontendDist": "../dist"
   },
   "app": {
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https: asset: http://asset.localhost; connect-src 'self' http: https: ws: wss: ipc: http://ipc.localhost; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none';",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/image_cache/**"]
+      },
+      "capabilities": ["desktop", "mobile"]
+    },
     "windows": [
       {
         "label": "main",
@@ -23,47 +31,7 @@
         "skipTaskbar": false,
         "center": true
       }
-    ],
-    "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https: asset: blob:; media-src 'self' http: https: blob:; connect-src 'self' http: https: ws: wss:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'; worker-src 'self' blob:;",
-      "assetProtocol": {
-        "enable": true,
-        "scope": ["$APPDATA/image_cache/**"]
-      },
-      "capabilities": [
-        {
-          "identifier": "default",
-          "windows": ["main"],
-          "webviews": ["main"],
-          "permissions": [
-            "core:default",
-            "core:window:allow-set-fullscreen",
-            "opener:default",
-            "store:default",
-            "stronghold:default",
-            "shell:default",
-            "http:default",
-            "sql:default",
-            "sql:allow-load",
-            "sql:allow-execute",
-            "sql:allow-select",
-            "fs:default",
-            "fs:allow-appdata-read-recursive",
-            "fs:allow-appdata-write-recursive",
-            "fs:allow-appdata-meta",
-            "fs:scope-appdata-recursive",
-            "core:path:default",
-            "process:default",
-            "libmpv:default",
-            "libmpv:allow-init",
-            "libmpv:allow-command",
-            "libmpv:allow-destroy",
-            "libmpv:allow-get-property",
-            "libmpv:allow-set-property"
-          ]
-        }
-      ]
-    }
+    ]
   },
   "bundle": {
     "active": true,

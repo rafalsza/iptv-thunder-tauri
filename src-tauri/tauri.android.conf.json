@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.iptv.tauri",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "pnpm run dev",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "pnpm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -16,29 +16,7 @@
         "enable": true,
         "scope": ["$APPDATA/image_cache/**"]
       },
-      "capabilities": [
-        {
-          "identifier": "default",
-          "permissions": [
-            "core:default",
-            "core:window:allow-set-fullscreen",
-            "opener:default",
-            "store:default",
-            "shell:default",
-            "http:default",
-            "sql:default",
-            "sql:allow-load",
-            "sql:allow-execute",
-            "sql:allow-select",
-            "fs:default",
-            "fs:allow-appdata-read-recursive",
-            "fs:allow-appdata-write-recursive",
-            "fs:allow-appdata-meta",
-            "fs:scope-appdata-recursive",
-            "core:path:default"
-          ]
-        }
-      ]
+      "capabilities": ["mobile"]
     }
   },
   "bundle": {

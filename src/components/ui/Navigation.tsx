@@ -44,7 +44,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
   };
 
   return (
-    <div className="w-64 flex flex-col h-full">
+    <div data-tv-container="navigation" className="w-64 flex flex-col h-full">
       {/* Header */}
       <div className="p-6 border-b dark:border-slate-700 border-gray-300">
         <div className="flex items-center justify-center mb-4">
@@ -54,14 +54,20 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
 
       {/* Navigation Items */}
       <nav className="flex-1 p-4 space-y-2">
-        {items.map((item) => {
+        {items.map((item, index) => {
           const hasSubItems = item.subItems && item.subItems.length > 0;
           const isExpanded = expandedItem === item.id;
+          // Use base index for main items, submenu will use base+1, base+2, etc.
+          const baseIndex = index * 10;
 
           return (
             <div key={item.id}>
               <button
                 data-tv-focusable
+                data-tv-index={baseIndex}
+                data-tv-group="navbar"
+                data-tv-initial={item.id === items[0]?.id}
+                data-tv-active={item.active || undefined}
                 tabIndex={0}
                 onClick={() => {
                   if (hasSubItems) {
@@ -114,10 +120,12 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
 
               {/* Submenu */}
               {hasSubItems && isExpanded && item.subItems && (
-                <div className="mt-1 ml-4 space-y-1">
-                  {item.subItems.map((subItem) => (
+                <div data-tv-group={item.id} className="mt-1 ml-4 space-y-1">
+                  {item.subItems.map((subItem, subIndex) => (
                     <button
                       data-tv-focusable
+                      data-tv-index={baseIndex + subIndex + 1}
+                      data-tv-initial={subIndex === 0}
                       tabIndex={0}
                       key={subItem.id}
                       onClick={subItem.onClick}
@@ -139,6 +147,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
         {/* Close App Button - subtle style */}
         <button
           data-tv-focusable
+          data-tv-index={60}
           tabIndex={0}
           onClick={handleCloseApp}
           className="w-full px-3 py-2 rounded-lg flex items-center justify-center gap-2 transition-all duration-200 dark:bg-slate-800 bg-gray-100 dark:text-slate-400 text-slate-600 dark:hover:bg-red-500/10 hover:bg-red-500/10 dark:hover:text-red-400 hover:text-red-400 dark:border-slate-700 border-gray-300 dark:hover:border-red-500/30 hover:border-red-500/30"

@@ -114,8 +114,7 @@ export async function getChannelCount(portalId: string, genreId?: string): Promi
 }
 
 // VOD API (with transaction support)
-export async function saveVod(vodList: Vod[], portalId: string): Promise<void> {
-  console.log('[Database] saveVod called with', vodList.length, 'items for portal', portalId);
+export async function saveVod(vodList: Vod[], portalId: string, categoryId?: string): Promise<void> {
   const now = Date.now();
 
   if (vodList.length === 0) return;
@@ -123,11 +122,11 @@ export async function saveVod(vodList: Vod[], portalId: string): Promise<void> {
   await withTransaction(async (db) => {
     for (let i = 0; i < vodList.length; i += BATCH_SIZE) {
       const chunk = vodList.slice(i, i + BATCH_SIZE);
-      const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+      const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
 
       const query = `
         INSERT INTO vod
-          (id, portal_id, name, description, poster_url, poster_local, stream_url, year, rating, duration, genre, director, actors, added, updated_at)
+          (id, portal_id, name, description, poster_url, poster_local, stream_url, year, rating, duration, genre, director, actors, category_id, added, updated_at)
         VALUES ${placeholders}
         ON CONFLICT(id, portal_id) DO UPDATE SET
           name = excluded.name,
@@ -141,6 +140,7 @@ export async function saveVod(vodList: Vod[], portalId: string): Promise<void> {
           genre = excluded.genre,
           director = excluded.director,
           actors = excluded.actors,
+          category_id = excluded.category_id,
           added = excluded.added,
           updated_at = excluded.updated_at
       `;
@@ -159,6 +159,7 @@ export async function saveVod(vodList: Vod[], portalId: string): Promise<void> {
         vod.genre || null,
         vod.director || null,
         vod.actors || null,
+        categoryId || null,
         vod.added ? new Date(vod.added).getTime() : null,
         now
       ]);
@@ -166,23 +167,21 @@ export async function saveVod(vodList: Vod[], portalId: string): Promise<void> {
       await db.execute(query, params);
     }
   });
-
-  console.log('[Database] Saved', vodList.length, 'VOD items for portal', portalId);
 }
 
-export async function getVod(portalId: string, genre?: string, limit?: number, offset?: number): Promise<Vod[]> {
+export async function getVod(portalId: string, categoryId?: string, limit?: number, offset?: number): Promise<Vod[]> {
   const db = await getDb();
-  
+
   let query = 'SELECT * FROM vod WHERE portal_id = ?';
   const params: (string | number)[] = [portalId];
-  
-  if (genre) {
-    query += ' AND genre = ?';
-    params.push(genre);
+
+  if (categoryId) {
+    query += ' AND category_id = ?';
+    params.push(categoryId);
   }
-  
+
   query += ' ORDER BY name COLLATE NOCASE';
-  
+
   if (limit !== undefined) {
     query += ' LIMIT ?';
     params.push(limit);
@@ -191,7 +190,7 @@ export async function getVod(portalId: string, genre?: string, limit?: number, o
       params.push(offset);
     }
   }
-  
+
   const rows = await db.select<DbVod[]>(query, params);
   return rows.map(row => ({
     id: row.id.toString(),
@@ -238,16 +237,16 @@ export async function getVodByIds(portalId: string, ids: string[]): Promise<Vod[
   }));
 }
 
-export async function getVodCount(portalId: string, genre?: string): Promise<number> {
+export async function getVodCount(portalId: string, categoryId?: string): Promise<number> {
   const db = await getDb();
   let query = 'SELECT COUNT(*) as count FROM vod WHERE portal_id = ?';
   const params: (string)[] = [portalId];
-  
-  if (genre) {
-    query += ' AND genre = ?';
-    params.push(genre);
+
+  if (categoryId) {
+    query += ' AND category_id = ?';
+    params.push(categoryId);
   }
-  
+
   const result = await db.select<{count: number}[]>(query, params);
   return result[0]?.count || 0;
 }
@@ -705,6 +704,7 @@ interface DbVod {
   genre: string;
   director: string;
   actors: string;
+  category_id: string;
   added: number;
   updated_at: number;
 }

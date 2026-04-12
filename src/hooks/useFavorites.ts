@@ -66,9 +66,8 @@ export async function initFavoritesTable(): Promise<void> {
         const tableInfo = await db.select<{name: string}[]>(`PRAGMA table_info(favorites)`);
         const hasAccountId = tableInfo.some(col => col.name === 'account_id');
         const hasKind = tableInfo.some(col => col.name === 'kind');
-        
+
         if (tableInfo.length > 0 && (!hasAccountId || !hasKind)) {
-          logger.info('Old favorites table detected, dropping...');
           await db.execute(`DROP TABLE IF EXISTS favorites`);
         }
       } catch (e) {
@@ -103,7 +102,6 @@ export async function initFavoritesTable(): Promise<void> {
       // Drop old tables if exist
       await db.execute(`DROP TABLE IF EXISTS favorite_categories`);
 
-      logger.info('Table initialized successfully');
       isTableReady = true;
     } catch (error) {
       logger.error('Error initializing table:', error);

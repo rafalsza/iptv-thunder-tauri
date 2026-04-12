@@ -142,7 +142,7 @@ export async function persistVodQueue(
   vodList: any[],
   accountId: string,
   categoryId: string,
-  saveVodFn: (vodList: any[], accountId: string) => Promise<void>,
+  saveVodFn: (vodList: any[], accountId: string, categoryId: string) => Promise<void>,
 ): Promise<void> {
   const queueKey = `${accountId}:${categoryId}`;
 
@@ -153,7 +153,7 @@ export async function persistVodQueue(
   }
 
   // Create new write promise
-  const writePromise = saveVodFn(vodList, accountId).finally(() => {
+  const writePromise = saveVodFn(vodList, accountId, categoryId).finally(() => {
     // Remove from queue when done
     writeQueue.delete(queueKey);
   });
