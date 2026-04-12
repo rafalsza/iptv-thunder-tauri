@@ -63,7 +63,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     if (
       style.display === 'none' ||
       style.visibility === 'hidden' ||
-      style.opacity === '0'
+      Number(style.opacity) < 0.1
     ) return false;
 
     const rect = el.getBoundingClientRect();
@@ -81,8 +81,18 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     });
   };
 
+  // Cleanup requestAnimationFrame on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current !== null) {
+        cancelAnimationFrame(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const focusElement = useCallback((el: HTMLElement | null) => {
     if (!el) return;
+    if (currentElementRef.current === el) return;
 
     el.focus({ preventScroll: true });
     scrollToElement(el);
@@ -114,6 +124,19 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     }
   }, []);
 
+  // Cleanup on unmount to prevent globalActiveContainer from getting stuck
+  useEffect(() => {
+    return () => {
+      if (activeContainerRef.current === globalActiveContainer) {
+        activeContainerRefCount--;
+        if (activeContainerRefCount <= 0) {
+          globalActiveContainer = null;
+          activeContainerRefCount = 0;
+        }
+      }
+    };
+  }, []);
+
   const findNextElement = useCallback((direction: 'up' | 'down' | 'left' | 'right') => {
     // Lazy update: if cache invalidated by scroll, batch update now (avoid O(n) forced layouts during scroll)
     if (isRectCacheInvalidRef.current) {
@@ -139,7 +162,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     
     // Fallback if current element was removed from DOM
     if (!current || !document.contains(current)) {
-      const fallbackElement = elements[0] ?? null;
+      const fallbackElement = elements.find(isVisible) ?? null;
       currentElementRef.current = fallbackElement;
       return fallbackElement;
     }
@@ -190,7 +213,11 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     );
     
     const searchInElements = (searchElements: HTMLElement[]) => {
-      const currentRect = rectCache.current.get(current) || current.getBoundingClientRect();
+      const currentRect = rectCache.current.get(current);
+      if (!currentRect) {
+        isRectCacheInvalidRef.current = true;
+        return current;
+      }
       const currentCenterX = currentRect.left + currentRect.width / 2;
       const currentCenterY = currentRect.top + currentRect.height / 2;
 
@@ -246,7 +273,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
           if (!isVisible(el)) continue;
           if (el.hasAttribute('disabled')) continue;
           
-          const elIdx = parseInt(el.dataset.tvIndex || '0');
+          const elIdx = Number.parseInt(el.dataset.tvIndex || '0');
           const idxDiff = elIdx - currentIdx;
           
           if (direction === 'down' && idxDiff > 0 && idxDiff < bestNavDiff) {
@@ -264,18 +291,22 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       }
       
       if (hasIndexElements.length > 0 && useIndexNavigation) {
-        const currentIndex = parseInt(current.dataset.tvIndex || '0');
+        const currentIndex = Number.parseInt(current.dataset.tvIndex || '0');
 
         // GRID NAVIGATION: Calculate columns based on element positions
         // Elements in same row have similar Y positions
-        const currentRect = rectCache.current.get(current) || current.getBoundingClientRect();
-        const rowThreshold = currentRect.height * 0.5; // Allow 50% tolerance for row detection
+        const currentRect = rectCache.current.get(current);
+        if (!currentRect) {
+          isRectCacheInvalidRef.current = true;
+          return current;
+        }
 
         // Group elements by rows (similar Y positions)
         const rowGroups = new Map<number, HTMLElement[]>();
         for (const el of hasIndexElements) {
-          const rect = rectCache.current.get(el) || el.getBoundingClientRect();
-          const rowKey = Math.round(rect.top / rowThreshold);
+          const rect = rectCache.current.get(el);
+          if (!rect) continue;
+          const rowKey = Math.round(rect.top / 50); // Constant bucket for stable UX during scroll
           const group = rowGroups.get(rowKey) || [];
           group.push(el);
           rowGroups.set(rowKey, group);
@@ -313,7 +344,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         // Try to find element at target index (grid-based navigation)
         if (targetIndex !== null && targetIndex >= 0) {
           const targetElement = hasIndexElements.find(el => {
-            const elIdx = parseInt(el.dataset.tvIndex || '0');
+            const elIdx = Number.parseInt(el.dataset.tvIndex || '0');
             return elIdx === targetIndex && isVisible(el) && !el.hasAttribute('disabled');
           });
           if (targetElement) {
@@ -333,7 +364,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
             if (!isVisible(el)) continue;
             if (el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') continue;
 
-            const elIndex = parseInt(el.dataset.tvIndex || '0');
+            const elIndex = Number.parseInt(el.dataset.tvIndex || '0');
             let indexDiff = elIndex - currentIndex;
 
             // For down, look for next higher index (smallest positive diff)
@@ -376,8 +407,9 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
         let rect = rectCache.current.get(el);
         if (!rect) {
-          // Get fresh rect for newly rendered elements (e.g., expanded submenu)
-          rect = el.getBoundingClientRect();
+          // Skip element if not in cache - will trigger batch refresh
+          isRectCacheInvalidRef.current = true;
+          return;
         }
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
@@ -582,11 +614,21 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     // Listen to resize, scroll, and DOM mutations
     window.addEventListener('resize', update);
     // Scroll: lazy invalidate (avoid forced layouts during rapid scroll)
-    window.addEventListener('scroll', () => { isRectCacheInvalidRef.current = true; }, true);
+    const handleScroll = () => {
+      isRectCacheInvalidRef.current = true;
+    };
+    window.addEventListener('scroll', handleScroll, true);
 
     // MutationObserver to detect new focusable elements (for lazy-loaded components)
+    let mutationScheduled = false;
     const observer = new MutationObserver(() => {
-      update();
+      if (mutationScheduled) return;
+      mutationScheduled = true;
+
+      requestAnimationFrame(() => {
+        update();
+        mutationScheduled = false;
+      });
     });
     observer.observe(document.body, {
       childList: true,
@@ -597,7 +639,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
     return () => {
       window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('scroll', handleScroll, true);
       observer.disconnect();
     };
   }, [getFocusableElements]);
@@ -638,63 +680,80 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         return;
       }
 
-      switch (e.key) {
-        case 'ArrowRight':
-        case 'Right':
-          e.preventDefault();
-          focusElement(findNextElement('right'));
-          break;
-        case 'ArrowLeft':
-        case 'Left': {
-          e.preventDefault();
+      const keyMap: Record<string, () => void> = {
+        ArrowRight: () => focusElement(findNextElement('right')),
+        Right: () => focusElement(findNextElement('right')),
+        ArrowLeft: () => {
           // Disable LEFT when in sidebar (navigation) - nowhere to go left
           const current = currentElementRef.current;
           const isInSidebar = current?.closest('[data-tv-container="navigation"]') !== null;
           if (!isInSidebar) {
             focusElement(findNextElement('left'));
           }
-          break;
-        }
-        case 'ArrowDown':
-        case 'Down':
-          e.preventDefault();
-          focusElement(findNextElement('down'));
-          break;
-        case 'ArrowUp':
-        case 'Up':
-          e.preventDefault();
+        },
+        Left: () => {
+          const current = currentElementRef.current;
+          const isInSidebar = current?.closest('[data-tv-container="navigation"]') !== null;
+          if (!isInSidebar) {
+            focusElement(findNextElement('left'));
+          }
+        },
+        ArrowDown: () => focusElement(findNextElement('down')),
+        Down: () => focusElement(findNextElement('down')),
+        ArrowUp: () => {
           // Disable UP when on search input - nowhere to go up
           const current = currentElementRef.current;
           const isOnSearchInput = current?.dataset.tvSearch !== undefined;
           if (!isOnSearchInput) {
             focusElement(findNextElement('up'));
           }
-          break;
-        case 'Enter':
-        case 'OK':
-        case 'Select': {
-          e.preventDefault();
+        },
+        Up: () => {
+          const current = currentElementRef.current;
+          const isOnSearchInput = current?.dataset.tvSearch !== undefined;
+          if (!isOnSearchInput) {
+            focusElement(findNextElement('up'));
+          }
+        },
+        Enter: () => {
           const current = currentElementRef.current;
           if (current) {
             onEnterRef.current?.(current);
             current.click();
           }
-          break;
-        }
-        case 'Backspace':
-        case 'Escape':
-        case 'Back': {
+        },
+        OK: () => {
+          const current = currentElementRef.current;
+          if (current) {
+            onEnterRef.current?.(current);
+            current.click();
+          }
+        },
+        Select: () => {
+          const current = currentElementRef.current;
+          if (current) {
+            onEnterRef.current?.(current);
+            current.click();
+          }
+        },
+        Backspace: () => {
           // Don't intercept backspace if user is typing in an input field
           const isTyping =
             e.target instanceof HTMLInputElement ||
             e.target instanceof HTMLTextAreaElement ||
             (e.target as HTMLElement).isContentEditable;
+          if (!isTyping) {
+            onBackRef.current?.();
+          }
+        },
+        Escape: () => onBackRef.current?.(),
+        Back: () => onBackRef.current?.(),
+      };
 
-          if (e.key === 'Backspace' && isTyping) return;
-          e.preventDefault();
-          onBackRef.current?.();
-          break;
-        }
+      const handler = keyMap[e.key];
+      if (handler) {
+        e.preventDefault();
+        handler();
       }
     };
 

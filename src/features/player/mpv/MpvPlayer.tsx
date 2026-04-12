@@ -2,7 +2,7 @@
 // 🎬 PLAYER — MPV Only
 // =========================
 
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo, useSyncExternalStore } from 'react';
 import { useStreamStore } from '@/store/stream.store';
 import { useChannelEPG } from '@/features/epg/epg.hooks';
 import { getCurrentProgram } from '@/features/epg/epg.api';
@@ -36,6 +36,23 @@ const OBSERVED_PROPERTIES = [
 ] as const satisfies MpvObservableProperty[];
 
 // ─── Helper Functions ───────────────────────────────────────────────────────────
+
+// External store for currentTime to avoid unnecessary re-renders
+const currentTimeStore = {
+  value: 0,
+  listeners: new Set<() => void>(),
+  subscribe(listener: () => void) {
+    currentTimeStore.listeners.add(listener);
+    return () => currentTimeStore.listeners.delete(listener);
+  },
+  getSnapshot() {
+    return currentTimeStore.value;
+  },
+  setValue(newValue: number) {
+    currentTimeStore.value = newValue;
+    currentTimeStore.listeners.forEach(listener => listener());
+  },
+};
 
 const timeCache = new Map<string, string>();
 const dateCache = new Map<string, string>();
@@ -154,7 +171,6 @@ function useMpvPlayer(
   const isLoadingRef = useRef(false);
   const currentTimeRef = useRef(0);
   const lastTimeUpdateRef = useRef(Date.now());
-  const lastUiUpdateRef = useRef(Date.now());
   const durationRef = useRef(0);
   const unobserveRef = useRef<(() => void) | null>(null);
   const requestIdRef = useRef(0);
@@ -164,6 +180,7 @@ function useMpvPlayer(
   const lastBufferingRef = useRef(0);
   const videoParamsReceivedRef = useRef(false);
   const firstTimePosRef = useRef(0);
+  const currentCacheSecsRef = useRef(10);
 
   // Smart retry metrics per URL
   interface UrlMetrics {
@@ -186,7 +203,7 @@ function useMpvPlayer(
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [usingMpv, setUsingMpv] = useState(false);
   const [videoParams, setVideoParams] = useState<{ width?: number; height?: number; fps?: number } | null>(null);
-  const [currentTime, setCurrentTime] = useState(0);
+  const currentTime = useSyncExternalStore(currentTimeStore.subscribe, currentTimeStore.getSnapshot);
   const [duration, setDuration] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -213,8 +230,8 @@ function useMpvPlayer(
     const scored = urls.map(u => {
       const metrics = urlMetricsRef.current.get(u);
       if (!metrics) {
-        // New URL - give it a chance with medium score
-        return { url: u, score: 100 };
+        // New URL - random exploration to allow fallback discovery
+        return { url: u, score: Math.random() * 100 };
       }
 
       // Factors (lower score = better priority)
@@ -300,11 +317,21 @@ function useMpvPlayer(
   const recordBufferingEvent = useCallback((streamUrl: string) => {
     const existing = urlMetricsRef.current.get(streamUrl);
     if (existing) {
+      const newBufferingCount = existing.bufferingCount + 1;
       urlMetricsRef.current.set(streamUrl, {
         ...existing,
-        bufferingCount: existing.bufferingCount + 1,
+        bufferingCount: newBufferingCount,
         lastUsed: Date.now(),
       });
+
+      // Adaptive buffering: increase cache-secs based on buffering events
+      // Base: 10s, increase by 2s per buffering event, max 60s
+      const newCacheSecs = Math.min(10 + newBufferingCount * 2, 60);
+      if (newCacheSecs !== currentCacheSecsRef.current) {
+        currentCacheSecsRef.current = newCacheSecs;
+        void setProperty('cache-secs', newCacheSecs.toString());
+        console.log(`📈 Adaptive buffering: cache-secs increased to ${newCacheSecs}s (${newBufferingCount} buffering events)`);
+      }
     }
   }, []);
 
@@ -313,8 +340,10 @@ function useMpvPlayer(
     const existing = urlMetricsRef.current.get(streamUrl);
     if (existing) {
       // Weighted average based on sample count to handle irregular events
-      const sampleCount = existing.bitrateSampleCount || 1;
-      const newBitrate = (existing.avgBitrate * sampleCount + bitrate) / (sampleCount + 1);
+      const sampleCount = existing.bitrateSampleCount;
+      const newBitrate = sampleCount === 0
+        ? bitrate
+        : (existing.avgBitrate * sampleCount + bitrate) / (sampleCount + 1);
       urlMetricsRef.current.set(streamUrl, {
         ...existing,
         avgBitrate: newBitrate,
@@ -419,6 +448,7 @@ function useMpvPlayer(
     // Reset video params tracking for new load
     videoParamsReceivedRef.current = false;
     firstTimePosRef.current = 0;
+    currentCacheSecsRef.current = 10; // Reset cache-secs to default
 
     recordUrlStart(streamUrl);
 
@@ -516,7 +546,6 @@ function useMpvPlayer(
           'aid': 'auto',
           'sid': 'no',
           'sub-auto': 'no',
-          'sub-visibility': false,
           'stream-lavf-o': [
             'reconnect=1',
             'reconnect_streamed=1',
@@ -548,15 +577,11 @@ function useMpvPlayer(
 
           if (name === 'time-pos' && typeof data === 'number') {
             currentTimeRef.current = data;
+            currentTimeStore.setValue(data);
             lastTimeUpdateRef.current = Date.now();
             // Track first time-pos for fallback success detection
             if (firstTimePosRef.current === 0 && data > 0) {
               firstTimePosRef.current = Date.now();
-            }
-            // Update state max 1x/s for UI
-            if (Date.now() - lastUiUpdateRef.current > 1000) {
-              lastUiUpdateRef.current = Date.now();
-              setCurrentTime(data);
             }
             // Fallback: if video-params never received, trigger success after 2s of playback
             if (onSuccessRef.current && data > 0 && !videoParamsReceivedRef.current && firstTimePosRef.current > 0) {
@@ -688,7 +713,15 @@ function useMpvPlayer(
 
         console.warn('⚠️ Stream stalled - no time update for 8s');
         setStreamState('stalled');
-        handleManualRetryRef.current?.(true); // soft retry - preserve current URL index
+
+        // Smart stall recovery: try seek first to unblock without reconnect
+        void command('seek', [0, 'relative']).then(() => {
+          console.log('✅ Seek recovery successful');
+          setStreamState('playing');
+        }).catch(() => {
+          console.warn('⏱ Seek recovery failed, falling back to retry');
+          handleManualRetryRef.current?.(true); // soft retry - preserve current URL index
+        });
       }
     }, 3000);
 
@@ -704,8 +737,6 @@ function useMpvPlayer(
   const setSubTrack = useCallback(async (id: string) => {
     try {
       await setProperty('sid', id);
-      // Enable subtitle visibility when selecting a track, disable when 'no'
-      await setProperty('sub-visibility', id !== 'no');
     } catch (e) { console.error('Set sub track failed:', e); }
   }, []);
 
@@ -1427,6 +1458,7 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
 
   const [showEPGModal, setShowEPGModal] = useState(false);
   const hasResumedRef = useRef(false);
+  const requestIdRef = useRef(0);
 
   // Memoized cleanup handler for beforeunload event
   const handleBeforeUnload = useCallback(() => {
@@ -1447,11 +1479,12 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
     const { cleanup, loadUrl, getRankedUrls, setStreamState, setStatusMsg } = mpv;
     hasResumedRef.current = false;
 
-    let cancelled = false;
+    const requestId = ++requestIdRef.current;
 
     // Cleanup old MPV before loading new URL
     void cleanup().then(() => {
-      if (cancelled) return;
+      // Guard: newer URL change may have started during cleanup
+      if (requestId !== requestIdRef.current) return;
 
       // Reset state for new stream
       setStreamState('connecting');
@@ -1462,7 +1495,8 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
     });
 
     return () => {
-      cancelled = true;
+      // Increment requestId to cancel pending load
+      requestIdRef.current++;
     };
   }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
 
