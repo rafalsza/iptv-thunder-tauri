@@ -38,9 +38,11 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
 
   // Apply search filter
   const filtered = useMemo(() =>
-    favoriteChannels.filter((c) =>
-      c.name.toLowerCase().includes(search.toLowerCase())
-    ),
+    favoriteChannels.filter((c) => {
+      // Filter out separator channels (names starting with ####)
+      if (c.name.startsWith('####')) return false;
+      return c.name.toLowerCase().includes(search.toLowerCase());
+    }),
   [favoriteChannels, search]);
 
   if (isLoading) {

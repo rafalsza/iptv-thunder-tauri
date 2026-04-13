@@ -244,7 +244,7 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
   const initialLoadDoneRef = React.useRef(false);
   const pageRef = React.useRef(1);
   const hasMoreRef = React.useRef(true);
-  const autoLoadTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const autoLoadTimeoutRef = React.useRef<number | null>(null);
   const totalExpectedRef = React.useRef<number | null>(null);
 
   const loadMore = React.useCallback(async () => {

@@ -166,7 +166,6 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               data-tv-focusable
               data-tv-initial
               data-tv-group="portal-form"
-              data-tv-index="1"
               tabIndex={0}
               type="text"
               value={formData.name}
@@ -190,7 +189,6 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               id="portal-url"
               data-tv-focusable
               data-tv-group="portal-form"
-              data-tv-index="2"
               tabIndex={0}
               type="url"
               value={formData.portalUrl}
@@ -205,7 +203,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
             )}
           </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div>
                 <label htmlFor="portal-login" className="block text-sm font-medium text-slate-300 mb-2">
                   Login
@@ -214,7 +212,6 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
                   id="portal-login"
                   data-tv-focusable
                   data-tv-group="portal-form"
-                  data-tv-index="3"
                   tabIndex={0}
                   type="text"
                   autoComplete="username"
@@ -238,7 +235,6 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
                   id="portal-password"
                   data-tv-focusable
                   data-tv-group="portal-form"
-                  data-tv-index="4"
                   tabIndex={0}
                   type="password"
                   autoComplete="current-password"
@@ -263,7 +259,6 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
                 id="portal-mac"
                 data-tv-focusable
                 data-tv-group="portal-form"
-                data-tv-index="5"
                 tabIndex={0}
                 type="text"
                 value={formData.mac}
@@ -287,7 +282,6 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               type="button"
               data-tv-focusable
               data-tv-group="portal-form"
-              data-tv-index="6"
               tabIndex={0}
               onClick={onClose}
               className="px-5 py-2.5 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700/50 hover:text-white transition-all duration-200 hover:scale-105"
@@ -298,7 +292,6 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               type="submit"
               data-tv-focusable
               data-tv-group="portal-form"
-              data-tv-index="7"
               tabIndex={0}
               disabled={isSubmitting}
               className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 hover:-translate-y-0.5 flex items-center gap-2 shadow-lg shadow-emerald-500/25"

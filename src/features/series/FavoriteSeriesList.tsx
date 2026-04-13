@@ -220,7 +220,8 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
     e.stopPropagation();
     const posterUrl = series.poster || series.logo || '';
     const name = series.name || series.series || '';
-    toggleItemFavorite('series', String(series.id), {
+    const itemId = (series as any).item_id || String(series.id);
+    toggleItemFavorite('series', itemId, {
       name: name as string,
       poster: posterUrl,
       cmd: series.cmd,
@@ -306,7 +307,7 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
                   const endIndex = Math.min(startIndex + columnCount, filteredSeries.length);
                   const items = filteredSeries.slice(startIndex, endIndex);
                   return items.map((series: StalkerVOD, idx) => {
-                    const seriesId = String(series.id);
+                    const seriesId = (series as any).item_id || String(series.id);
                     const seriesIndex = startIndex + idx;
                     return (
                       <SeriesCard

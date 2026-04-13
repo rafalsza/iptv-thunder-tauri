@@ -147,6 +147,7 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
         const extra = f.extra ? JSON.parse(f.extra) : {};
         return {
           id: Number.parseInt(f.item_id) || 0,
+          item_id: f.item_id,
           name: f.name || `Film ${f.item_id}`,
           logo: f.poster,
           poster: f.poster,
@@ -163,10 +164,10 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
           rating_kinopoisk: extra.rating_kinopoisk,
           added: '',
           censored: false,
-        } as StalkerVOD;
+        } as StalkerVOD & { item_id: string };
       })
       .filter((m, index, self) =>
-        index === self.findIndex(t => t.id === m.id)
+        index === self.findIndex(t => (t as any).item_id === (m as any).item_id)
       ),
   [dbFavorites]);
 
@@ -216,7 +217,8 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
   const handleToggleFavorite = useCallback((e: React.MouseEvent, movie: StalkerVOD) => {
     e.stopPropagation();
     const posterUrl = movie.poster || movie.logo || '';
-    toggleItemFavorite('vod', String(movie.id), {
+    const itemId = (movie as any).item_id || String(movie.id);
+    toggleItemFavorite('vod', itemId, {
       name: movie.name,
       poster: posterUrl,
       cmd: movie.cmd,
@@ -290,9 +292,10 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
               >
                 {getRow(vRow.index).map((movie, colIndex) => {
                   const itemIndex = vRow.index * cols + colIndex;
+                  const movieId = (movie as any).item_id || String(movie.id);
                   return (
                     <MovieCard
-                      key={String(movie.id)}
+                      key={movieId}
                       movie={movie}
                       index={itemIndex}
                       posterUrl={movie.poster || movie.logo || ''}

@@ -14,7 +14,7 @@ import { fetchVODPages, normalizeVod, normalizeDbVod, persistVodQueue } from './
 export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
   const account = client?.getAccount();
   const accountId = account?.id ?? 'default';
-  const enabled = !!categoryId && !!accountId;
+  const enabled = !!client; // Require client, allow loading all movies when categoryId is undefined/empty
   const queryClient = useQueryClient();
 
   // Streaming state for progressive loading
@@ -27,10 +27,11 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
   const query = useQuery({
     queryKey: ['movies-all', accountId, categoryId],
     queryFn: async ({ signal }) => {
-      if (!categoryId) return [];
+      // Treat undefined categoryId as empty string to load all movies
+      const effectiveCategoryId = categoryId || '';
 
       // Try SQLite cache first
-      const cached = await getVod(accountId, categoryId);
+      const cached = await getVod(accountId, effectiveCategoryId);
 
       if (cached.length > 0) {
         // Return raw cached data - transformation happens in useMemo
@@ -41,14 +42,14 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
       setStreamingState({ isStreaming: true, loadedPages: 0, totalPages: 0 });
 
       // Layer 1: Fetch from API with progressive hydration
-      const items = await fetchVODPages(client, categoryId, {
+      const items = await fetchVODPages(client, effectiveCategoryId, {
         signal,
         onProgress: (progressItems, loadedPages, totalPages) => {
           // Layer 2: Normalize and update UI progressively
           if (signal?.aborted) return;
           if (queryClient) {
             const normalized = normalizeVod(progressItems);
-            queryClient.setQueryData(['movies-all', accountId, categoryId], normalized);
+            queryClient.setQueryData(['movies-all', accountId, effectiveCategoryId], normalized);
             // Update streaming state
             setStreamingState({ isStreaming: loadedPages < totalPages, loadedPages, totalPages });
           }
@@ -78,7 +79,7 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
           added: vod.added ? new Date(vod.added).getTime() : undefined,
         }));
 
-        persistVodQueue(vodData, accountId, categoryId, saveVod)
+        persistVodQueue(vodData, accountId, effectiveCategoryId, saveVod)
           .catch(err => console.error('[DB] Failed to save VOD:', err));
       }
 

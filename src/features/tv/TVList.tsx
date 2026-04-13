@@ -70,6 +70,18 @@ export const TVList: React.FC<TVListProps> = ({
     timeoutsRef.current.clear();
   }, [selectedCategory?.id]);
 
+  // Focus first channel after category change
+  useEffect(() => {
+    if (allChannels.length > 0) {
+      setTimeout(() => {
+        const firstChannel = document.querySelector('[data-tv-group="tv-channels"][data-tv-initial]') as HTMLElement;
+        if (firstChannel) {
+          firstChannel.focus();
+        }
+      }, 100);
+    }
+  }, [selectedCategory?.id]);
+
   // Debounced prefetch - waits 300ms and limits total prefetches
   const debouncedPreload = useCallback((channel: StalkerChannel) => {
     const channelId = String(channel.id);
@@ -93,9 +105,11 @@ export const TVList: React.FC<TVListProps> = ({
   }, [preload]);
 
   const filtered = useMemo(() =>
-    allChannels.filter((c: StalkerChannel) =>
-      c.name.toLowerCase().includes(search.toLowerCase())
-    ),
+    allChannels.filter((c: StalkerChannel) => {
+      // Filter out separator channels (names starting with ####)
+      if (c.name.startsWith('####')) return false;
+      return c.name.toLowerCase().includes(search.toLowerCase());
+    }),
   [allChannels, search]);
 
   if (isLoading && allChannels.length === 0) {

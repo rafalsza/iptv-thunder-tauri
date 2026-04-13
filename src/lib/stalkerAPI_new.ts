@@ -23,7 +23,7 @@ export class StalkerClient {
   private readonly tauriHttp: TauriHttpClient | null;
   private readonly account: StalkerAccount;
   private readonly logger = createLogger('StalkerClient');
-  readonly useTauri: boolean;
+  public readonly useTauri: boolean;
   token: string | null = null;
   private tokenExpiresAt: Date | null = null;
 
