@@ -161,3 +161,38 @@ html.light {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Android TV 4K support - ensure proper scaling */
+@media (min-width: 3840px) {
+  html, body, #root {
+    font-size: 16px;
+  }
+}
+
+/* Android TV 2K/1440p support */
+@media (min-width: 2560px) {
+  html, body, #root {
+    font-size: 14px;
+  }
+}
+
+/* Android TV FHD/1080p support */
+@media (min-width: 1920px) {
+  html, body, #root {
+    font-size: 14px;
+  }
+}
+
+/* Android TV HD/720p support */
+@media (min-width: 1280px) {
+  html, body, #root {
+    font-size: 14px;
+  }
+}
+
+/* Ensure full height on Android TV */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
