@@ -20,11 +20,12 @@ interface PlayerProps {
   movieId?: string;
   resumePosition?: number;
   onClose: () => void;
+  onEnded?: () => void;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const Player: React.FC<PlayerProps> = ({
-  url, fallbackUrls = [], name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, onClose,
+  url, fallbackUrls = [], name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, onClose, onEnded,
 }) => {
   const { setPosition } = useResumeStore();
 
@@ -41,6 +42,7 @@ export const Player: React.FC<PlayerProps> = ({
         resumePosition={resumePosition}
         setPosition={setPosition}
         onClose={onClose}
+        onEnded={onEnded}
       />
     );
   }
@@ -57,6 +59,7 @@ export const Player: React.FC<PlayerProps> = ({
       movieId={movieId}
       resumePosition={resumePosition}
       onClose={onClose}
+      onEnded={onEnded}
     />
   );
 };

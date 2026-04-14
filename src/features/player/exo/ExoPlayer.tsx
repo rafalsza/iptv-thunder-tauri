@@ -51,6 +51,7 @@ export interface ExoPlayerProps {
   resumePosition?: number;
   setPosition: (id: string, pos: number, duration?: number) => void;
   onClose: () => void;
+  onEnded?: () => void;
 }
 
 // ─── Hook: useExoPlayer ───────────────────────────────────────────────────────
@@ -82,7 +83,9 @@ function useExoPlayer(
   isVod: boolean,
   movieId: string | undefined,
   resumePosition: number,
-  setPosition: (id: string, pos: number, duration?: number) => void
+  setPosition: (id: string, pos: number, duration?: number) => void,
+  onEnded?: () => void,
+  markAsWatched?: (movieId: string, duration: number) => void
 ): UseExoPlayerReturn {
   const isMountedRef = useRef(true);
   const currentIdxRef = useRef(0);
@@ -373,6 +376,25 @@ function useExoPlayer(
                 return;
               }
               eventListenersRef.current.push(unlistenError);
+
+              const unlistenEnded = await listen(
+                'exoplayer:playback_ended',
+                () => {
+                  if (!isMountedRef.current) return;
+                  // Mark as watched when VOD ends
+                  if (isVod && movieId && markAsWatched && durationRef.current > 0) {
+                    markAsWatched(movieId, durationRef.current);
+                  }
+                  if (onEnded) {
+                    onEnded();
+                  }
+                }
+              );
+              if (!isActiveRef.current) {
+                unlistenEnded();
+                return;
+              }
+              eventListenersRef.current.push(unlistenEnded);
 
               retryCountRef.current = 0;
               setStreamState('playing');
@@ -884,10 +906,10 @@ const DeadState: React.FC<DeadStateProps> = ({ errorMsg, onRetry, onClose }) => 
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const ExoPlayer: React.FC<ExoPlayerProps> = ({
-  url, fallbackUrls = [], name = 'Stream', channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, onClose,
+  url, fallbackUrls = [], name = 'Stream', channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, onClose, onEnded,
 }) => {
-  const { setPosition } = useResumeStore();
-  const exo = useExoPlayer(url, fallbackUrls, isVod, movieId, resumePosition, setPosition);
+  const { setPosition, markAsWatched } = useResumeStore();
+  const exo = useExoPlayer(url, fallbackUrls, isVod, movieId, resumePosition, setPosition, onEnded, markAsWatched);
   const controls = useExoPlayerControls();
   const controlsRef = useRef(controls);
   useEffect(() => { controlsRef.current = controls; }, [controls]);

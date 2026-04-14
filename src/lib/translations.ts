@@ -18,6 +18,8 @@ export const translations = {
 
     autoPlay: 'Autoodtwarzanie',
     autoPlayDescription: 'Automatycznie odtwarzaj po kliknięciu kanału',
+    autoPlayEpisodes: 'Automatyczne odtwarzanie odcinków',
+    autoPlayEpisodesDescription: 'Automatycznie odtwarzaj kolejny odcinek po zakończeniu obecnego',
 
     videoQuality: 'Domyślna jakość wideo',
     auto: 'Automatyczna',
@@ -169,6 +171,8 @@ export const translations = {
 
     autoPlay: 'Auto Play',
     autoPlayDescription: 'Automatically play after clicking a channel',
+    autoPlayEpisodes: 'Auto-play episodes',
+    autoPlayEpisodesDescription: 'Automatically play next episode when current one ends',
 
     videoQuality: 'Default Video Quality',
     auto: 'Automatic',

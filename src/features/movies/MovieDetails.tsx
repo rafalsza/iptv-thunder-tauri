@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StalkerVOD } from '@/types';
 import { useFavorites } from '@/hooks/useFavorites';
 import { usePortalsStore } from '@/store/portals.store';
@@ -7,6 +7,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useMovieDetails } from './movies.hooks';
+import { X } from 'lucide-react';
 
 interface MovieDetailsProps {
   movie: StalkerVOD;
@@ -28,6 +29,16 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
   const { isItemFavorite, toggleItemFavorite } = useFavorites(accountId);
   const { getPosition, clearPosition, getProgress } = useResumeStore();
   const [isHovered, setIsHovered] = useState(false);
+
+  // Set focus on first element with data-tv-initial when component mounts
+  useEffect(() => {
+    setTimeout(() => {
+      const firstElement = document.querySelector('[data-tv-initial]') as HTMLElement;
+      if (firstElement) {
+        firstElement.focus();
+      }
+    }, 100);
+  }, []);
 
   // Fetch full movie details from API (only if we have a valid movie id > 0)
   const movieId = String(movie.id);
@@ -198,6 +209,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               <h1 className="text-4xl font-bold flex-1 pr-4">{displayMovie.name}</h1>
               <button
                 data-tv-focusable
+                data-tv-initial
                 tabIndex={0}
                 onClick={onBack}
                 className="flex items-center justify-center w-10 h-10 bg-slate-800/80 hover:bg-slate-700/80 rounded-full text-white transition-all backdrop-blur-sm flex-shrink-0"
@@ -242,14 +254,6 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                   </svg>
                   Obejrzane
-                </span>
-              )}
-              {isInProgress && progress && (
-                <span className="px-3 py-1 bg-green-700/80 rounded-md text-sm flex items-center gap-1">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
-                  </svg>
-                  {displayPercentage}%
                 </span>
               )}
             </div>
@@ -361,7 +365,15 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
       {/* Resume Dialog */}
       {showResumeDialog && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4 relative">
+            <button
+              onClick={() => setShowResumeDialog(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+              data-tv-focusable
+              tabIndex={0}
+            >
+              <X className="w-6 h-6" />
+            </button>
             <h3 className="text-xl font-bold text-white mb-2">{t('resumeWatching')}</h3>
             <p className="text-slate-300 mb-6">
               {t('watchedTo')} <span className="text-white font-semibold">{formatTime(resumePosition)}</span>

@@ -262,7 +262,30 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         <p className="font-medium dark:text-white text-slate-900">{t('autoPlay')}</p>
                         <p className="text-sm dark:text-slate-400 text-slate-600">{t('autoPlayDescription')}</p>
                       </div>
-                      <Switch checked={settings.autoPlay} onCheckedChange={(v) => updateSetting('autoPlay', v)} />
+                      <Switch
+                        data-tv-focusable="true"
+                        data-tv-group="settings-content"
+                        data-tv-initial="true"
+                        data-tv-index="30"
+                        tabIndex={0}
+                        checked={settings.autoPlay}
+                        onCheckedChange={(v) => updateSetting('autoPlay', v)}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium dark:text-white text-slate-900">{t('autoPlayEpisodes')}</p>
+                        <p className="text-sm dark:text-slate-400 text-slate-600">{t('autoPlayEpisodesDescription')}</p>
+                      </div>
+                      <Switch
+                        data-tv-focusable="true"
+                        data-tv-group="settings-content"
+                        data-tv-index="31"
+                        tabIndex={0}
+                        checked={settings.autoPlayEpisodes}
+                        onCheckedChange={(v) => updateSetting('autoPlayEpisodes', v)}
+                      />
                     </div>
 
                     <div>
@@ -270,6 +293,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         {t('videoQuality')}
                       </label>
                       <select
+                        data-tv-focusable
+                        data-tv-group="settings-content"
+                        data-tv-index="32"
+                        tabIndex={0}
                         value={settings.videoQuality}
                         onChange={(e) => updateSetting('videoQuality', e.target.value as any)}
                         className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
@@ -286,6 +313,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         {t('defaultVolume')} — {Math.round(settings.volume * 100)}%
                       </label>
                       <input
+                        data-tv-focusable
+                        data-tv-group="settings-content"
+                        data-tv-index="33"
+                        tabIndex={0}
                         id="default-volume"
                         type="range"
                         min="0"
@@ -378,7 +409,15 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         <p className="font-medium">Tryb debugowania</p>
                         <p className="text-sm dark:text-slate-400 text-slate-600">Pokazuje szczegółowe logi w konsoli (Debug Mode)</p>
                       </div>
-                      <Switch checked={settings.debugMode} onCheckedChange={(v) => updateSetting('debugMode', v)} />
+                      <Switch
+                        data-tv-focusable="true"
+                        data-tv-group="settings-content"
+                        data-tv-initial="true"
+                        data-tv-index="40"
+                        tabIndex={0}
+                        checked={settings.debugMode}
+                        onCheckedChange={(v) => updateSetting('debugMode', v)}
+                      />
                     </div>
                   </div>
                 )}

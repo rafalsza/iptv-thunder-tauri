@@ -1,7 +1,7 @@
 // =========================
 // 🧠 COMPLETE APP WITH ALL FEATURES
 // =========================
-import React, { useState, useRef, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useRef, useEffect, Suspense, lazy, useCallback } from 'react';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
@@ -13,6 +13,7 @@ import { usePortalsStore } from '@/store/portals.store';
 import { useTranslation, useTVNavigation } from '@/hooks';
 import { Settings } from '@/features/settings/Settings';
 import { ToastProvider } from '@/components/ui/Toast';
+import { getSeriesInfo } from '@/features/series/series.api';
 
 // Lazy load components
 const TVList = lazy(() => import('@/features/tv/TVList').then(module => ({ default: module.TVList })));
@@ -62,6 +63,8 @@ function AppInner({ }: AppProps) {
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
   const [selectedMovie, setSelectedMovie] = useState<StalkerVOD | null>(null);
   const [selectedSeries, setSelectedSeries] = useState<StalkerVOD | null>(null);
+  const [episodesList, setEpisodesList] = useState<StalkerVOD[]>([]);
+  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
 
   // Track previous view for back navigation
   const previousViewRef = useRef<ActiveView>('movies');
@@ -148,9 +151,42 @@ function AppInner({ }: AppProps) {
     }
   }, [activeView, isSettingsOpen, setActiveContainer]);
 
+  const handleEpisodeEnded = useCallback(async () => {
+    const { getSetting } = await import('@/hooks/useSettings');
+    const autoPlayEpisodes = await getSetting('autoPlayEpisodes');
+
+    if (autoPlayEpisodes && selectedSeries && episodesList.length > 0 && currentEpisodeIndex < episodesList.length - 1) {
+      const nextIndex = currentEpisodeIndex + 1;
+      const nextEpisode = episodesList[nextIndex];
+      setCurrentEpisodeIndex(nextIndex);
+      await handleEpisodeSelect(nextEpisode, 0);
+    }
+  }, [episodesList, currentEpisodeIndex, selectedSeries]);
+
   const handleEpisodeSelect = async (episode: StalkerVOD, resumePosition?: number) => {
     if (!client) return;
-    
+
+    // Store episodes list and current index for auto-play
+    if (selectedSeries?.id) {
+      try {
+        const seriesData = await queryClient.fetchQuery({
+          queryKey: ['series', String(selectedSeries.id), 'info'],
+          queryFn: async () => {
+            return await getSeriesInfo(client, String(selectedSeries.id));
+          },
+        });
+        if (seriesData?.episodes) {
+          const episodeIndex = seriesData.episodes.findIndex(ep => String(ep.id) === String(episode.id));
+          if (episodeIndex !== -1) {
+            setEpisodesList(seriesData.episodes);
+            setCurrentEpisodeIndex(episodeIndex);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch series episodes for auto-play:', e);
+      }
+    }
+
     try {
       const url = await queryClient.fetchQuery({
         queryKey: ['series', episode.cmd, episode.episode],
@@ -550,6 +586,7 @@ function AppInner({ }: AppProps) {
             movieId={currentPlayer.current.movieId}
             resumePosition={currentPlayer.current.resumePosition}
             onClose={currentPlayer.close}
+            onEnded={handleEpisodeEnded}
           />
         )}
       </Suspense>

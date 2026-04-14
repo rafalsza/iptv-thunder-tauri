@@ -1,13 +1,14 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { StalkerVOD } from '@/types';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useResumeStore } from '@/store/resume.store';
 import { usePortalsStore } from '@/store/portals.store';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTVNavigation } from '@/hooks/useTVNavigation';
 import { useSeriesInfo } from './series.hooks';
 import { Button } from '@/components/ui/button';
-import { Loader2, Play, Heart, ArrowLeft } from 'lucide-react';
+import { Loader2, Play, Heart, ArrowLeft, X } from 'lucide-react';
 
 interface SeriesDetailsProps {
   series: StalkerVOD;
@@ -23,12 +24,31 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   onBack,
 }) => {
   const { t } = useTranslation();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { setActiveContainer } = useTVNavigation({
+    onBack,
+  });
+
+  useEffect(() => {
+    if (containerRef.current) {
+      setActiveContainer(containerRef.current);
+      setTimeout(() => {
+        const firstInput = containerRef.current?.querySelector('[data-tv-initial]') as HTMLElement;
+        if (firstInput) {
+          firstInput.focus();
+        }
+      }, 100);
+    }
+    return () => {
+      setActiveContainer(null);
+    };
+  }, [setActiveContainer]);
   const accountId = usePortalsStore((s) =>
     s.portals.find((p) => p.id === s.activePortalId)?.id ?? 'default'
   );
 
   const { favorites, toggleItemFavorite } = useFavorites(accountId);
-  const { getPosition, clearPosition } = useResumeStore();
+  const { getPosition, clearPosition, getWatchStatus } = useResumeStore();
 
   const [selectedSeason, setSelectedSeason] = useState<string>('1');
   const [selectedEpisode, setSelectedEpisode] = useState<StalkerVOD | null>(null);
@@ -162,12 +182,15 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     : [];
 
   return (
-    <div className="flex-1  overflow-y-auto">
+    <div ref={containerRef} className="flex-1  overflow-y-auto" data-tv-container="main">
       <div className="max-w-6xl mx-auto p-8">
         {/* Header z przyciskiem wstecz po prawej */}
         <div className="flex items-start justify-between mb-6">
           <h1 className="text-4xl font-bold text-white pr-8">{fullSeries.name}</h1>
           <button
+            data-tv-focusable
+            data-tv-initial
+            tabIndex={0}
             onClick={onBack}
             className="flex items-center justify-center w-10 h-10 bg-slate-800/80 hover:bg-slate-700/80 rounded-full text-white transition-all backdrop-blur-sm flex-shrink-0"
           >
@@ -180,6 +203,8 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           {/* Poster with Play Button */}
           <div className="flex-shrink-0 w-[280px]">
             <div className="relative rounded-lg overflow-hidden group cursor-pointer"
+                 data-tv-focusable
+                 tabIndex={0}
                  onClick={() => {
                    const firstSeason = seasons.length > 0 ? seasons[0] : '1';
                    const firstSeasonEpisodes = episodesBySeason[firstSeason] || [];
@@ -266,6 +291,8 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
             <div className="flex gap-4 mt-6">
               {episodes.length > 0 && (
                 <button
+                  data-tv-focusable
+                  tabIndex={0}
                   onClick={() => {
                     const firstSeason = seasons.length > 0 ? seasons[0] : '1';
                     const firstSeasonEpisodes = episodesBySeason[firstSeason] || [];
@@ -280,6 +307,8 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 </button>
               )}
               <button
+                data-tv-focusable
+                tabIndex={0}
                 onClick={handleToggleFavorite}
                 className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors"
               >
@@ -297,6 +326,8 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           <h2 className="text-2xl font-bold text-white">{t('episodes')}</h2>
           {seasons.length > 1 && (
             <select
+              data-tv-focusable
+              tabIndex={0}
               value={selectedSeason}
               onChange={(e) => setSelectedSeason(e.target.value)}
               className="bg-slate-800 text-white px-4 py-2 rounded-lg border border-slate-700"
@@ -318,13 +349,17 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
             <div className="space-y-0 divide-y divide-slate-800">
               {currentEpisodes.map((episode, index) => {
                 const resumePos = getPosition(String(episode.id));
-                const hasResume = resumePos > 30;
+                const watchStatus = getWatchStatus(String(episode.id));
+                const hasResume = resumePos > 30 && watchStatus === 'in_progress';
+                const isWatched = watchStatus === 'watched';
                 const epNum = index + 1;
-                const displayName = episode.episodeName || episode.name || `${t('episode')} ${epNum}`;
+                const displayName = (episode.episodeName || episode.name || `${t('episode')} ${epNum}`).replace(/Season (\d+)/g, `${t('season')} $1`);
 
                 return (
                   <div
                     key={`${selectedSeason}-${episode.episode || index}-${episode.id}`}
+                    data-tv-focusable
+                    tabIndex={0}
                     onClick={() => handleEpisodePlay(episode)}
                     className="group flex items-start gap-6 py-6 cursor-pointer hover:bg-slate-800/50 transition-colors"
                   >
@@ -373,6 +408,11 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                               {t('resume')}
                             </span>
                           )}
+                          {isWatched && (
+                            <span className="text-xs bg-slate-700 text-white px-2 py-1 rounded">
+                              {t('watched')}
+                            </span>
+                          )}
                           {episode.length && (
                             <span className="text-sm text-slate-400">
                               {Math.floor(episode.length / 60)} {t('minutes')}
@@ -396,17 +436,25 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
       {/* Resume dialog */}
       {showResumeDialog && selectedEpisode && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
-          <div className="bg-slate-900 rounded-2xl p-8 max-w-md w-full mx-4">
+          <div className="bg-slate-900 rounded-2xl p-8 max-w-md w-full mx-4 relative">
+            <button
+              onClick={() => setShowResumeDialog(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+              data-tv-focusable
+              tabIndex={0}
+            >
+              <X className="w-6 h-6" />
+            </button>
             <h3 className="text-2xl font-semibold text-white mb-2">{t('resumeWatching')}</h3>
             <p className="text-slate-400 mb-8">
               <span className="text-slate-300">{t('watchedEpisodeTo')} <span className="text-white font-medium">{formatTime(resumePosition)}</span></span>
             </p>
 
             <div className="flex gap-4">
-              <Button variant="secondary" onClick={handlePlayFromStart} className="flex-1">
+              <Button variant="secondary" onClick={handlePlayFromStart} className="flex-1" data-tv-focusable tabIndex={0}>
                 {t('playFromStart')}
               </Button>
-              <Button onClick={handleResume} className="flex-1">
+              <Button onClick={handleResume} className="flex-1" data-tv-focusable tabIndex={0}>
                 {t('resumePlayback')}
               </Button>
             </div>

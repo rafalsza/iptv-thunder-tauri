@@ -190,6 +190,40 @@ html.light {
   }
 }
 
+/* Desktop 4K/High DPI support - scale navigation only */
+@media (min-resolution: 144dpi), (min-resolution: 1.5dppx) {
+  [data-tv-container="navigation"] {
+    width: 18rem !important;
+  }
+  [data-tv-container="navigation"] .text-xl {
+    font-size: 1.5rem;
+  }
+  [data-tv-container="navigation"] .text-sm {
+    font-size: 1rem;
+  }
+  [data-tv-container="navigation"] .text-xs {
+    font-size: 0.875rem;
+  }
+}
+
+@media (min-resolution: 192dpi), (min-resolution: 2dppx) {
+  [data-tv-container="navigation"] {
+    width: 20rem !important;
+  }
+  [data-tv-container="navigation"] .text-xl {
+    font-size: 1.75rem;
+  }
+  [data-tv-container="navigation"] .text-sm {
+    font-size: 1.125rem;
+  }
+  [data-tv-container="navigation"] .text-xs {
+    font-size: 1rem;
+  }
+  [data-tv-container="navigation"] button {
+    padding: 1rem 1.25rem !important;
+  }
+}
+
 /* Ensure full height on Android TV */
 html, body, #root {
   height: 100%;

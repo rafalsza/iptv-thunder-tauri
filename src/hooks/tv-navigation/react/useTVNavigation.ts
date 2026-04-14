@@ -1,9 +1,10 @@
-import { useEffect, useRef, useCallback, useMemo } from 'react';
-import { findNextNode, gridPlugin, containerPlugin, wrapPlugin, spatialPlugin, Direction, NavigationState, buildNavigationState, findElementById, filterVisibleElements, type NavigationPlugin } from './tv-navigation';
+// REACT HOOK - UI Layer
+// Thin wrapper that connects engine to React
 
-// Ownership tracking for active container across all hook instances
-let globalActiveContainer: HTMLElement | null = null;
-let ownerId: symbol | null = null;
+import { useEffect, useRef, useCallback } from 'react';
+import { findNextNode, Direction, NavigationState } from '../core/engine';
+import { buildNavigationState, findElementById, filterVisibleElements, isVisible } from '../adapters/domAdapter';
+import { gridPlugin, containerPlugin, wrapPlugin, spatialPlugin } from '../plugins';
 
 interface TVNavigationOptions {
   selector?: string;
@@ -11,23 +12,17 @@ interface TVNavigationOptions {
   onBack?: () => void;
   onEnter?: (element: HTMLElement) => void;
   onTVFocus?: (element: HTMLElement) => void;
-  plugins?: NavigationPlugin[];
-  rootElement?: HTMLElement; // Custom root for MutationObserver
-  scrollBehavior?: (el: HTMLElement) => void; // Custom scroll handler
-  onKeyDown?: (e: KeyboardEvent, api: { move: (dir: Direction) => void }) => boolean | void; // Return true to stop default
+  plugins?: any[];
 }
 
 export function useTVNavigation(options: TVNavigationOptions = {}) {
-  const {
-    selector = '[data-tv-focusable]',
-    elements: externalElements,
-    onBack,
-    onEnter,
+  const { 
+    selector = '[data-tv-focusable]', 
+    elements: externalElements, 
+    onBack, 
+    onEnter, 
     onTVFocus,
-    plugins: customPlugins = [],
-    rootElement,
-    scrollBehavior,
-    onKeyDown
+    plugins: customPlugins = []
   } = options;
 
   // Use refs for callbacks to avoid re-registering listeners
@@ -41,18 +36,14 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   useEffect(() => { onTVFocusRef.current = onTVFocus; }, [onTVFocus]);
 
   const elementsRef = useRef<HTMLElement[]>([]);
-  const stateRef = useRef<NavigationState | undefined>(undefined);
+  const stateRef = useRef<NavigationState>();
   const currentElementRef = useRef<HTMLElement | null>(null);
   const lastFocusedByContainer = useRef<Map<string, HTMLElement>>(new Map());
   const activeContainerRef = useRef<HTMLElement | null>(null);
   const scrollTimeoutRef = useRef<number | null>(null);
 
   // Combine default plugins with custom plugins
-  // Order: grid -> container (transitions/wrap) -> spatial (same container fallback)
-  const allPlugins = useMemo(
-    () => [gridPlugin, containerPlugin, spatialPlugin, wrapPlugin, ...customPlugins],
-    [customPlugins]
-  );
+  const allPlugins = [containerPlugin, gridPlugin, wrapPlugin, spatialPlugin, ...customPlugins];
 
   const getFocusableElements = useCallback(() => {
     if (externalElements) {
@@ -71,29 +62,20 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     return elements;
   }, [selector, externalElements]);
 
-  const scrollToElement = useCallback((el: HTMLElement) => {
+  const scrollToElement = (el: HTMLElement) => {
     if (scrollTimeoutRef.current !== null) {
       cancelAnimationFrame(scrollTimeoutRef.current);
     }
 
     scrollTimeoutRef.current = requestAnimationFrame(() => {
-      if (scrollBehavior) {
-        // Custom scroll behavior (e.g., for virtualized lists)
-        scrollBehavior(el);
-      } else {
-        // Default: native scrollIntoView
-        el.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
-      }
+      el.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
       scrollTimeoutRef.current = null;
     });
-  }, [scrollBehavior]);
+  };
 
   const focusElement = useCallback((el: HTMLElement | null) => {
     if (!el) return;
     if (currentElementRef.current === el) return;
-
-    // Verify element is visible before focusing
-    if (!el.offsetParent) return;
 
     el.focus({ preventScroll: true });
     scrollToElement(el);
@@ -106,36 +88,10 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     if (container?.id) {
       lastFocusedByContainer.current.set(container.id, el);
     }
-  }, [scrollToElement]);
-
-  // Instance ID for ownership tracking
-  const instanceId = useRef(Symbol());
-
-  const setActiveContainer = useCallback((container: HTMLElement | null) => {
-    // Ownership-based tracking: prevents race conditions
-    if (container) {
-      globalActiveContainer = container;
-      ownerId = instanceId.current;
-      activeContainerRef.current = container;
-    } else if (ownerId === instanceId.current) {
-      // Only clear if WE are the owner
-      globalActiveContainer = null;
-      ownerId = null;
-      activeContainerRef.current = null;
-    }
   }, []);
 
-  // Cleanup on unmount to prevent globalActiveContainer from getting stuck
-  useEffect(() => {
-    return () => {
-      if (ownerId === instanceId.current) {
-        globalActiveContainer = null;
-        ownerId = null;
-      }
-      if (scrollTimeoutRef.current !== null) {
-        cancelAnimationFrame(scrollTimeoutRef.current);
-      }
-    };
+  const setActiveContainer = useCallback((container: HTMLElement | null) => {
+    activeContainerRef.current = container;
   }, []);
 
   const updateState = useCallback(() => {
@@ -143,57 +99,21 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     const visibleElements = filterVisibleElements(elements);
     elementsRef.current = visibleElements;
 
-    // Clear stale reference if current element is no longer visible/available
-    if (currentElementRef.current && !visibleElements.includes(currentElementRef.current)) {
-      currentElementRef.current = null;
-    }
-
-    console.log('[TVNav] updateState, elements found:', visibleElements.length);
-    console.log('[TVNav] elements:', visibleElements.map(el => ({
-      id: el.dataset.tvId ?? el.id,
-      container: (el.closest('[data-tv-container]') as HTMLElement | null)?.dataset.tvContainer,
-      group: (el.closest('[data-tv-group]') as HTMLElement | null)?.dataset.tvGroup
-    })));
-
-    const currentId = currentElementRef.current
-      ? (currentElementRef.current.dataset.tvId || currentElementRef.current.id || null)
+    const currentId = currentElementRef.current 
+      ? (currentElementRef.current.dataset.tvId ?? currentElementRef.current.id)
       : null;
-    console.log('[TVNav] updateState currentId:', currentId, 'currentElement:', currentElementRef.current?.tagName);
 
     stateRef.current = buildNavigationState(visibleElements, currentId);
-    console.log('[TVNav] state built, nodes:', stateRef.current?.nodes.map(n => ({id: n.id, containerId: n.containerId})));
   }, [getFocusableElements]);
 
   const move = useCallback((direction: Direction) => {
-    console.log('[TVNav] move called:', direction);
-    console.log('[TVNav] state:', stateRef.current);
-    console.log('[TVNav] elements count:', elementsRef.current.length);
-    console.log('[TVNav] current element:', currentElementRef.current?.id);
-
-    if (!stateRef.current) {
-      console.log('[TVNav] no state, aborting');
-      return;
-    }
+    if (!stateRef.current) return;
 
     const nextId = findNextNode(stateRef.current, direction, allPlugins);
-    console.log('[TVNav] nextId from engine:', nextId);
-
-    if (!nextId) {
-      console.log('[TVNav] no nextId found');
-      return;
-    }
+    if (!nextId) return;
 
     const el = findElementById(elementsRef.current, nextId);
-    console.log('[TVNav] found element:', el?.id);
-    // Safety: verify element is still in DOM before focusing
-    if (el && document.contains(el)) {
-      // Update state currentId before focusing
-      if (stateRef.current) {
-        stateRef.current = {
-          ...stateRef.current,
-          currentId: nextId,
-        };
-      }
+    if (el) {
       focusElement(el);
     }
   }, [allPlugins, focusElement]);
@@ -214,17 +134,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     update();
 
     window.addEventListener('resize', update);
-
-    // Separate throttled scroll handler for performance
-    let scrollTimeout: number | null = null;
-    const throttledScroll = () => {
-      if (scrollTimeout !== null) return;
-      scrollTimeout = window.setTimeout(() => {
-        update();
-        scrollTimeout = null;
-      }, 50);
-    };
-    window.addEventListener('scroll', throttledScroll, true);
+    window.addEventListener('scroll', update, true);
 
     let mutationScheduled = false;
     const observer = new MutationObserver(() => {
@@ -236,9 +146,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         mutationScheduled = false;
       });
     });
-    // Scope to custom root, active container, or document.body
-    const root = rootElement ?? activeContainerRef.current ?? document.body;
-    observer.observe(root, {
+    observer.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: false,
@@ -247,17 +155,16 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
     return () => {
       window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', throttledScroll, true);
-      if (scrollTimeout !== null) {
-        clearTimeout(scrollTimeout);
-      }
+      window.removeEventListener('scroll', update, true);
       observer.disconnect();
+      if (scrollTimeoutRef.current !== null) {
+        cancelAnimationFrame(scrollTimeoutRef.current);
+      }
     };
   }, [updateState]);
 
   useEffect(() => {
-    // Use layout timing instead of setTimeout for deterministic behavior
-    const initFocus = () => {
+    const focusTimeout = setTimeout(() => {
       const elements = getFocusableElements();
       elementsRef.current = elements;
 
@@ -279,32 +186,9 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         const preferred = elements.find(el => el.dataset.tvInitial !== undefined);
         focusElement(preferred ?? elements[0] ?? null);
       }
-    };
-
-    // Double rAF ensures layout is complete
-    let rafId: number;
-    const scheduleFocus = () => {
-      rafId = requestAnimationFrame(() => {
-        requestAnimationFrame(initFocus);
-      });
-    };
-    scheduleFocus();
+    }, 100);
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // If another instance manages an active container, skip handling
-      if (globalActiveContainer && globalActiveContainer !== activeContainerRef.current) {
-        return;
-      }
-
-      // Custom key handler - return true to stop default
-      if (onKeyDown) {
-        const shouldStop = onKeyDown(e, { move });
-        if (shouldStop) {
-          e.preventDefault();
-          return;
-        }
-      }
-
       const keyMap: Record<string, () => void> = {
         ArrowRight: () => move('right'),
         Right: () => move('right'),
@@ -390,7 +274,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     document.addEventListener('focusin', handleFocus);
 
     return () => {
-      cancelAnimationFrame(rafId);
+      clearTimeout(focusTimeout);
       window.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('focusin', handleFocus);
     };

@@ -19,6 +19,7 @@ export interface AppSettings {
 
   // Player settings
   autoPlay: boolean;
+  autoPlayEpisodes: boolean;
   volume: number;
   muted: boolean;
   videoQuality: 'auto' | '1080p' | '720p' | '480p';
@@ -47,6 +48,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   sidebarCollapsed: false,
   channelViewMode: 'grid',
   autoPlay: true,
+  autoPlayEpisodes: true,
   volume: 1.0,
   muted: false,
   videoQuality: 'auto',

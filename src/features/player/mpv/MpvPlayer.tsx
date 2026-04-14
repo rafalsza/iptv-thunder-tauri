@@ -33,6 +33,7 @@ const OBSERVED_PROPERTIES = [
   ['cache-buffering-state', 'double', 'none'],
   ['video-bitrate', 'double', 'none'],
   ['volume', 'double', 'none'],
+  ['end-file', 'node', 'none'],
 ] as const satisfies MpvObservableProperty[];
 
 // ─── Helper Functions ───────────────────────────────────────────────────────────
@@ -125,6 +126,7 @@ interface PlayerProps {
   movieId?: string;
   resumePosition?: number;
   onClose: () => void;
+  onEnded?: () => void;
 }
 
 // ─── Hook: useMpvPlayer ─────────────────────────────────────────────────────────
@@ -159,7 +161,9 @@ function useMpvPlayer(
   fallbackUrls: string[],
   isVod: boolean,
   movieId: string | undefined,
-  setPosition: (id: string, pos: number, duration?: number) => void
+  setPosition: (id: string, pos: number, duration?: number) => void,
+  onEnded?: () => void,
+  markAsWatched?: (movieId: string, duration: number) => void
 ): UseMpvPlayerReturn {
   const isMountedRef = useRef(true);
   const mpvRunningRef = useRef(false);
@@ -181,6 +185,7 @@ function useMpvPlayer(
   const videoParamsReceivedRef = useRef(false);
   const firstTimePosRef = useRef(0);
   const currentCacheSecsRef = useRef(10);
+  const isEndedRef = useRef(false);
 
   // Smart retry metrics per URL
   interface UrlMetrics {
@@ -366,9 +371,14 @@ function useMpvPlayer(
   }, []);
 
   const cleanup = useCallback(async () => {
+    // Save position BEFORE resetting refs
     if (isVod && movieId && currentTimeRef.current > 30) {
       setPosition(movieId, currentTimeRef.current, durationRef.current);
     }
+    // Reset refs after setPosition to prevent old values being used for next stream
+    currentTimeRef.current = 0;
+    durationRef.current = 0;
+    lastTimeUpdateRef.current = Date.now();
     if (unobserveRef.current) {
       unobserveRef.current();
       unobserveRef.current = null;
@@ -394,6 +404,11 @@ function useMpvPlayer(
     const requestId = ++requestIdRef.current;
     currentStreamUrlRef.current = streamUrl;
     successCalledRef.current = false;
+
+    // Reset refs for new stream
+    currentTimeRef.current = 0;
+    durationRef.current = 0;
+    lastTimeUpdateRef.current = Date.now();
 
     if (isLoadingRef.current) {
       console.log('⏭️ loadUrl skipped - already loading');
@@ -449,6 +464,7 @@ function useMpvPlayer(
     videoParamsReceivedRef.current = false;
     firstTimePosRef.current = 0;
     currentCacheSecsRef.current = 10; // Reset cache-secs to default
+    isEndedRef.current = false; // Reset ended flag for new playback
 
     recordUrlStart(streamUrl);
 
@@ -641,6 +657,17 @@ function useMpvPlayer(
             // Track bitrate (in bits per second, convert to kbps)
             recordBitrate(currentStreamUrlRef.current, data / 1000);
           }
+          if (name === 'end-file' && data && typeof data === 'object') {
+            const endData = data as { reason: number };
+            // reason 0 = EOF (normal end), 3 = quit, etc.
+            // Only trigger onEnded for normal end (reason 0)
+            if (endData.reason === 0) {
+              isEndedRef.current = true;
+              if (onEnded) {
+                onEnded();
+              }
+            }
+          }
         });
         unobserveRef.current = unobserve;
       } catch (e) {
@@ -697,21 +724,46 @@ function useMpvPlayer(
 
   const isLoading = streamState === 'connecting' || streamState === 'retrying' || streamState === 'stalled';
 
-  // Stall detection watchdog
+  // Stall detection watchdog + End detection for VOD
   useEffect(() => {
     const interval = setInterval(() => {
       if (streamStateRef.current !== 'playing') return;
       if (isLoadingRef.current) return; // still loading, don't trigger stall
       if (!mpvRunningRef.current) return; // MPV not initialized yet
       if (retryCountRef.current > 0) return; // don't retry during retry
+      if (isEndedRef.current) return; // playback ended, don't trigger stall
 
       const now = Date.now();
-      if (now - lastTimeUpdateRef.current > 8000) {
+      const timeSinceLastUpdate = now - lastTimeUpdateRef.current;
+
+      // For VOD: detect end by checking if time stopped updating and we're near the end
+      if (isVod) {
+        const isNearEnd = durationRef.current > 0 && currentTimeRef.current > durationRef.current * 0.98;
+        if (isNearEnd && timeSinceLastUpdate > 5000 && !isEndedRef.current) {
+          isEndedRef.current = true;
+          // Mark as watched when VOD ends
+          if (movieId && markAsWatched && durationRef.current > 0) {
+            markAsWatched(movieId, durationRef.current);
+          }
+          if (onEnded) {
+            onEnded();
+          }
+          return;
+        }
+        // For VOD: use longer timeout and disable stall detection when near end
+        const isApproachingEnd = durationRef.current > 0 && currentTimeRef.current > durationRef.current * 0.95;
+        if (isApproachingEnd) return; // Don't trigger stall detection near end
+      }
+
+      // Stall detection
+      const stallTimeout = isVod ? 15000 : 8000; // 15s for VOD, 8s for live
+
+      if (timeSinceLastUpdate > stallTimeout) {
         // Debounce: prevent spam retry loop (min 10s between stall retries)
         if (now - lastRetryRef.current < 10000) return;
         lastRetryRef.current = now;
 
-        console.warn('⚠️ Stream stalled - no time update for 8s');
+        console.warn(`⚠️ Stream stalled - no time update for ${stallTimeout / 1000}s`);
         setStreamState('stalled');
 
         // Smart stall recovery: try seek first to unblock without reconnect
@@ -726,7 +778,7 @@ function useMpvPlayer(
     }, 3000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isVod]);
 
   const setAudioTrack = useCallback(async (id: string) => {
     try {
@@ -1441,10 +1493,10 @@ EPGDetailsModal.displayName = 'EPGDetailsModal';
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const MpvPlayer: React.FC<PlayerProps> = ({
-  url, fallbackUrls = [], name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, onClose,
+  url, fallbackUrls = [], name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, onClose, onEnded,
 }) => {
-  const { setPosition } = useResumeStore();
-  const mpv = useMpvPlayer(url, fallbackUrls, isVod, movieId, setPosition);
+  const { setPosition, markAsWatched } = useResumeStore();
+  const mpv = useMpvPlayer(url, fallbackUrls, isVod, movieId, setPosition, onEnded, markAsWatched);
   const controls = usePlayerControls();
 
   // Single EPG query for 24 hours - used by both current program and EPG modal
