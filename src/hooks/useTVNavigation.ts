@@ -219,7 +219,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     let scrollTimeout: number | null = null;
     const throttledScroll = () => {
       if (scrollTimeout !== null) return;
-      scrollTimeout = window.setTimeout(() => {
+      scrollTimeout = globalThis.setTimeout(() => {
         update();
         scrollTimeout = null;
       }, 50);
@@ -386,12 +386,12 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    globalThis.addEventListener('keydown', handleKeyDown);
     document.addEventListener('focusin', handleFocus);
 
     return () => {
       cancelAnimationFrame(rafId);
-      window.removeEventListener('keydown', handleKeyDown);
+      globalThis.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('focusin', handleFocus);
     };
   }, [getFocusableElements, move, focusElement]);

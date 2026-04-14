@@ -3,6 +3,48 @@
 
 import { NavigationState, Direction, NavigationPlugin } from '../core/types';
 
+type Handler = (state: NavigationState, current: NavigationState['nodes'][0]) => string | null;
+
+interface Rule {
+  match: (direction: Direction, current: NavigationState['nodes'][0]) => boolean;
+  handler: Handler;
+  log: string;
+}
+
+const rules: Rule[] = [
+  { match: (d, c) => d === 'down' && !!c.isSearch, handler: findMainInitial, log: 'down from search' },
+  { match: (d, c) => d === 'left' && !!c.isSearch, handler: findNavigationActive, log: 'left from search' },
+  { match: (d, c) => d === 'right' && c.containerId === 'navigation', handler: findMainInitial, log: 'right from navigation' },
+  { match: (d, c) => d === 'right' && c.groupId === 'settings-tabs', handler: findSettingsContentInitial, log: 'right from settings-tabs' },
+  { match: (d, c) => d === 'right' && c.groupId === 'favorite-categories', handler: findPortalsNavItem, log: 'right from favorite-categories' },
+];
+
+function handleNavbarNavigation(state: NavigationState, current: NavigationState['nodes'][0], direction: Direction): string | null {
+  if (current.groupId !== 'navbar') return null;
+
+  if (direction === 'down') {
+    return findSubmenuForNavbar(state, current, 'down');
+  }
+
+  if (direction === 'up') {
+    const navbarElements = state.nodes.filter(n => n.groupId === 'navbar');
+    navbarElements.sort((a, b) => a.rect.top - b.rect.top);
+
+    if (navbarElements[0]?.id === current.id) {
+      return current.id;
+    }
+
+    return findSubmenuForNavbar(state, current, 'up');
+  }
+
+  return null;
+}
+
+function handleSubmenuNavigation(state: NavigationState, current: NavigationState['nodes'][0], direction: Direction): string | null {
+  if (direction !== 'up' || !current.groupId || current.groupId === 'navbar') return null;
+  return findParentNavbarForSubmenu(state, current);
+}
+
 export const containerPlugin: NavigationPlugin = {
   name: 'container',
   findNext: (state: NavigationState, direction: Direction) => {
@@ -14,80 +56,25 @@ export const containerPlugin: NavigationPlugin = {
     }
     console.log('[ContainerPlugin] current:', current.id, 'container:', current.containerId, 'isSearch:', current.isSearch);
 
-    // Special case: going down from search input
-    if (direction === 'down' && current.isSearch) {
-      console.log('[ContainerPlugin] match: down from search');
-      return findMainInitial(state);
-    }
-
-    // Special case: going left from search input
-    if (direction === 'left' && current.isSearch) {
-      console.log('[ContainerPlugin] match: left from search');
-      return findNavigationActive(state);
-    }
-
-    // Special case: going right from navigation container
-    if (direction === 'right' && current.containerId === 'navigation') {
-      console.log('[ContainerPlugin] match: right from navigation');
-      return findMainInitial(state);
-    }
-
-    // Special case: going right from settings tabs
-    if (direction === 'right' && current.groupId === 'settings-tabs') {
-      console.log('[ContainerPlugin] match: right from settings-tabs');
-      return findSettingsContentInitial(state);
-    }
-
-    // Special case: going right from favorite-categories
-    if (direction === 'right' && current.groupId === 'favorite-categories') {
-      console.log('[ContainerPlugin] match: right from favorite-categories');
-      return findPortalsNavItem(state);
-    }
-
-    // Special case: going down from navbar item with submenu
-    // If there are elements in navigation with different group, it's a submenu
-    if (direction === 'down' && current.groupId === 'navbar') {
-      const submenu = findSubmenuForNavbar(state, current, 'down');
-      if (submenu) {
-        console.log('[ContainerPlugin] match: down from navbar to submenu');
-        return submenu;
+    for (const rule of rules) {
+      if (rule.match(direction, current)) {
+        console.log('[ContainerPlugin] match:', rule.log);
+        return rule.handler(state, current);
       }
     }
 
-    // Special case: going up from first navbar item - block it (nothing above)
-    if (direction === 'up' && current.groupId === 'navbar') {
-      // Check if this is the first navbar element
-      const navbarElements = state.nodes.filter(n => n.groupId === 'navbar');
-      navbarElements.sort((a, b) => a.rect.top - b.rect.top);
-      const isFirst = navbarElements[0]?.id === current.id;
-      if (isFirst) {
-        console.log('[ContainerPlugin] match: up from first navbar - blocking, staying on', current.id);
-        return current.id; // Block navigation - stay on current element
-      }
+    const navbarResult = handleNavbarNavigation(state, current, direction);
+    if (navbarResult) {
+      const isBlocked = navbarResult === current.id;
+      console.log('[ContainerPlugin] match:', isBlocked ? 'up from first navbar - blocking' : `${direction} from navbar to submenu`);
+      return navbarResult;
     }
 
-    // Special case: going up from navbar item below submenu
-    // If submenu is above current navbar item, go to last submenu item
-    if (direction === 'up' && current.groupId === 'navbar') {
-      const submenuLast = findSubmenuForNavbar(state, current, 'up');
-      if (submenuLast) {
-        console.log('[ContainerPlugin] match: up from navbar to submenu');
-        return submenuLast;
-      }
+    const submenuResult = handleSubmenuNavigation(state, current, direction);
+    if (submenuResult) {
+      console.log('[ContainerPlugin] match: up from submenu to navbar');
+      return submenuResult;
     }
-
-    // Special case: going up from first submenu item to parent navbar item
-    // If we're in a submenu and it's the first item, go up to navbar item above
-    if (direction === 'up' && current.groupId && current.groupId !== 'navbar') {
-      const parentNavbar = findParentNavbarForSubmenu(state, current);
-      if (parentNavbar) {
-        console.log('[ContainerPlugin] match: up from submenu to navbar');
-        return parentNavbar;
-      }
-    }
-
-    // Note: removed 'left from main' rule - let spatial handle intra-container navigation
-    // Spatial will find elements in same row/column within main container
 
     console.log('[ContainerPlugin] no match found');
     return null;
@@ -163,61 +150,86 @@ function findParentNavbarForSubmenu(state: NavigationState, current: { id: strin
   return null;
 }
 
+function hasNavbarBetween(
+  state: NavigationState,
+  containerId: string | undefined,
+  top: number,
+  bottom: number
+): boolean {
+  return state.nodes.some(
+    n => n.containerId === containerId && n.groupId === 'navbar' &&
+         n.rect.top > top && n.rect.top < bottom
+  );
+}
+
+function findSubmenuDown(
+  state: NavigationState,
+  current: { id: string; containerId?: string },
+  currentNode: NavigationState['nodes'][0],
+  submenuElements: NavigationState['nodes']
+): string | null {
+  const firstSubmenu = submenuElements[0];
+  if (firstSubmenu.rect.top <= currentNode.rect.top) {
+    return null;
+  }
+
+  if (hasNavbarBetween(state, current.containerId, currentNode.rect.top, firstSubmenu.rect.top)) {
+    console.log('[ContainerPlugin] findSubmenuForNavbar: other navbar elements between current and submenu, skip');
+    return null;
+  }
+
+  console.log('[ContainerPlugin] findSubmenuForNavbar result:', firstSubmenu.id, '(directly below)');
+  return firstSubmenu.id;
+}
+
+function findSubmenuUp(
+  state: NavigationState,
+  current: { id: string; containerId?: string },
+  currentNode: NavigationState['nodes'][0],
+  submenuElements: NavigationState['nodes']
+): string | null {
+  const lastSubmenu = submenuElements.at(-1);
+  if (!lastSubmenu || lastSubmenu.rect.top >= currentNode.rect.top) {
+    return null;
+  }
+
+  if (hasNavbarBetween(state, current.containerId, lastSubmenu.rect.top, currentNode.rect.top)) {
+    console.log('[ContainerPlugin] findSubmenuForNavbar: other navbar elements between submenu and current, skip');
+    return null;
+  }
+
+  console.log('[ContainerPlugin] findSubmenuForNavbar result:', lastSubmenu.id, '(directly above)');
+  return lastSubmenu.id;
+}
+
 function findSubmenuForNavbar(
   state: NavigationState,
   current: { id: string; containerId?: string; groupId?: string },
   direction: 'up' | 'down'
 ): string | null {
-  // Find submenu elements - elements in same container but different group
   const submenuElements = state.nodes.filter(
     n => n.containerId === current.containerId && n.groupId && n.groupId !== current.groupId
   );
   console.log('[ContainerPlugin] findSubmenuForNavbar', direction, 'submenu elements:', submenuElements.length);
-  if (submenuElements.length > 0) {
-    // Sort by top position
-    submenuElements.sort((a, b) => a.rect.top - b.rect.top);
 
-    // Get current element rect
-    const currentNode = state.nodes.find(n => n.id === current.id);
-    if (!currentNode) return null;
-
-    if (direction === 'down') {
-      // For down: return first submenu element only if current is DIRECTLY above submenu
-      // (no other navbar elements between current and submenu)
-      const firstSubmenu = submenuElements[0];
-      if (firstSubmenu.rect.top > currentNode.rect.top) {
-        // Check if there are any navbar elements between current and submenu
-        const navbarElements = state.nodes.filter(
-          n => n.containerId === current.containerId && n.groupId === 'navbar' &&
-               n.rect.top > currentNode.rect.top && n.rect.top < firstSubmenu.rect.top
-        );
-        if (navbarElements.length === 0) {
-          // Current is directly above submenu
-          console.log('[ContainerPlugin] findSubmenuForNavbar result:', firstSubmenu.id, '(directly below)');
-          return firstSubmenu.id;
-        }
-        console.log('[ContainerPlugin] findSubmenuForNavbar: other navbar elements between current and submenu, skip');
-      }
-    } else if (direction === 'up') {
-      // For up: return last submenu element only if current is DIRECTLY below submenu
-      // (no other navbar elements between submenu and current)
-      const lastSubmenu = submenuElements.at(-1);
-      if (lastSubmenu && lastSubmenu.rect.top < currentNode.rect.top) {
-        // Check if there are any navbar elements between submenu and current
-        const navbarElements = state.nodes.filter(
-          n => n.containerId === current.containerId && n.groupId === 'navbar' &&
-               n.rect.top > lastSubmenu.rect.top && n.rect.top < currentNode.rect.top
-        );
-        if (navbarElements.length === 0) {
-          // Current is directly below submenu
-          console.log('[ContainerPlugin] findSubmenuForNavbar result:', lastSubmenu.id, '(directly above)');
-          return lastSubmenu.id;
-        }
-        console.log('[ContainerPlugin] findSubmenuForNavbar: other navbar elements between submenu and current, skip');
-      }
-    }
-    console.log('[ContainerPlugin] findSubmenuForNavbar: submenu not in direction, skip');
+  if (submenuElements.length === 0) {
     return null;
   }
-  return null;
+
+  submenuElements.sort((a, b) => a.rect.top - b.rect.top);
+
+  const currentNode = state.nodes.find(n => n.id === current.id);
+  if (!currentNode) {
+    return null;
+  }
+
+  const result = direction === 'down'
+    ? findSubmenuDown(state, current, currentNode, submenuElements)
+    : findSubmenuUp(state, current, currentNode, submenuElements);
+
+  if (!result) {
+    console.log('[ContainerPlugin] findSubmenuForNavbar: submenu not in direction, skip');
+  }
+
+  return result;
 }

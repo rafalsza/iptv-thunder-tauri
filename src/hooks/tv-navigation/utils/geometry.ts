@@ -13,7 +13,7 @@ export function getDistance(
 ): { dx: number; dy: number; distance: number } {
   const dx = rect2.left - rect1.left;
   const dy = rect2.top - rect1.top;
-  const distance = Math.sqrt(dx * dx + dy * dy);
+  const distance = Math.hypot(dx, dy);
   return { dx, dy, distance };
 }
 

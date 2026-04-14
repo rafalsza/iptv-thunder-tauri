@@ -1,8 +1,17 @@
 import { useRef, useCallback } from 'react';
-import { findNextNode } from './tv-navigation/core/engine';
-import { Direction, NavigationState } from './tv-navigation/core/types';
-import { buildNavigationState, findElementById, filterVisibleElements, isVisible } from './tv-navigation/adapters/domAdapter';
-import { gridPlugin, containerPlugin, wrapPlugin, spatialPlugin } from './tv-navigation/plugins';
+import {
+  findNextNode,
+  Direction,
+  NavigationState,
+  buildNavigationState,
+  findElementById,
+  filterVisibleElements,
+  isVisible,
+  gridPlugin,
+  containerPlugin,
+  wrapPlugin,
+  spatialPlugin,
+} from './tv-navigation';
 
 interface TVFocusGraphOptions {
   selector?: string;
