@@ -2,6 +2,14 @@
 
 export type Direction = 'up' | 'down' | 'left' | 'right' | 'back';
 
+// Rule result type to distinguish between "handled" and "not handled"
+export interface RuleResult {
+  targetId?: string | null;
+  handled: boolean;
+  reason?: string;
+  action?: 'BACK' | 'CLOSE' | 'OPEN' | string;
+}
+
 // Re-export config types for public API
 export type { NavigationConfig, NavigationRule, NavigationCondition, NavigationTarget } from './config';
 export { matchCondition, findTargetByConfig } from './config';
@@ -19,6 +27,14 @@ export interface NavNode {
   isInitial?: boolean;
   isActive?: boolean;
   gridPosition?: { row: number; col: number };
+  // Semantic flags for UI-independent navigation logic
+  flags?: {
+    isResumeDialog?: boolean;
+    isCloseButton?: boolean;
+    isActionButton?: boolean;
+  };
+  // Container type for better modal detection
+  containerType?: 'modal' | 'base' | 'overlay';
 }
 
 export interface GridData {
@@ -53,6 +69,6 @@ export interface PluginContext {
 
 export interface NavigationPlugin {
   name: string;
-  findNext: (state: NavigationState, direction: Direction, context?: PluginContext) => string | null;
+  findNext: (state: NavigationState, direction: Direction, context?: PluginContext) => RuleResult | string | null;
   onContainerChange?: (container: HTMLElement | null, context: PluginContext) => void;
 }

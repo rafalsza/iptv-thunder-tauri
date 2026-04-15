@@ -17,7 +17,8 @@ const rules: Rule[] = [
   { match: (d, c) => d === 'down' && !!c.isSearch, handler: findMainInitial, log: 'down from search' },
   { match: (d, c) => d === 'left' && !!c.isSearch, handler: findNavigationActive, log: 'left from search' },
   { match: (d, c) => d === 'right' && c.containerId === 'navigation', handler: findMainInitial, log: 'right from navigation' },
-  { match: (d, c) => d === 'left' && c.containerId === 'main' && !GRID_GROUPS.has(c.groupId || ''), handler: findNavigationActive, log: 'left from main (non-grid)' },
+  { match: (d, c) => d === 'left' && c.containerId === 'main' && !GRID_GROUPS.has(c.groupId || '') && c.groupId !== 'movie-actions', handler: findNavigationActive, log: 'left from main (non-grid, non-movie-actions)' },
+  { match: (d, c) => d === 'up' && c.groupId === 'movie-actions' && !c.isInitial, handler: findMovieActionsInitial, log: 'up from movie-actions to X' },
   { match: (d, c) => d === 'back' && c.groupId === 'portal-actions', handler: findPortalsContentActive, log: 'back from portal-actions' },
 ];
 
@@ -153,4 +154,10 @@ function findPortalsContentActive(state: NavigationState): string | null {
   const contentElements = state.nodes.filter(n => n.groupId === 'portals-content');
   const activeElement = contentElements.find(n => n.isActive);
   return activeElement?.id ?? contentElements.find(n => n.isInitial)?.id ?? null;
+}
+
+function findMovieActionsInitial(state: NavigationState): string | null {
+  const movieActionsElements = state.nodes.filter(n => n.groupId === 'movie-actions');
+  const initialElement = movieActionsElements.find(n => n.isInitial);
+  return initialElement?.id ?? null;
 }

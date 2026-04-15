@@ -5,7 +5,7 @@ import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { findNextNode } from '../core/engine';
 import { Direction, NavigationState, PluginContext, ContainerState } from '../core/types';
 import { buildNavigationState, findElementById, filterVisibleElements } from '..';
-import { gridPlugin, containerPlugin, wrapPlugin, spatialPlugin, initAutoFocus, navbarPlugin, trapFocusPlugin, settingsPlugin } from '../plugins';
+import { gridPlugin, containerPlugin, wrapPlugin, spatialPlugin, initAutoFocus, navbarPlugin, trapFocusPlugin, settingsPlugin, movieDetailsPlugin } from '../plugins';
 import { setActiveContainerId, saveContainerFocus, getLastFocus } from '../plugins/containerPlugin';
 
 interface TVNavigationOptions {
@@ -56,7 +56,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   // Combine default plugins with custom plugins
   // Order: specific plugins first, then general plugins as fallback
   const allPlugins = useMemo(
-    () => [settingsPlugin, trapFocusPlugin, navbarPlugin, containerPlugin, gridPlugin, wrapPlugin, spatialPlugin, ...customPlugins],
+    () => [settingsPlugin, trapFocusPlugin, navbarPlugin, movieDetailsPlugin, containerPlugin, gridPlugin, wrapPlugin, spatialPlugin, ...customPlugins],
     [customPlugins]
   );
 
@@ -172,12 +172,21 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   const move = useCallback((direction: Direction) => {
     if (!stateRef.current) return;
 
-    const nextId = findNextNode(stateRef.current, direction, allPlugins, pluginContext);
-    if (!nextId) return;
+    const result = findNextNode(stateRef.current, direction, allPlugins, pluginContext);
+    if (!result) return;
 
-    const el = findElementById(elementsRef.current, nextId);
-    if (el) {
-      focusElement(el);
+    // Handle action intents (e.g., BACK)
+    if (result.action === 'BACK') {
+      onBackRef.current?.();
+      return;
+    }
+
+    // Handle targetId navigation
+    if (result.targetId) {
+      const el = findElementById(elementsRef.current, result.targetId);
+      if (el) {
+        focusElement(el);
+      }
     }
   }, [allPlugins, focusElement, pluginContext]);
 

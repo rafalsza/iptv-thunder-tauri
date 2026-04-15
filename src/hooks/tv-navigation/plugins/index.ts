@@ -7,3 +7,4 @@ export { initAutoFocus } from './autoFocusPlugin';
 export { navbarPlugin } from './navbarPlugin';
 export { trapFocusPlugin } from './trapFocusPlugin';
 export { settingsPlugin } from './settingsPlugin';
+export { movieDetailsPlugin } from './movieDetailsPlugin';

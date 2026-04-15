@@ -70,6 +70,17 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [resumePosition, setResumePosition] = useState(0);
 
+  const getProgressText = () => {
+    if (!progress) return '';
+    if (displayMovie.length && displayMovie.length > 0) {
+      return `Obejrzano ${formatTime(progress.position)} z ${formatTime(displayMovie.length * 60)}`;
+    }
+    if (progress.duration > 0) {
+      return `Obejrzano ${formatTime(progress.position)} z ${formatTime(progress.duration)}`;
+    }
+    return `Obejrzano ${formatTime(progress.position)}`;
+  };
+
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -130,7 +141,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
     : [];
 
   return (
-    <div className="flex-1  overflow-y-auto">
+    <div className="flex-1  overflow-y-auto" data-tv-container="main">
       <div className="max-w-6xl mx-auto p-8">
         <div className="flex gap-8">
           {/* Poster */}
@@ -175,11 +186,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                     <span className="text-white text-xs font-medium">{displayPercentage}%</span>
                   </div>
                   <p className="text-slate-300 text-xs text-center">
-                    {displayMovie.length && displayMovie.length > 0
-                      ? `Obejrzano ${formatTime(progress.position)} z ${formatTime(displayMovie.length * 60)}`
-                      : progress.duration > 0
-                        ? `Obejrzano ${formatTime(progress.position)} z ${formatTime(progress.duration)}`
-                        : `Obejrzano ${formatTime(progress.position)}`}
+                    {getProgressText()}
                   </p>
                 </div>
               )}
@@ -210,6 +217,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               <button
                 data-tv-focusable
                 data-tv-initial
+                data-tv-group="movie-actions"
                 tabIndex={0}
                 onClick={onBack}
                 className="flex items-center justify-center w-10 h-10 bg-slate-800/80 hover:bg-slate-700/80 rounded-full text-white transition-all backdrop-blur-sm flex-shrink-0"
@@ -300,7 +308,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4" data-tv-group="movie-actions">
               <button
                 data-tv-focusable
                 tabIndex={0}
