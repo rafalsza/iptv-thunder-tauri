@@ -8,6 +8,7 @@ export const spatialPlugin: NavigationPlugin = {
   name: 'spatial',
   findNext: (state: NavigationState, direction: Direction) => {
     console.log('[SpatialPlugin] checking direction:', direction);
+    if (direction === 'back') return null;
     const current = state.nodes.find(n => n.id === state.currentId);
     if (!current) {
       console.log('[SpatialPlugin] no current node');
@@ -19,9 +20,13 @@ export const spatialPlugin: NavigationPlugin = {
     let best = findBestInContainer(current, state.nodes, direction, state, current.containerId);
 
     // Phase 2: If no result and current has container, search globally but penalize other containers
-    if (!best && current.containerId) {
+    // IMPORTANT: Don't leave modal containers (e.g., settings-modal, portal-actions)
+    const isModalContainer = (id: string) => id && id !== 'main' && id !== 'navigation';
+    if (!best && current.containerId && !isModalContainer(current.containerId)) {
       console.log('[SpatialPlugin] no result in same container, searching globally');
       best = findBestGlobally(current, state.nodes, direction, state);
+    } else if (!best && current.containerId && isModalContainer(current.containerId)) {
+      console.log('[SpatialPlugin] no result in modal container, staying inside:', current.containerId);
     }
 
     console.log('[SpatialPlugin] best:', best?.id ?? 'none');

@@ -158,7 +158,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                   </svg>
-                  Obejrzane
+                   {t('watched')}
                 </div>
               )}
 
@@ -310,7 +310,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z" />
                 </svg>
-                Odtwórz
+                {t('play')}
               </button>
 
               <button
@@ -336,11 +336,11 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               >
                 {isFavorite ? (
                   <>
-                    <span>❤️</span> Usuń z ulubionych
+                    <span>❤️</span> {t('removeFromFavorites')}
                   </>
                 ) : (
                   <>
-                    <span>🤍</span> Dodaj do ulubionych
+                    <span>🤍</span>  {t('addToFavorites')}
                   </>
                 )}
               </button>

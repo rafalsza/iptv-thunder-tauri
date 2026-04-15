@@ -59,7 +59,7 @@ export {
 export { useTranslation } from './useTranslation';
 
 // 📺 TV NAVIGATION: Android TV / D-pad support
-export { useTVNavigation } from './useTVNavigation';
+export { useTVNavigation } from './tv-navigation/react/useTVNavigation';
 
 // ❤️ FAVORITES: User favorites (channels, movies, series, categories)
 export {

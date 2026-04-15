@@ -3,123 +3,112 @@
 
 import { NavigationState, Direction, NavigationPlugin } from '../core/types';
 
-const GRID_GROUPS = [
+export const GRID_GROUPS = new Set([
   'favorite-categories', 'favorite-channels',
   'tv-categories', 'tv-channels',
-  'movie-categories', 'favorite-movie-categories', 'favorite-movies',
-  'series-categories', 'favorite-series-categories', 'favorite-series'
-];
+  'movie-categories', 'favorite-movie-categories', 'favorite-movies', 'movies',
+  'series-categories', 'favorite-series-categories', 'favorite-series',
+  'portals-content', 'portal-actions'
+]);
 
 export const gridPlugin: NavigationPlugin = {
   name: 'grid',
   findNext: (state: NavigationState, direction: Direction) => {
-    console.log('[GridPlugin] checking direction:', direction);
     const current = state.nodes.find(n => n.id === state.currentId);
     if (!current) {
-      console.log('[GridPlugin] no current node');
       return null;
     }
 
     // Check if we should use grid navigation
-    if (!shouldUseGridNavigation(current, state, direction)) {
-      console.log('[GridPlugin] shouldUseGridNavigation returned false');
+    if (!shouldUseGridNavigation(current)) {
       return null;
     }
 
-    const result = findGridNext(current, state, direction);
-    console.log('[GridPlugin] result:', result);
-    return result;
+    return findGridNext({ ...current, index: current.index! }, state, direction);
   },
 };
 
 function shouldUseGridNavigation(
-  current: { index?: number; groupId?: string; containerId?: string },
-  state: NavigationState,
-  direction: Direction
+  current: { index?: number; groupId?: string; containerId?: string }
 ): boolean {
-  console.log('[GridPlugin] shouldUseGridNavigation check:', current.groupId, 'index:', current.index);
   if (current.index === undefined) {
-    console.log('[GridPlugin] no index');
     return false;
   }
   if (!current.groupId) {
-    console.log('[GridPlugin] no groupId');
     return false;
   }
-  if (!GRID_GROUPS.includes(current.groupId)) {
-    console.log('[GridPlugin] group not in GRID_GROUPS');
-    return false;
-  }
-
-  // Check for cross-container candidates
-  const hasCrossContainerCandidates = state.nodes.some(node =>
-    node.index !== undefined && node.containerId !== current.containerId
-  );
-
-  if (hasCrossContainerCandidates) {
-    console.log('[GridPlugin] has cross-container candidates, skipping grid');
-    return false;
-  }
-
-  // Allow horizontal moves in grid groups
-  const isGridGroup = GRID_GROUPS.includes(current.groupId || '');
-  if ((direction === 'right' || direction === 'left') && !isGridGroup) {
-    console.log('[GridPlugin] horizontal move but not grid group');
-    return false;
-  }
-
-  console.log('[GridPlugin] shouldUseGridNavigation returned true');
-  return true;
+  return GRID_GROUPS.has(current.groupId);
 }
 
 function findGridNext(
-  current: { index: number; rect: DOMRect; containerId?: string },
+  current: { index: number; rect: DOMRect; containerId?: string; groupId?: string; gridPosition?: { row: number; col: number } },
   state: NavigationState,
   direction: Direction
 ): string | null {
-  const currentIndex = current.index;
-
-  // Calculate column count from row grouping
-  const rowGroups = new Map<number, typeof state.nodes>();
-  for (const node of state.nodes) {
-    if (node.index === undefined) continue;
-    const rowKey = Math.round(node.rect.top / 50);
-    const group = rowGroups.get(rowKey) || [];
-    group.push(node);
-    rowGroups.set(rowKey, group);
+  // Use precomputed grid data for O(1) navigation
+  // Grid is keyed by groupId|containerId to handle multiple containers with same groupId
+  const gridKey = `${current.groupId}|${current.containerId}`;
+  const grid = state.grid?.get(gridKey);
+  if (!grid || !current.gridPosition) {
+    return null;
   }
 
-  let maxElementsInRow = 1;
-  for (const [, elements] of rowGroups) {
-    maxElementsInRow = Math.max(maxElementsInRow, elements.length);
-  }
+  const { row, col } = current.gridPosition;
+  let targetNode: { id: string; disabled?: boolean } | undefined;
 
-  const columnCount = Math.max(1, maxElementsInRow);
-
-  // Calculate target index
-  let targetIndex: number | null = null;
+  // Navigate using row/col position instead of raw index arithmetic
   if (direction === 'down') {
-    targetIndex = currentIndex + columnCount;
+    const nextRow = grid.rows[row + 1];
+    if (nextRow) {
+      // Clamp column to the next row's length
+      const targetCol = Math.min(col, nextRow.length - 1);
+      targetNode = nextRow[targetCol];
+    }
   } else if (direction === 'up') {
-    targetIndex = currentIndex - columnCount;
+    if (row === 0) {
+      // Special case: going up from first row should focus search input
+      const searchNode = state.nodes.find(n => n.isSearch);
+      if (searchNode && !searchNode.disabled) return searchNode.id;
+    } else {
+      const prevRow = grid.rows[row - 1];
+      if (prevRow) {
+        // Clamp column to the previous row's length
+        const targetCol = Math.min(col, prevRow.length - 1);
+        targetNode = prevRow[targetCol];
+      }
+    }
   } else if (direction === 'right') {
-    targetIndex = currentIndex + 1;
+    const currentRow = grid.rows[row];
+    if (currentRow && col + 1 < currentRow.length) {
+      targetNode = currentRow[col + 1];
+    }
   } else if (direction === 'left') {
-    targetIndex = currentIndex - 1;
+    const currentRow = grid.rows[row];
+    if (currentRow && col - 1 >= 0) {
+      targetNode = currentRow[col - 1];
+    } else if (col === 0) {
+      // At first column - return to active sidebar element (channels/categories)
+      const activeSidebarElement = state.nodes.find(n =>
+        n.containerId === 'navigation' &&
+        n.isActive &&
+        !n.disabled
+      );
+      if (activeSidebarElement) {
+        return activeSidebarElement.id;
+      }
+      // Fallback to first sidebar element if no active one found
+      const sidebarElement = state.nodes.find(n =>
+        n.containerId === 'navigation' &&
+        !n.disabled
+      );
+      if (sidebarElement) {
+        return sidebarElement.id;
+      }
+    }
   }
 
-  // Special case: going up from first row should focus search input
-  if (direction === 'up' && targetIndex !== null && targetIndex < 0) {
-    const searchNode = state.nodes.find(n => n.isSearch);
-    if (searchNode && !searchNode.disabled) return searchNode.id;
-  }
-
-  // Find element at target index
-  if (targetIndex !== null && targetIndex >= 0) {
-    const targetNode = state.nodes.find(n =>
-      n.index === targetIndex && !n.disabled
-    );
-    if (targetNode) return targetNode.id;
+  if (targetNode && !targetNode.disabled) {
+    return targetNode.id;
   }
 
   return null;

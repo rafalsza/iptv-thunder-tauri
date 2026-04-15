@@ -5,7 +5,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { useResumeStore } from '@/store/resume.store';
 import { usePortalsStore } from '@/store/portals.store';
 import { useTranslation } from '@/hooks/useTranslation';
-import { useTVNavigation } from '@/hooks/useTVNavigation';
+import { useTVNavigation } from '@/hooks';
 import { useSeriesInfo } from './series.hooks';
 import { Button } from '@/components/ui/button';
 import { Loader2, Play, Heart, ArrowLeft, X } from 'lucide-react';

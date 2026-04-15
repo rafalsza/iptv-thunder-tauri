@@ -8,7 +8,7 @@ import { listen } from '@tauri-apps/api/event';
 import { useChannelEPG } from '@/features/epg/epg.hooks';
 import { getCurrentProgram } from '@/features/epg/epg.api';
 import { useResumeStore } from '@/store/resume.store';
-import { useTVNavigation } from '@/hooks/useTVNavigation';
+import { useTVNavigation } from '@/hooks';
 import { StalkerEPG } from '@/types';
 
 // ─── Config ───────────────────────────────────────────────────────────────────

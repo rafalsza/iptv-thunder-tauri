@@ -233,18 +233,19 @@ function AppInner({ }: AppProps) {
   };
 
   const handleCategorySelect = (category: StalkerGenre) => {
-    
     setSelectedCategory(category);
     setSearch(''); // Reset search when changing category
 
     // Use functional update to get current activeView value
     setActiveView(currentView => {
-      
       // Navigate to appropriate view based on current context
       if (currentView === 'movie-categories' || currentView === 'favorite-movie-categories') {
         return 'movies';
       } else if (currentView === 'series-categories' || currentView === 'favorite-series-categories') {
         return 'series';
+      } else if (currentView === 'movies' || currentView === 'series' || currentView === 'tv') {
+        // Already in the correct content view, don't navigate away
+        return currentView;
       } else {
         return 'tv';
       }
@@ -551,7 +552,7 @@ function AppInner({ }: AppProps) {
 
       {/* Main Content - hidden when player active */}
       {!currentPlayer.current && (
-        <div data-tv-container="main" className="flex-1 flex flex-col">
+        <div id="main" data-tv-container="main" className="flex-1 flex flex-col">
           {/* Search Bar - only show for list views */}
           {activeView !== 'portals' && activeView !== 'movie-details' && activeView !== 'series-details' && activePortal && (
             <div className="p-4 dark:border-b border-slate-700 border-b-gray-300">

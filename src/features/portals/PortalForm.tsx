@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { usePortalsStore } from '@/store/portals.store';
 import { PortalAccount, PortalFormData } from './portals.types';
 import { useToast } from '@/components/ui/Toast';
-import { useTVNavigation } from '@/hooks/useTVNavigation';
+import { useTranslation } from '@/hooks';
 
 interface PortalFormProps {
   portal?: PortalAccount | null;
@@ -14,7 +14,7 @@ interface PortalFormProps {
 
 export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
   const { showToast } = useToast();
-  const { setActiveContainer } = useTVNavigation();
+  const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState<PortalFormData>({
     name: '',
@@ -31,22 +31,6 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
 
   const { addPortal, updatePortal } = usePortalsStore();
 
-  useEffect(() => {
-    // Set active container to trap navigation in modal
-    if (modalRef.current) {
-      setActiveContainer(modalRef.current);
-      // Focus first input with data-tv-initial
-      setTimeout(() => {
-        const firstInput = modalRef.current?.querySelector('[data-tv-initial]') as HTMLElement;
-        if (firstInput) {
-          firstInput.focus();
-        }
-      }, 100);
-    }
-    return () => {
-      setActiveContainer(null);
-    };
-  }, [setActiveContainer]);
 
   useEffect(() => {
     if (portal) {
@@ -66,19 +50,19 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
     const newErrors: Partial<Record<keyof PortalFormData, string>> = {};
 
     if (!formData.name.trim()) {
-      newErrors.name = 'Nazwa portalu jest wymagana';
+      newErrors.name = t('nameRequired');
     }
 
     if (!formData.portalUrl.trim()) {
-      newErrors.portalUrl = 'URL portalu jest wymagany';
+      newErrors.portalUrl = t('urlRequired');
     } else if (!isValidUrl(formData.portalUrl)) {
-      newErrors.portalUrl = 'Nieprawidłowy format URL';
+      newErrors.portalUrl = t('invalidUrl');
     }
 
     if (!formData.mac.trim()) {
-      newErrors.mac = 'Adres MAC jest wymagany';
+      newErrors.mac = t('macRequired');
     } else if (!isValidMac(formData.mac)) {
-      newErrors.mac = 'Nieprawidłowy format MAC (np. 00:1A:79:84:1A:AB)';
+      newErrors.mac = t('invalidMac');
     }
 
     setErrors(newErrors);
@@ -120,7 +104,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
       onClose();
     } catch (error) {
       console.error('Error saving portal:', error);
-      showToast('Wystąpił błąd podczas zapisywania portalu', 'error');
+      showToast(t('errorSavingPortal'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -141,7 +125,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
         <div className="p-4 border-b border-slate-700/50 bg-slate-800/30 backdrop-blur-sm sticky top-0 z-10">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-              {portal ? 'Edytuj Portal' : 'Dodaj Nowy Portal'}
+              {portal ? t('editPortal') : t('addNewPortal')}
             </h2>
             <button
               data-tv-focusable
@@ -159,7 +143,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
           {/* Name */}
           <div>
             <label htmlFor="portal-name" className="block text-sm font-medium text-slate-300 mb-2">
-              Nazwa Portalu *
+              {t('portalName')} *
             </label>
             <input
               id="portal-name"
@@ -183,7 +167,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
           {/* URL */}
           <div>
             <label htmlFor="portal-url" className="block text-sm font-medium text-slate-300 mb-2">
-              URL Portalu *
+              {t('portalUrl')} *
             </label>
             <input
               id="portal-url"
@@ -206,7 +190,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
             <div className="space-y-4">
               <div>
                 <label htmlFor="portal-login" className="block text-sm font-medium text-slate-300 mb-2">
-                  Login
+                  {t('login')}
                 </label>
                 <input
                   id="portal-login"
@@ -229,7 +213,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
 
               <div>
                 <label htmlFor="portal-password" className="block text-sm font-medium text-slate-300 mb-2">
-                  Hasło
+                  {t('password')}
                 </label>
                 <input
                   id="portal-password"
@@ -253,7 +237,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
 
             <div>
               <label htmlFor="portal-mac" className="block text-sm font-medium text-slate-300 mb-2">
-                Adres MAC *
+                {t('macAddress')} *
               </label>
               <input
                 id="portal-mac"
@@ -272,7 +256,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
                 <p className="mt-1.5 text-sm text-red-400">{errors.mac}</p>
               )}
               <p className="mt-1 text-xs text-slate-500">
-                Format: XX:XX:XX:XX:XX:XX
+                {t('format')}: XX:XX:XX:XX:XX:XX
               </p>
             </div>
 
@@ -286,7 +270,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               onClick={onClose}
               className="px-5 py-2.5 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700/50 hover:text-white transition-all duration-200 hover:scale-105"
             >
-              Anuluj
+              {t('cancel')}
             </button>
             <button
               type="submit"
@@ -299,11 +283,11 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               {isSubmitting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Zapisywanie...
+                  {t('saving')}
                 </>
               ) : (
                 <>
-                  {portal ? 'Zapisz' : 'Dodaj'}
+                  {portal ? t('save') : t('add')}
                 </>
               )}
             </button>

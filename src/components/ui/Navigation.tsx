@@ -44,7 +44,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
   };
 
   return (
-    <div data-tv-container="navigation" className="w-64 flex flex-col h-full">
+    <div id="navigation" data-tv-container="navigation" className="w-64 flex flex-col h-full">
       {/* Header */}
       <div className="p-6 border-b dark:border-slate-700 border-gray-300">
         <div className="flex items-center justify-center mb-4">

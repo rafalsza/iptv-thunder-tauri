@@ -1,6 +1,12 @@
 // CORE TYPES - Shared type definitions
 
-export type Direction = 'up' | 'down' | 'left' | 'right';
+export type Direction = 'up' | 'down' | 'left' | 'right' | 'back';
+
+// Re-export config types for public API
+export type { NavigationConfig, NavigationRule, NavigationCondition, NavigationTarget } from './config';
+export { matchCondition, findTargetByConfig } from './config';
+export type { CreateNavigationOptions } from './factory';
+export { createNavigation } from './factory';
 
 export interface NavNode {
   id: string;
@@ -12,6 +18,13 @@ export interface NavNode {
   isSearch?: boolean;
   isInitial?: boolean;
   isActive?: boolean;
+  gridPosition?: { row: number; col: number };
+}
+
+export interface GridData {
+  rows: NavNode[][];
+  columnCount: number;
+  indexMap: Map<number, NavNode>;
 }
 
 export interface NavigationState {
@@ -19,9 +32,27 @@ export interface NavigationState {
   nodes: NavNode[];
   lastXByRow?: Map<number, number>;
   lastPositionByAxis?: { x: number; y: number };
+  grid?: Map<string, GridData>; // groupId -> GridData
+}
+
+// Per-instance container state (NOT global)
+export interface ContainerState {
+  lastFocusedByContainer: Map<string, string>; // containerId -> elementId
+  activeContainerId: string | null;
+}
+
+// Plugin context passed from hook to plugins
+export interface PluginContext {
+  setActiveContainer: (container: HTMLElement | null) => void;
+  getActiveContainer: () => HTMLElement | null;
+  saveLastFocus: (containerId: string, element: HTMLElement) => void;
+  getLastFocus: (containerId: string) => HTMLElement | null;
+  // Instance-scoped container state (prevents cross-instance bugs)
+  container: ContainerState;
 }
 
 export interface NavigationPlugin {
   name: string;
-  findNext: (state: NavigationState, direction: Direction) => string | null;
+  findNext: (state: NavigationState, direction: Direction, context?: PluginContext) => string | null;
+  onContainerChange?: (container: HTMLElement | null, context: PluginContext) => void;
 }

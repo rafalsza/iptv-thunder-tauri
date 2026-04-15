@@ -1,5 +1,7 @@
 // UTILS - Geometry utilities
 
+import { Direction } from '../core/types';
+
 export function getCenter(rect: DOMRect): { x: number; y: number } {
   return {
     x: rect.left + rect.width / 2,
@@ -38,8 +40,9 @@ export function overlapsHorizontally(rect1: DOMRect, rect2: DOMRect): boolean {
 export function isInDirection(
   from: DOMRect,
   to: DOMRect,
-  direction: 'up' | 'down' | 'left' | 'right'
+  direction: Direction
 ): boolean {
+  if (direction === 'back') return false;
   const { dx, dy } = getDistance(from, to);
   const tolerance = 5; // Small tolerance for elements at almost same level
 

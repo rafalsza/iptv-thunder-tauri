@@ -26,13 +26,53 @@ export const PortalList: React.FC = () => {
     testingPortal ? s.portals.find(p => p.id === testingPortal) : undefined
   );
   const menuRef = useRef<HTMLDivElement>(null);
+  const lastPortalRef = useRef<string | null>(null);
+
+  // Auto-focus first menu button when menu opens, restore focus when closes
+  useEffect(() => {
+    if (activeMenuPortal) {
+      // Menu is opening - save the portal ID
+      lastPortalRef.current = activeMenuPortal;
+
+      // Delay to ensure DOM and navigation state are fully updated
+      const timeout = setTimeout(() => {
+        const firstButton = menuRef.current?.querySelector('[data-tv-initial]') as HTMLElement;
+        if (firstButton) {
+          firstButton.focus();
+        }
+      }, 200);
+
+      return () => clearTimeout(timeout);
+    } else if (lastPortalRef.current) {
+      // Menu is closing - restore focus to the portal card
+      const timeout = setTimeout(() => {
+        // Don't restore focus if a modal is open (e.g., PortalTest, PortalForm)
+        const openModal = document.querySelector('[data-tv-container]:not([data-tv-container="main"]):not([data-tv-container="navigation"])');
+        if (openModal) {
+          return;
+        }
+
+        const portalCard = document.querySelector(`[data-portal-id="${lastPortalRef.current}"]`) as HTMLElement;
+        if (portalCard) {
+          portalCard.focus();
+        }
+      }, 100);
+      return () => clearTimeout(timeout);
+    }
+  }, [activeMenuPortal]);
 
   // Close menu when clicking outside or pressing Escape
   useEffect(() => {
     if (!activeMenuPortal) return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      // Don't close if clicking on the portal card (data-portal-id)
+      // or inside the menu itself
+      const isPortalCard = target.closest('[data-portal-id]') !== null;
+      const isInsideMenu = menuRef.current?.contains(target) ?? false;
+
+      if (!isPortalCard && !isInsideMenu) {
         setActiveMenuPortal(null);
       }
     };
@@ -43,11 +83,11 @@ export const PortalList: React.FC = () => {
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('click', handleClickOutside);
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('click', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [activeMenuPortal]);
@@ -83,7 +123,7 @@ export const PortalList: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen p-8">
+    <div data-tv-container="main" className="min-h-screen p-8">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-12">
         <div className="flex flex-wrap justify-between items-start gap-6">
@@ -117,10 +157,12 @@ export const PortalList: React.FC = () => {
           {portals.map((portal, portalIndex) => (
             <div
               key={portal.id}
+              data-portal-id={portal.id}
               data-tv-focusable
               data-tv-index={portalIndex}
               data-tv-group="portals-content"
-              tabIndex={0}
+              data-tv-disabled={activeMenuPortal === portal.id ? true : undefined}
+              tabIndex={activeMenuPortal === portal.id ? -1 : 0}
               onKeyDown={(e) => {
                 // TV remote: Enter opens action menu, Escape closes it
                 if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
@@ -133,6 +175,7 @@ export const PortalList: React.FC = () => {
               }}
               onClick={() => setActiveMenuPortal(portal.id)}
               className={`group relative backdrop-blur-xl rounded-3xl p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 cursor-pointer ${getStatusColor(portal)} dark:border border-white/10 border-gray-300/20`}
+              style={{ pointerEvents: activeMenuPortal === portal.id ? 'none' : undefined }}
             >
             {/* Header */}
             <div className="flex justify-between items-start mb-6">
@@ -152,25 +195,20 @@ export const PortalList: React.FC = () => {
               {activeMenuPortal === portal.id && (
                 <div
                   ref={menuRef}
-                  className="absolute inset-0 z-20 bg-slate-900/95 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center gap-3 p-4"
-                  data-tv-focusable
-                  data-tv-group="portal-actions"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape' || e.key === 'Back') {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setActiveMenuPortal(null);
-                    }
-                  }}
+                  className="absolute inset-0 z-20 bg-slate-900/95 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center gap-3 p-4 pointer-events-auto"
+                  data-tv-container="portal-actions"
+                  style={{ pointerEvents: 'auto' }}
                 >
                   <p className="text-white font-semibold mb-2">{portal.name}</p>
                   <div className="flex flex-col gap-2 w-full max-w-[200px]">
                     {portal.id !== activePortalId && (
                       <button
                         data-tv-focusable
+                        data-tv-group="portal-actions"
                         data-tv-index={0}
-                        onClick={() => { handleSetActive(portal); setActiveMenuPortal(null); }}
+                        data-tv-initial
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); handleSetActive(portal); setActiveMenuPortal(null); }}
                         className="flex items-center gap-3 px-4 py-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-xl transition-all"
                       >
                         <span>🎯</span>
@@ -179,8 +217,10 @@ export const PortalList: React.FC = () => {
                     )}
                     <button
                       data-tv-focusable
+                      data-tv-group="portal-actions"
                       data-tv-index={1}
-                      onClick={() => { setTestingPortal(portal.id); setActiveMenuPortal(null); }}
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); setTestingPortal(portal.id); setActiveMenuPortal(null); }}
                       className="flex items-center gap-3 px-4 py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-xl transition-all"
                     >
                       <span>🔄</span>
@@ -188,8 +228,10 @@ export const PortalList: React.FC = () => {
                     </button>
                     <button
                       data-tv-focusable
+                      data-tv-group="portal-actions"
                       data-tv-index={2}
-                      onClick={() => { handleEdit(portal); setActiveMenuPortal(null); }}
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); handleEdit(portal); setActiveMenuPortal(null); }}
                       className="flex items-center gap-3 px-4 py-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-xl transition-all"
                     >
                       <span>✏️</span>
@@ -197,8 +239,10 @@ export const PortalList: React.FC = () => {
                     </button>
                     <button
                       data-tv-focusable
+                      data-tv-group="portal-actions"
                       data-tv-index={3}
-                      onClick={() => { handleDelete(portal); setActiveMenuPortal(null); }}
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(portal); setActiveMenuPortal(null); }}
                       className="flex items-center gap-3 px-4 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-xl transition-all"
                     >
                       <span>🗑️</span>
@@ -207,7 +251,9 @@ export const PortalList: React.FC = () => {
                     <button
                       type="button"
                       data-tv-focusable
+                      data-tv-group="portal-actions"
                       data-tv-index={4}
+                      tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); setActiveMenuPortal(null); }}
                       className="flex items-center gap-3 px-4 py-3 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 rounded-xl transition-all mt-2"
                     >
@@ -276,7 +322,7 @@ export const PortalList: React.FC = () => {
       {/* Help text */}
       {portals.length > 0 && (
         <div className="max-w-7xl mx-auto mt-8 text-center text-sm dark:text-slate-500 text-slate-500">
-          {t('clickPortalForActions') || 'Kliknij w portal lub naciśnij Enter, aby otworzyć menu akcji'}
+          {t('clickPortalForActions')}
         </div>
       )}
 

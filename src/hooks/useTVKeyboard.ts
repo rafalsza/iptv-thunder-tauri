@@ -62,6 +62,12 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
         }
       };
 
+      // Check if user is typing in an input field
+      const isTyping =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement).isContentEditable;
+
       const keyMap: Record<string, () => void> = {
         Right: () => handleNavigation('right'),
         Left: () => handleNavigation('left'),
@@ -70,12 +76,7 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
         Enter: handleEnter,
         OK: handleEnter,
         Select: handleEnter,
-        // eslint-disable-next-line @typescript-eslint/no-unused-property
         Backspace: () => {
-          const isTyping =
-            e.target instanceof HTMLInputElement ||
-            e.target instanceof HTMLTextAreaElement ||
-            (e.target as HTMLElement).isContentEditable;
           if (!isTyping) {
             onBackRef.current?.();
           }
@@ -86,7 +87,10 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
 
       const handler = keyMap[e.key];
       if (handler) {
-        e.preventDefault();
+        // Don't prevent default if user is typing and pressed Backspace
+        if (!(isTyping && e.key === 'Backspace')) {
+          e.preventDefault();
+        }
         handler();
       }
     };

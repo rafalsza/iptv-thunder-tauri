@@ -64,6 +64,24 @@ export const translations = {
     active: 'Aktywny',
     inactive: 'Nieaktywny',
     lastUpdated: 'Ostatnia aktualizacja',
+    clickPortalForActions: 'Kliknij w portal lub naciśnij Enter, aby otworzyć menu akcji',
+    
+    // Portal Form
+    portalName: 'Nazwa Portalu',
+    portalUrl: 'URL Portalu',
+    login: 'Login',
+    password: 'Hasło',
+    macAddress: 'Adres MAC',
+    nameRequired: 'Nazwa portalu jest wymagana',
+    urlRequired: 'URL portalu jest wymagany',
+    invalidUrl: 'Nieprawidłowy format URL',
+    macRequired: 'Adres MAC jest wymagany',
+    invalidMac: 'Nieprawidłowy format MAC (np. 00:1A:79:84:1A:AB)',
+    editPortal: 'Edytuj Portal',
+    addNewPortal: 'Dodaj Nowy Portal',
+    saving: 'Zapisywanie...',
+    errorSavingPortal: 'Wystąpił błąd podczas zapisywania portalu',
+    format: 'Format',
 
     // TV Channels
     channels: 'Kanały',
@@ -216,6 +234,24 @@ export const translations = {
     active: 'Active',
     inactive: 'Inactive',
     lastUpdated: 'Last updated',
+    clickPortalForActions: 'Click on a portal or press Enter to open the action menu',
+    
+    // Portal Form
+    portalName: 'Portal Name',
+    portalUrl: 'Portal URL',
+    login: 'Login',
+    password: 'Password',
+    macAddress: 'MAC Address',
+    nameRequired: 'Portal name is required',
+    urlRequired: 'Portal URL is required',
+    invalidUrl: 'Invalid URL format',
+    macRequired: 'MAC address is required',
+    invalidMac: 'Invalid MAC format (e.g. 00:1A:79:84:1A:AB)',
+    editPortal: 'Edit Portal',
+    addNewPortal: 'Add New Portal',
+    saving: 'Saving...',
+    errorSavingPortal: 'An error occurred while saving the portal',
+    format: 'Format',
 
     // TV Channels
     channels: 'Channels',

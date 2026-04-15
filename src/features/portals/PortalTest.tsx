@@ -1,7 +1,7 @@
 // =========================
 // 🔄 PORTAL TEST COMPONENT
 // =========================
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { PortalAccount, PortalTestResult } from './portals.types';
 
@@ -13,6 +13,17 @@ interface PortalTestProps {
 export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
   const [testResult, setTestResult] = useState<PortalTestResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  const testButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Restore focus to test button when test completes
+  useEffect(() => {
+    if (!isTesting && testResult && testButtonRef.current) {
+      // Small delay to ensure button is enabled and focusable
+      setTimeout(() => {
+        testButtonRef.current?.focus();
+      }, 50);
+    }
+  }, [isTesting, testResult]);
 
   if (!portal) {
     return null;
@@ -85,7 +96,7 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-600 overflow-hidden">
+      <div data-tv-container="portal-test" className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-600 overflow-hidden">
         {/* Header */}
         <div className="p-6 border-b border-slate-700 bg-slate-800 bg-opacity-50">
           <div className="flex justify-between items-center">
@@ -93,6 +104,10 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
               Test Połączenia
             </h2>
             <button
+              data-tv-focusable
+              data-tv-group="portal-test"
+              data-tv-index={0}
+              tabIndex={0}
               onClick={onClose}
               className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white"
             >
@@ -121,6 +136,12 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
           {/* Test Button */}
           <div className="text-center mb-6">
             <button
+              ref={testButtonRef}
+              data-tv-focusable
+              data-tv-group="portal-test"
+              data-tv-index={1}
+              data-tv-initial
+              tabIndex={0}
               onClick={runTest}
               disabled={isTesting}
               className="px-8 py-3 bg-gradient-to-r from-green-700 to-green-800 text-white rounded-xl hover:from-green-800 hover:to-green-900 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-3 mx-auto shadow-lg"
@@ -211,6 +232,10 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
         <div className="p-6 border-t border-slate-700 bg-slate-800 bg-opacity-50">
           <div className="flex justify-end">
             <button
+              data-tv-focusable
+              data-tv-group="portal-test"
+              data-tv-index={2}
+              tabIndex={0}
               onClick={onClose}
               className="px-6 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-700 hover:text-white transition-colors"
             >

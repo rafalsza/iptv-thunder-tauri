@@ -439,7 +439,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             </div>
 
             {/* Footer */}
-            <div data-tv-container="settings-footer" className="dark:border-t border-slate-700 border-t-gray-300 px-8 py-5 flex justify-end gap-3">
+            <div data-tv-group="settings-footer" className="dark:border-t border-slate-700 border-t-gray-300 px-8 py-5 flex justify-end gap-3">
               <Button
                 data-tv-focusable
                 data-tv-index={100}
