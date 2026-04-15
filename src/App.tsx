@@ -9,6 +9,7 @@ import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel, StalkerVOD, StalkerGenre } from '@/types';
 import { usePlayer } from '@/features/player/player.hooks';
 import { Navigation } from '@/components/ui/Navigation';
+import { TitleBar } from '@/components/ui/TitleBar';
 import { usePortalsStore } from '@/store/portals.store';
 import { useTranslation, useTVNavigation } from '@/hooks';
 import { Settings } from '@/features/settings/Settings';
@@ -32,6 +33,7 @@ const FavoriteMoviesList = lazy(() => import('@/features/movies/FavoriteMoviesLi
 const SeriesCategoriesList = lazy(() => import('@/features/series/SeriesCategoriesList').then(module => ({ default: module.SeriesCategoriesList })));
 const FavoriteSeriesCategoriesList = lazy(() => import('@/features/series/FavoriteSeriesCategoriesList').then(module => ({ default: module.FavoriteSeriesCategoriesList })));
 const FavoriteSeriesList = lazy(() => import('@/features/series/FavoriteSeriesList').then(module => ({ default: module.FavoriteSeriesList })));
+const ForYouSection = lazy(() => import('@/features/personalized/ForYouSection').then(module => ({ default: module.ForYouSection })));
 
 // Create a client with persistent cache
 const queryClient = new QueryClient({
@@ -49,7 +51,7 @@ const persister = createAsyncStoragePersister({
   storage: globalThis.localStorage,
 });
 
-type ActiveView = 'tv' | 'movies' | 'series' | 'portals' | 'categories' | 'favorite-categories' | 'favorite-channels' | 'movie-categories' | 'favorite-movie-categories' | 'favorite-movies' | 'movie-details' | 'series-details' | 'series-categories' | 'favorite-series-categories' | 'favorite-series';
+type ActiveView = 'tv' | 'movies' | 'series' | 'portals' | 'categories' | 'favorite-categories' | 'favorite-channels' | 'movie-categories' | 'favorite-movie-categories' | 'favorite-movies' | 'movie-details' | 'series-details' | 'series-categories' | 'favorite-series-categories' | 'favorite-series' | 'for-you';
 
 interface AppProps {
   // Remove activeAccount prop - we'll get it from store
@@ -260,6 +262,14 @@ function AppInner({ }: AppProps) {
       icon: '🌐',
       active: activeView === 'portals',
       onClick: () => setActiveView('portals'),
+    },
+    {
+      id: 'for-you',
+      label: t('forYou') || 'Dla Ciebie',
+      icon: '⭐',
+      active: activeView === 'for-you',
+      disabled: !activePortal,
+      onClick: () => setActiveView('for-you'),
     },
     {
       id: 'tv',
@@ -513,7 +523,14 @@ function AppInner({ }: AppProps) {
             />
           </Suspense>
         );
-      
+
+      case 'for-you':
+        return (
+          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading For You...</div>}>
+            <ForYouSection />
+          </Suspense>
+        );
+
       default:
         return (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Portals...</div>}>
@@ -542,55 +559,61 @@ function AppInner({ }: AppProps) {
   const currentPlayer = getCurrentPlayer();
 
   return (
-    <div className={`flex h-full ${currentPlayer.current ? 'bg-transparent' : 'dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 bg-gradient-to-br from-white via-gray-100 to-white'}`}>
-      {/* Navigation - hidden when player active */}
-      {!currentPlayer.current && (
-        <Navigation 
-          items={navigationItems}
-        />
-      )}
+    <div className={`flex flex-col h-full ${currentPlayer.current ? 'bg-transparent' : 'dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 bg-gradient-to-br from-white via-gray-100 to-white'}`}>
+      {/* Custom TitleBar - always visible */}
+      <TitleBar />
 
-      {/* Main Content - hidden when player active */}
-      {!currentPlayer.current && (
-        <div id="main" data-tv-container="main" className="flex-1 flex flex-col">
-          {/* Search Bar - only show for list views */}
-          {activeView !== 'portals' && activeView !== 'movie-details' && activeView !== 'series-details' && activePortal && (
-            <div className="p-4 dark:border-b border-slate-700 border-b-gray-300">
-              <input
-                type="text"
-                placeholder={`${t('search')}...`}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                data-tv-focusable
-                data-tv-search
-                tabIndex={0}
-                className="w-full px-4 py-3 dark:bg-slate-700 bg-gray-200 dark:bg-opacity-50 bg-opacity-50 dark:border border-slate-600 border-gray-300 rounded-lg dark:text-white text-slate-900 dark:placeholder-slate-400 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-700 focus:border-green-700"
-              />
-            </div>
-          )}
-
-          {/* Active View */}
-          {renderActiveView()}
-        </div>
-      )}
-
-      {/* Player */}
-      <Suspense fallback={<div className="fixed inset-0 bg-black z-50 flex items-center justify-center"><div className="text-white">Loading player...</div></div>}>
-        {currentPlayer.current && (
-          <Player
-            url={currentPlayer.current.url}
-            name={currentPlayer.current.name}
-            channelId={currentPlayer.current.channelId}
-            client={client || undefined}
-            buffering={currentPlayer.buffering}
-            isVod={currentPlayer.current.isVod}
-            movieId={currentPlayer.current.movieId}
-            resumePosition={currentPlayer.current.resumePosition}
-            onClose={currentPlayer.close}
-            onEnded={handleEpisodeEnded}
+      {/* Main Content Area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Navigation - hidden when player active */}
+        {!currentPlayer.current && (
+          <Navigation
+            items={navigationItems}
           />
         )}
-      </Suspense>
+
+        {/* Main Content - hidden when player active */}
+        {!currentPlayer.current && (
+          <div id="main" data-tv-container="main" className="flex-1 flex flex-col">
+            {/* Search Bar - only show for list views */}
+            {activeView !== 'portals' && activeView !== 'movie-details' && activeView !== 'series-details' && activePortal && (
+              <div className="p-4 dark:border-b border-slate-700/50 border-b-gray-300/50">
+                <input
+                  type="text"
+                  placeholder={`${t('search')}...`}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  data-tv-focusable
+                  data-tv-search
+                  tabIndex={0}
+                  className="w-full px-4 py-3 dark:bg-slate-800/50 bg-gray-200/50 dark:bg-opacity-50 bg-opacity-50 dark:border border-slate-600/50 border-gray-300/50 rounded-lg dark:text-white text-slate-900 dark:placeholder-slate-400 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-700 focus:border-green-700 backdrop-blur-sm shadow-sm transition-all duration-200"
+                />
+              </div>
+            )}
+
+            {/* Active View */}
+            {renderActiveView()}
+          </div>
+        )}
+
+        {/* Player */}
+        <Suspense fallback={<div className="fixed inset-0 bg-black z-50 flex items-center justify-center"><div className="text-white">Loading player...</div></div>}>
+          {currentPlayer.current && (
+            <Player
+              url={currentPlayer.current.url}
+              name={currentPlayer.current.name}
+              channelId={currentPlayer.current.channelId}
+              client={client || undefined}
+              buffering={currentPlayer.buffering}
+              isVod={currentPlayer.current.isVod}
+              movieId={currentPlayer.current.movieId}
+              resumePosition={currentPlayer.current.resumePosition}
+              onClose={currentPlayer.close}
+              onEnded={handleEpisodeEnded}
+            />
+          )}
+        </Suspense>
+      </div>
 
       <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>

@@ -117,8 +117,27 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     }
 
     scrollTimeoutRef.current = requestAnimationFrame(() => {
-      // Use 'center' for TV to ensure focused element is prominently visible
-      el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+      // Find the nearest scrollable ancestor (prefer the sidebar nav if inside it)
+      const scrollableContainer = el.closest('[data-tv-container="navigation"] nav') ||
+                                  el.closest('.overflow-y-auto') ||
+                                  el.closest('[data-tv-container]') ||
+                                  document.documentElement;
+
+      if (scrollableContainer && scrollableContainer !== document.documentElement) {
+        // Calculate scroll position to center the element
+        const containerRect = scrollableContainer.getBoundingClientRect();
+        const elementRect = el.getBoundingClientRect();
+        const relativeTop = elementRect.top - containerRect.top;
+        const scrollTop = scrollableContainer.scrollTop + relativeTop - (containerRect.height / 2) + (elementRect.height / 2);
+
+        scrollableContainer.scrollTo({
+          top: scrollTop,
+          behavior: 'auto'
+        });
+      } else {
+        // Fallback to default scrollIntoView if no scrollable container found
+        el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+      }
       scrollTimeoutRef.current = null;
     });
   };

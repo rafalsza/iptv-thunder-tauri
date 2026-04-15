@@ -8,6 +8,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel, StalkerGenre } from '@/types';
 import { ChannelLogo } from './ChannelLogo';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface TVListProps {
   client: StalkerClient;
@@ -131,42 +132,66 @@ export const TVList: React.FC<TVListProps> = ({
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Category Header - Unified Style */}
-      {selectedCategory && (
-        <div className="border-b dark:border-slate-700 border-gray-300 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-700 rounded-lg flex items-center justify-center text-xl">
-              {selectedCategory.id === '*' ? '🌍' : '📺'}
+      <AnimatePresence>
+        {selectedCategory && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="border-b dark:border-slate-700/50 border-gray-200/50 p-4 backdrop-blur-sm"
+          >
+            <div className="flex items-center gap-3">
+              <motion.div
+                className="w-10 h-10 bg-gradient-to-br from-green-600 to-green-800 rounded-lg flex items-center justify-center text-xl shadow-glow"
+                whileHover={{ scale: 1.1, rotate: 5 }}
+                transition={{ duration: 0.2 }}
+              >
+                {selectedCategory.id === '*' ? '🌍' : '📺'}
+              </motion.div>
+              <div className="flex-1">
+                <h2 className="text-lg font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+                <p className="text-sm dark:text-slate-400 text-slate-600">
+                  {allChannels.length} {t('channels').toLowerCase()}
+                </p>
+              </div>
+              {/* Favorite Category Button */}
+              <motion.button
+                data-tv-focusable
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (selectedCategory) {
+                    toggleCategory(String(selectedCategory.id), selectedCategory.title);
+                  }
+                }}
+                whileHover={{ scale: 1.2 }}
+                whileTap={{ scale: 0.9 }}
+                className="text-xl p-2 rounded-full dark:hover:bg-slate-700/50 dark:focus:bg-slate-700/50 hover:bg-gray-200/50 focus:bg-gray-200/50 transition-all"
+                title={isCategoryFavorite(String(selectedCategory.id)) ? t('removeFromFavorites') : t('addToFavorites')}
+              >
+                <motion.span
+                  animate={isCategoryFavorite(String(selectedCategory.id)) ? { scale: [1, 1.3, 1] } : {}}
+                  transition={{ duration: 0.3 }}
+                >
+                  {isCategoryFavorite(String(selectedCategory.id)) ? '❤️' : '🤍'}
+                </motion.span>
+              </motion.button>
             </div>
-            <div className="flex-1">
-              <h2 className="text-lg font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
-              <p className="text-sm dark:text-slate-400 text-slate-600">
-                {allChannels.length} {t('channels').toLowerCase()}
-              </p>
-            </div>
-            {/* Favorite Category Button */}
-            <button
-              data-tv-focusable
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (selectedCategory) {
-                  toggleCategory(String(selectedCategory.id), selectedCategory.title);
-                }
-              }}
-              className="text-xl hover:scale-110 transition-transform p-2 rounded-full dark:hover:bg-slate-700 dark:focus:bg-slate-700 hover:bg-gray-200 focus:bg-gray-200"
-              title={isCategoryFavorite(String(selectedCategory.id)) ? t('removeFromFavorites') : t('addToFavorites')}
-            >
-              {isCategoryFavorite(String(selectedCategory.id)) ? '❤️' : '🤍'}
-            </button>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Channels Grid */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <motion.div
+          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
           {filtered.map((channel: StalkerChannel, index: number) => (
-          <div
+          <motion.div
             key={channel.id}
             data-tv-focusable
             data-tv-group="tv-channels"
@@ -179,7 +204,12 @@ export const TVList: React.FC<TVListProps> = ({
             onMouseEnter={() => debouncedPreload(channel)}
             onFocus={() => debouncedPreload(channel)}
             onClick={() => onChannelSelect(channel)}
-            className="p-3 dark:border border-slate-700 border-gray-300 rounded-lg cursor-pointer dark:hover:bg-slate-700 hover:bg-gray-200 dark:hover:border-green-700 hover:border-green-700 transition-all dark:focus:bg-slate-700 focus:bg-gray-200 dark:focus:border-green-700 focus:border-green-700"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, delay: index * 0.03 }}
+            whileHover={{ scale: 1.05, y: -4, boxShadow: '0 10px 40px rgba(34, 197, 94, 0.2)' }}
+            whileTap={{ scale: 0.98 }}
+            className="p-3 dark:border border-slate-700/50 border-gray-300/50 rounded-xl cursor-pointer dark:bg-slate-800/30 bg-gray-100/30 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 dark:hover:border-green-700 hover:border-green-700 transition-all dark:focus:bg-slate-700/50 focus:bg-gray-200/50 dark:focus:border-green-700 focus:border-green-700 backdrop-blur-sm"
           >
             <div className="flex justify-between items-start">
               <div className="flex-1 min-w-0">
@@ -190,7 +220,7 @@ export const TVList: React.FC<TVListProps> = ({
                   <p className="text-xs dark:text-slate-400 text-slate-600">#{channel.number}</p>
                 )}
               </div>
-              <button
+              <motion.button
                 tabIndex={-1}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -200,15 +230,22 @@ export const TVList: React.FC<TVListProps> = ({
                     cmd: channel.cmd,
                   });
                 }}
-                className="ml-2 text-lg hover:scale-110 transition-transform focus:scale-110"
+                whileHover={{ scale: 1.2 }}
+                whileTap={{ scale: 0.9 }}
+                className="ml-2 text-lg"
               >
-                {isItemFavorite('live', String(channel.id)) ? '❤️' : '🤍'}
-              </button>
+                <motion.span
+                  animate={isItemFavorite('live', String(channel.id)) ? { scale: [1, 1.3, 1] } : {}}
+                  transition={{ duration: 0.3 }}
+                >
+                  {isItemFavorite('live', String(channel.id)) ? '❤️' : '🤍'}
+                </motion.span>
+              </motion.button>
             </div>
             {!!channel.logo && <ChannelLogo logo={channel.logo} name={channel.name} />}
-          </div>
+          </motion.div>
         ))}
-        </div>
+        </motion.div>
         
         {/* Infinite scroll trigger and loading state */}
         {isLoading && (

@@ -5,6 +5,8 @@ import React, { useState } from 'react';
 import { ChevronDown, Power } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { exit } from '@tauri-apps/plugin-process';
+import { invoke } from '@tauri-apps/api/core';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export type NavigationItem = {
   id: string;
@@ -34,35 +36,42 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
 
   const handleCloseApp = async () => {
     try {
-      // Use Tauri exit to close entire application
+      // Try desktop exit first
       await exit(0);
-    } catch (error) {
-      console.error('Failed to exit app:', error);
-      // Fallback for web/browser mode
-      window.close();
+    } catch {
+      try {
+        // Try Android exit via invoke
+        await invoke('exit_app');
+      } catch {
+        // Final fallback
+        window.close();
+      }
     }
   };
 
   return (
-    <div id="navigation" data-tv-container="navigation" className="w-64 flex flex-col h-full">
+    <div
+      id="navigation"
+      data-tv-container="navigation"
+      className="flex flex-col h-full w-56 dark:bg-slate-900/40 bg-white/40 backdrop-blur-md border-r dark:border-slate-700/30 border-gray-200/30"
+    >
       {/* Header */}
-      <div className="p-6 border-b dark:border-slate-700 border-gray-300">
-        <div className="flex items-center justify-center mb-4">
+      <div className="p-6 border-b dark:border-slate-700/30 border-gray-200/30">
+        <div className="flex items-center justify-center">
           <img src="/logo.svg" alt="IPTV Thunder" className="h-10 w-auto max-w-full" />
         </div>
       </div>
 
       {/* Navigation Items */}
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-4 space-y-3 overflow-y-auto">
         {items.map((item, index) => {
           const hasSubItems = item.subItems && item.subItems.length > 0;
           const isExpanded = expandedItem === item.id;
-          // Use base index for main items, submenu will use base+1, base+2, etc.
           const baseIndex = index * 10;
 
           return (
-            <div key={item.id}>
-              <button
+            <div key={item.id} className="relative group">
+              <motion.button
                 data-tv-focusable
                 data-tv-index={baseIndex}
                 data-tv-group="navbar"
@@ -77,92 +86,110 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
                   }
                 }}
                 disabled={item.disabled}
-                className={`w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 transition-all duration-200 relative overflow-hidden group ${
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full text-left px-4 py-4 rounded-2xl flex items-center gap-4 transition-all duration-200 relative overflow-hidden group ${
                   item.active && !hasSubItems
-                    ? 'bg-gradient-to-r from-green-700 to-green-800 text-white shadow-lg shadow-green-500/25'
+                    ? 'bg-green-700/90 text-white'
                     : item.disabled
-                    ? 'dark:bg-slate-700 dark:bg-opacity-30 bg-gray-200 dark:text-slate-500 text-slate-500 cursor-not-allowed'
-                    : 'dark:bg-slate-700 dark:bg-opacity-50 bg-gray-200 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-600 hover:bg-gray-300 hover:text-white hover:shadow-md hover:translate-x-1'
+                    ? 'dark:bg-slate-700/20 bg-gray-200/30 dark:text-slate-500 text-slate-500 cursor-not-allowed'
+                    : 'dark:bg-slate-800/30 bg-gray-100/30 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 hover:text-white'
                 }`}
               >
                 {/* Active state gradient overlay */}
                 {item.active && !hasSubItems && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 animate-pulse"></div>
-                )}
-                
-                {/* Hover effect background */}
-                {!item.disabled && !item.active && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-green-700 opacity-0 group-hover:opacity-10 transition-opacity duration-200"></div>
-                )}
-                
-                <span className={`text-xl relative z-10 ${item.active && !hasSubItems ? 'animate-pulse' : ''}`}>
-                  {item.icon}
-                </span>
-                <span className="font-medium relative z-10 flex-1 dark:text-white text-slate-900">{item.label}</span>
-                
-                {/* Dropdown arrow for items with sub-items */}
-                {hasSubItems && (
-                  <ChevronDown 
-                    className={`w-4 h-4 relative z-10 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10"
+                    animate={{ x: ['-100%', '100%'] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
                   />
                 )}
                 
-                {/* Disabled indicator */}
+                <span className={`text-xl relative z-10 flex-shrink-0 ${item.active && !hasSubItems ? 'animate-pulse' : ''}`}>
+                  {item.icon}
+                </span>
+                
+                <span className="font-medium relative z-10 flex-1 dark:text-white text-slate-900">
+                  {item.label}
+                </span>
+                
+                {hasSubItems && (
+                  <motion.div
+                    initial={{ opacity: 0, rotate: -90 }}
+                    animate={{ opacity: 1, rotate: isExpanded ? 180 : 0 }}
+                    exit={{ opacity: 0, rotate: -90 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <ChevronDown className="w-4 h-4 relative z-10 dark:text-white text-slate-900" />
+                  </motion.div>
+                )}
+                
                 {item.disabled && (
-                  <span className="ml-auto text-xs dark:bg-slate-600 bg-gray-400 px-2 py-1 rounded-full">🔒</span>
+                  <span className="ml-auto text-xs dark:bg-slate-600 bg-gray-400 px-2 py-1 rounded-full">
+                    🔒
+                  </span>
                 )}
                 
                 {/* Active indicator */}
                 {item.active && !hasSubItems && (
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full animate-pulse" />
                 )}
-              </button>
+              </motion.button>
+
 
               {/* Submenu */}
-              {hasSubItems && isExpanded && item.subItems && (
-                <div data-tv-group={item.id} className="mt-1 ml-4 space-y-1">
-                  {item.subItems.map((subItem, subIndex) => (
-                    <button
-                      data-tv-focusable
-                      data-tv-index={baseIndex + subIndex + 1}
-                      data-tv-initial={subIndex === 0}
-                      tabIndex={0}
-                      key={subItem.id}
-                      onClick={subItem.onClick}
-                      className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all duration-200 text-sm dark:bg-slate-700 dark:bg-opacity-30 bg-gray-200 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-600 hover:bg-gray-300 hover:text-white hover:translate-x-1"
-                    >
-                      <span className="text-sm dark:text-white text-slate-900">▸</span>
-                      <span className="dark:text-white text-slate-900">{subItem.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <AnimatePresence>
+                {hasSubItems && isExpanded && item.subItems && (
+                  <motion.div
+                    data-tv-group={item.id}
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="mt-6 ml-5 space-y-3 overflow-visible p-2"
+                  >
+                    {item.subItems.map((subItem, subIndex) => (
+                      <motion.button
+                        key={subItem.id}
+                        data-tv-focusable
+                        data-tv-index={baseIndex + subIndex + 1}
+                        data-tv-initial={subIndex === 0}
+                        tabIndex={0}
+                        onClick={subItem.onClick}
+                        whileHover={{ scale: 1.02, x: 4 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full text-left px-5 py-4 rounded-xl flex items-center gap-3 transition-all duration-200 text-sm dark:bg-slate-800/20 bg-gray-100/20 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-700/40 hover:bg-gray-200/40 hover:text-white"
+                      >
+                        <span className="text-sm dark:text-white text-slate-900">▸</span>
+                        <span className="dark:text-white text-slate-900">{subItem.label}</span>
+                      </motion.button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           );
         })}
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t dark:border-slate-700 border-gray-300 space-y-3">
+      <div className="p-4 border-t dark:border-slate-700/30 border-gray-200/30 space-y-4">
         {/* Close App Button - subtle style */}
-        <button
+        <motion.button
           data-tv-focusable
           data-tv-index={60}
           tabIndex={0}
           onClick={handleCloseApp}
-          className="w-full px-3 py-2 rounded-lg flex items-center justify-center gap-2 transition-all duration-200 dark:bg-slate-800 bg-gray-100 dark:text-slate-400 text-slate-600 dark:hover:bg-red-500/10 hover:bg-red-500/10 dark:hover:text-red-400 hover:text-red-400 dark:border-slate-700 border-gray-300 dark:hover:border-red-500/30 hover:border-red-500/30"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          className="w-full px-5 py-3 rounded-xl flex items-center justify-center gap-3 transition-all duration-200 dark:bg-slate-800/30 bg-gray-100/30 dark:text-slate-400 text-slate-600 dark:hover:bg-red-500/10 hover:bg-red-500/10 dark:hover:text-red-400 hover:text-red-400"
         >
           <Power className="w-4 h-4" />
           <span className="text-sm font-medium dark:text-white text-slate-900">{t('exit') || 'Wyjdź'}</span>
-        </button>
+        </motion.button>
 
-        <div className="bg-gradient-to-r from-green-700 to-green-800 rounded-lg p-3 text-center">
-          <p className="text-xs text-white opacity-80">v1.0.0</p>
-          <div className="flex justify-center gap-1 mt-2">
-            <div className="w-1 h-1 bg-white rounded-full opacity-60"></div>
-            <div className="w-1 h-1 bg-white rounded-full opacity-80"></div>
-            <div className="w-1 h-1 bg-white rounded-full"></div>
-          </div>
+        <div className="text-center py-3">
+          <p className="text-xs dark:text-slate-500 text-slate-400">v1.0.0</p>
         </div>
       </div>
     </div>

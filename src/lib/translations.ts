@@ -91,6 +91,11 @@ export const translations = {
     addToFavorites: 'Dodaj do ulubionych',
     removeFromFavorites: 'Usuń z ulubionych',
 
+    // Personalized
+    forYou: 'Dla Ciebie',
+    basedOnHistory: 'Na podstawie historii',
+    noWatchHistory: 'Rozpocznij oglądanie, aby zobaczyć rekomendacje',
+
     // Movies & Series
     movies: 'Filmy',
     series: 'Seriale',
@@ -260,6 +265,11 @@ export const translations = {
     favoriteChannels: 'Favorite channels',
     addToFavorites: 'Add to favorites',
     removeFromFavorites: 'Remove from favorites',
+
+    // Personalized
+    forYou: 'For You',
+    basedOnHistory: 'Based on history',
+    noWatchHistory: 'Start watching to see recommendations',
 
     // Movies & Series
     movies: 'Movies',

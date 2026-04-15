@@ -235,9 +235,9 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                   {displayMovie.year}
                 </span>
               )}
-              {displayMovie.genres_str?.trim() && (
+              {(displayMovie.genres_str?.trim() || displayMovie.genre?.trim()) && (
                 <span className="px-3 py-1 bg-slate-700/80 rounded-md text-sm">
-                  {displayMovie.genres_str}
+                  {displayMovie.genres_str?.trim() || displayMovie.genre?.trim()}
                 </span>
               )}
               {displayMovie.rating_imdb && (
