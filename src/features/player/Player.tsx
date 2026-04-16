@@ -2,10 +2,11 @@
 // 🎬 PLAYER — Platform-Aware Wrapper
 // =========================
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MpvPlayer } from './mpv/MpvPlayer';
 import { ExoPlayer } from './exo/ExoPlayer';
 import { useResumeStore } from '@/store/resume.store';
+import { platform } from '@tauri-apps/plugin-os';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,15 +29,45 @@ export const Player: React.FC<PlayerProps> = ({
   url, fallbackUrls = [], name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, onClose, onEnded,
 }) => {
   const { setPosition } = useResumeStore();
+  const [currentPlatform, setCurrentPlatform] = useState<string>('desktop');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Detect platform - use ExoPlayer for Android TV, MPV for desktop
-  const platform = globalThis.__TAURI__?.__currentWindow?.label?.includes('android') ? 'android' : 'desktop';
+  // Detect platform using OS plugin
+  useEffect(() => {
+    const detectPlatform = () => {
+      try {
+        const osPlatform = platform(); // 'android' | 'ios' | 'windows' | 'macOS' | 'linux'
+        setCurrentPlatform(osPlatform);
+      } catch {
+        // Plugin not available - assume desktop
+        setCurrentPlatform('desktop');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    detectPlatform();
+  }, []);
 
-  if (platform === 'android') {
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-black">
+        <div className="animate-spin w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  // Use ExoPlayer for Android, MPV for desktop (Linux/Windows/macOS)
+  const isMobile = currentPlatform === 'android' || currentPlatform === 'ios';
+
+  if (isMobile) {
     return (
       <ExoPlayer
         url={url}
         fallbackUrls={fallbackUrls}
+        name={name}
+        channelId={channelId}
+        client={client}
+        buffering={buffering}
         isVod={isVod}
         movieId={movieId}
         resumePosition={resumePosition}

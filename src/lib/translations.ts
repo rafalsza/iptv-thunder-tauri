@@ -29,6 +29,9 @@ export const translations = {
 
     defaultVolume: 'Domyślna głośność',
 
+    hardwareAcceleration: 'Przyspieszenie sprzętowe',
+    hardwareAccelerationDescription: 'Używa dekodowania sprzętowego GPU (wymaga sterowników)',
+
     epgSource: 'Źródło EPG',
     customEpgUrl: 'Własny URL EPG',
 
@@ -66,6 +69,12 @@ export const translations = {
     lastUpdated: 'Ostatnia aktualizacja',
     clickPortalForActions: 'Kliknij w portal lub naciśnij Enter, aby otworzyć menu akcji',
     
+    // Delete Confirmation
+    deletePortal: 'Usuń Portal',
+    deletePortalConfirm: 'Czy na pewno chcesz usunąć portal',
+    thisActionCannotBeUndone: 'Ta operacja jest nieodwracalna.',
+    areYouSure: 'Czy jesteś pewien?',
+
     // Portal Form
     portalName: 'Nazwa Portalu',
     portalUrl: 'URL Portalu',
@@ -205,6 +214,9 @@ export const translations = {
 
     defaultVolume: 'Default Volume',
 
+    hardwareAcceleration: 'Hardware Acceleration',
+    hardwareAccelerationDescription: 'Uses GPU hardware decoding (requires drivers)',
+
     epgSource: 'EPG Source',
     customEpgUrl: 'Custom EPG URL',
 
@@ -241,6 +253,12 @@ export const translations = {
     lastUpdated: 'Last updated',
     clickPortalForActions: 'Click on a portal or press Enter to open the action menu',
     
+    // Delete Confirmation
+    deletePortal: 'Delete Portal',
+    deletePortalConfirm: 'Are you sure you want to delete portal',
+    thisActionCannotBeUndone: 'This action cannot be undone.',
+    areYouSure: 'Are you sure?',
+
     // Portal Form
     portalName: 'Portal Name',
     portalUrl: 'Portal URL',

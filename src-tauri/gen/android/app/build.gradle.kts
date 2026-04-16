@@ -46,14 +46,10 @@ android {
         }
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "1.8"
     }
     buildFeatures {
         buildConfig = true
-    }
-    lint {
-        checkReleaseBuilds = false
-        abortOnError = false
     }
 }
 
@@ -62,21 +58,14 @@ rust {
 }
 
 dependencies {
-    implementation(libs.webkit)
-    implementation(libs.appcompat)
-    implementation(libs.activity.ktx)
-    implementation(libs.material)
+    implementation("androidx.webkit:webkit:1.14.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("androidx.activity:activity-ktx:1.10.1")
+    implementation("com.google.android.material:material:1.12.0")
     
-    // Media3 ExoPlayer for Android TV
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.ui)
-    implementation(libs.media3.session)
-    implementation(libs.media3.exoplayer.hls)
-    implementation(libs.media3.exoplayer.dash)
-    implementation(libs.media3.datasource.okhttp)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.junit.ext)
-    androidTestImplementation(libs.espresso.core)
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.4")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
 }
 
 apply(from = "tauri.build.gradle.kts")

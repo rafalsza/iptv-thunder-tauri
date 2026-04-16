@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { TauriHttpClient } from './tauriHttp';
 import { StalkerAccount, HandshakeResponse, StalkerProfile, StalkerChannel, StalkerGenre, StalkerVOD, StalkerEPG } from '@/types';
 import { createLogger, createDebugRequestContext, logDebugRequest, logDebugSuccess, logDebugError } from './logger';
+import { platform } from '@tauri-apps/plugin-os';
 
 // Re-export types for consumers
 export type { StalkerAccount, StalkerProfile, StalkerChannel, StalkerGenre, StalkerVOD, StalkerEPG };
@@ -30,31 +31,45 @@ export class StalkerClient {
   constructor(account: StalkerAccount) {
     this.account = account;
     
-    // Multiple detection methods for Tauri environment
+    // Detect Tauri environment using OS plugin (most reliable)
+    let osPlatform: string | null = null;
+    try {
+      osPlatform = platform(); // Returns 'android' | 'ios' | 'windows' | 'macos' | 'linux' | etc.
+    } catch {
+      // OS plugin not available - not in Tauri
+      osPlatform = null;
+    }
+
+    // Fallback detection methods
     const hasTauriAPI = globalThis.window !== undefined && '__TAURI__' in globalThis.window;
     const isTauriBuild = import.meta.env?.TAURI === 'true';
-    const isLocalhost = globalThis.window !== undefined && 
-                       (globalThis.window.location.hostname === 'localhost' || 
+    const isLocalhost = globalThis.window !== undefined &&
+                       (globalThis.window.location.hostname === 'localhost' ||
                         globalThis.window.location.hostname === '127.0.0.1' ||
+                        globalThis.window.location.hostname === 'tauri.localhost' || // Android/iOS WebView
                         globalThis.window.location.protocol === 'tauri:');
-    
-    // Use Tauri HTTP if any indicator suggests we're in Tauri
-    this.useTauri = hasTauriAPI || isTauriBuild || isLocalhost;
 
-    const baseURL = account.portalUrl.endsWith('/') 
-      ? account.portalUrl 
-      : account.portalUrl + '/';
+    // Use Tauri HTTP if OS plugin detected a platform OR any fallback indicator
+    this.useTauri = !!osPlatform || hasTauriAPI || isTauriBuild || isLocalhost;
+
+    // Sanitize portalUrl - remove null bytes and other problematic characters
+    const sanitizedPortalUrl = account.portalUrl.replace(/\x00/g, '').trim();
+
+    const baseURL = sanitizedPortalUrl.endsWith('/')
+      ? sanitizedPortalUrl
+      : sanitizedPortalUrl + '/';
 
     // Log only once per session to avoid spam
     if (!globalThis.window.__STALKER_CLIENT_LOGGED__) {
-      console.log('StalkerClient environment detection:', { 
-        useTauri: this.useTauri, 
+      console.log('StalkerClient environment detection:', {
+        useTauri: this.useTauri,
+        osPlatform,
         hasTauriAPI,
         isTauriBuild,
         isLocalhost,
         hostname: globalThis.window.location.hostname,
         protocol: globalThis.window.location.protocol,
-        tauriEnv: import.meta.env?.TAURI 
+        tauriEnv: import.meta.env?.TAURI
       });
       globalThis.window.__STALKER_CLIENT_LOGGED__ = true;
     }

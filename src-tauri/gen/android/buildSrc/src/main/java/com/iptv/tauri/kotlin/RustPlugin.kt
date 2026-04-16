@@ -1,11 +1,9 @@
 import com.android.build.api.dsl.ApplicationExtension
-import com.iptv.tauri.kotlin.BuildTask
 import org.gradle.api.DefaultTask
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.get
-import org.gradle.kotlin.dsl.register
 
 const val TASK_GROUP = "rust"
 
@@ -65,20 +63,16 @@ open class RustPlugin : Plugin<Project> {
                     val targetName = targetPair.value
                     val targetArch = archList[targetPair.index]
                     val targetArchCapitalized = targetArch.replaceFirstChar { it.uppercase() }
-                    
-                    val taskName = "rustBuild$targetArchCapitalized$profileCapitalized"
-                    val targetBuildTask = if (tasks.names.contains(taskName)) {
-                        tasks.named(taskName, BuildTask::class.java).get()
-                    } else {
-                        tasks.register<BuildTask>(taskName) {
-                            group = TASK_GROUP
-                            description = "Build dynamic library in $profile mode for $targetArch"
-                        }.get()
+                    val targetBuildTask = project.tasks.maybeCreate(
+                        "rustBuild$targetArchCapitalized$profileCapitalized",
+                        BuildTask::class.java
+                    ).apply {
+                        group = TASK_GROUP
+                        description = "Build dynamic library in $profile mode for $targetArch"
+                        rootDirRel = config.rootDirRel
+                        target = targetName
+                        release = profile == "release"
                     }
-                    
-                    targetBuildTask.rootDirRel = config.rootDirRel
-                    targetBuildTask.target = targetName
-                    targetBuildTask.release = profile == "release"
 
                     buildTask.dependsOn(targetBuildTask)
                     tasks["merge$targetArchCapitalized${profileCapitalized}JniLibFolders"].dependsOn(

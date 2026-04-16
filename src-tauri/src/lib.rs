@@ -163,16 +163,19 @@ async fn check_mpv_available() -> Result<bool, String> {
 
 // ExoPlayer commands - on Android these invoke the native Kotlin plugin
 // On desktop these are stubs (desktop uses libmpv instead)
+// On Android, these should be handled by ExoPlayerPlugin Kotlin class
 #[tauri::command]
 async fn exoplayer_init() -> Result<serde_json::Value, String> {
+    println!("[Rust] exoplayer_init called");
     #[cfg(target_os = "android")]
     {
-        // On Android, this command is handled by the ExoPlayerPlugin Kotlin class
-        Ok(serde_json::json!({"success": true}))
+        println!("[Rust] exoplayer_init: Android detected, should be handled by Kotlin plugin");
+        // Note: If Kotlin plugin doesn't intercept this, it will return this stub response
+        Ok(serde_json::json!({"success": true, "source": "rust_stub"}))
     }
     #[cfg(not(target_os = "android"))]
     {
-        // Desktop uses libmpv, not ExoPlayer
+        println!("[Rust] exoplayer_init: Desktop - returning stub");
         Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
     }
 }
@@ -180,14 +183,15 @@ async fn exoplayer_init() -> Result<serde_json::Value, String> {
 #[tauri::command]
 #[allow(unused_variables)]
 async fn exoplayer_play(url: String, resume_position: Option<i64>) -> Result<serde_json::Value, String> {
+    println!("[Rust] exoplayer_play called with url: {}", url);
     #[cfg(target_os = "android")]
     {
-        // On Android, this command is handled by the ExoPlayerPlugin Kotlin class
-        Ok(serde_json::json!({"success": true, "url": url}))
+        println!("[Rust] exoplayer_play: Android detected, should be handled by Kotlin plugin");
+        Ok(serde_json::json!({"success": true, "url": url, "source": "rust_stub"}))
     }
     #[cfg(not(target_os = "android"))]
     {
-        // Desktop uses libmpv, not ExoPlayer
+        println!("[Rust] exoplayer_play: Desktop - returning stub");
         Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
     }
 }
@@ -344,7 +348,11 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_os::init())
+        // Android video player (uses ExoPlayer via Media3)
+        .plugin(tauri_plugin_videoplayer::init())
         .invoke_handler(tauri::generate_handler![
+            // Note: exoplayer_* commands replaced by tauri-plugin-videoplayer
             stalker_request,
             fetch_image,
             check_mpv_available,

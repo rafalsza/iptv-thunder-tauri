@@ -94,10 +94,10 @@ export function useTVFocusGraph(options: TVFocusGraphOptions = {}) {
   const findNextElement = useCallback((direction: Direction) => {
     if (!stateRef.current) return null;
 
-    const nextId = findNextNode(stateRef.current, direction, allPlugins);
-    if (!nextId) return null;
+    const result = findNextNode(stateRef.current, direction, allPlugins);
+    if (!result.targetId) return null;
 
-    const el = findElementById(elementsRef.current, nextId);
+    const el = findElementById(elementsRef.current, result.targetId);
     return el ?? null;
   }, [allPlugins]);
 

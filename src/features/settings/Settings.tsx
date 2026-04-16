@@ -327,6 +327,21 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         className="w-full accent-green-700"
                       />
                     </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium dark:text-white text-slate-900">{t('hardwareAcceleration')}</p>
+                        <p className="text-sm dark:text-slate-400 text-slate-600">{t('hardwareAccelerationDescription')}</p>
+                      </div>
+                      <Switch
+                        data-tv-focusable="true"
+                        data-tv-group="settings-content"
+                        data-tv-index="34"
+                        tabIndex={0}
+                        checked={settings.hardwareAcceleration}
+                        onCheckedChange={(v) => updateSetting('hardwareAcceleration', v)}
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -406,7 +421,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                   <div className="max-w-md space-y-8">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">Tryb debugowania</p>
+                        <p className="font-medium dark:text-white text-slate-900">Tryb debugowania</p>
                         <p className="text-sm dark:text-slate-400 text-slate-600">Pokazuje szczegółowe logi w konsoli (Debug Mode)</p>
                       </div>
                       <Switch

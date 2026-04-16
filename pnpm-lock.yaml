@@ -50,6 +50,9 @@ importers:
       '@tauri-apps/plugin-opener':
         specifier: ^2.5.3
         version: 2.5.3
+      '@tauri-apps/plugin-os':
+        specifier: ^2.3.2
+        version: 2.3.2
       '@tauri-apps/plugin-process':
         specifier: ^2.3.1
         version: 2.3.1
@@ -104,6 +107,9 @@ importers:
       tauri-plugin-libmpv-api:
         specifier: ^0.3.2
         version: 0.3.2
+      tauri-plugin-videoplayer-api:
+        specifier: ^0.1.6
+        version: 0.1.6
       video.js:
         specifier: ^8.23.8
         version: 8.23.8
@@ -1256,6 +1262,9 @@ packages:
 
   '@tauri-apps/plugin-opener@2.5.3':
     resolution: {integrity: sha512-CCcUltXMOfUEArbf3db3kCE7Ggy1ExBEBl51Ko2ODJ6GDYHRp1nSNlQm5uNCFY5k7/ufaK5Ib3Du/Zir19IYQQ==}
+
+  '@tauri-apps/plugin-os@2.3.2':
+    resolution: {integrity: sha512-n+nXWeuSeF9wcEsSPmRnBEGrRgOy6jjkSU+UVCOV8YUGKb2erhDOxis7IqRXiRVHhY8XMKks00BJ0OAdkpf6+A==}
 
   '@tauri-apps/plugin-process@2.3.1':
     resolution: {integrity: sha512-nCa4fGVaDL/B9ai03VyPOjfAHRHSBz5v6F/ObsB73r/dA3MHHhZtldaDMIc0V/pnUw9ehzr2iEG+XkSEyC0JJA==}
@@ -2877,6 +2886,9 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
+  tauri-plugin-videoplayer-api@0.1.6:
+    resolution: {integrity: sha512-1jvGFt5aA5b+685r5NVR2IuvaEwE5kdGnsjgFx7vSqxvNiozPkwrMfAE3Y3gB6CEkcca+rkLKVRAOZX/aTq5rQ==}
+
   test-exclude@6.0.0:
     resolution: {integrity: sha512-cAGWPIyOHU6zlmg88jwm7VRyXnMN7iV68OGAbYDk/Mh/xC/pzVPlQtY6ngoIH/5/tciuhGfvESU8GrHrcxD56w==}
     engines: {node: '>=8'}
@@ -4285,6 +4297,10 @@ snapshots:
       '@tauri-apps/api': 2.10.1
 
   '@tauri-apps/plugin-opener@2.5.3':
+    dependencies:
+      '@tauri-apps/api': 2.10.1
+
+  '@tauri-apps/plugin-os@2.3.2':
     dependencies:
       '@tauri-apps/api': 2.10.1
 
@@ -5896,6 +5912,10 @@ snapshots:
     dependencies:
       7z-wasm: 1.2.0
       '@tauri-apps/api': 2.8.0
+
+  tauri-plugin-videoplayer-api@0.1.6:
+    dependencies:
+      '@tauri-apps/api': 2.10.1
 
   test-exclude@6.0.0:
     dependencies:

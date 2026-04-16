@@ -14,6 +14,7 @@ export const PortalList: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [testingPortal, setTestingPortal] = useState<string | null>(null);
   const [activeMenuPortal, setActiveMenuPortal] = useState<string | null>(null);
+  const [deletingPortal, setDeletingPortal] = useState<PortalAccount | null>(null);
 
   const {
     portals,
@@ -98,9 +99,18 @@ export const PortalList: React.FC = () => {
   };
 
   const handleDelete = (portal: PortalAccount) => {
-    if (globalThis.confirm(`${t('delete')} portal "${portal.name}"?`)) {
-      deletePortal(portal.id);
+    setDeletingPortal(portal);
+  };
+
+  const confirmDelete = () => {
+    if (deletingPortal) {
+      deletePortal(deletingPortal.id);
+      setDeletingPortal(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setDeletingPortal(null);
   };
 
   const handleSetActive = (portal: PortalAccount) => {
@@ -361,6 +371,69 @@ export const PortalList: React.FC = () => {
           portal={testingPortalData}
           onClose={() => setTestingPortal(null)}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingPortal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div
+            data-tv-container="modal"
+            className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl shadow-2xl w-full max-w-md border border-slate-700/50 overflow-hidden"
+          >
+            {/* Header */}
+            <div className="p-6 border-b border-slate-700/50 bg-gradient-to-r from-red-500/10 to-orange-500/10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/20 flex items-center justify-center text-2xl backdrop-blur-sm border border-red-400/20">
+                  🗑️
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">
+                    {t('deletePortal')}
+                  </h2>
+                  <p className="text-sm text-slate-400">{t('areYouSure')}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <p className="text-slate-300 mb-2">
+                {t('deletePortalConfirm')} <span className="font-semibold text-white">"{deletingPortal.name}"</span>?
+              </p>
+              <p className="text-sm text-slate-500">
+                {t('thisActionCannotBeUndone')}
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 p-6 pt-2 border-t border-slate-700/50">
+              <button
+                type="button"
+                data-tv-focusable
+                data-tv-group="delete-confirm"
+                data-tv-index={0}
+                tabIndex={0}
+                onClick={cancelDelete}
+                className="px-5 py-2.5 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700/50 hover:text-white transition-all duration-200 hover:scale-105"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                data-tv-focusable
+                data-tv-group="delete-confirm"
+                data-tv-index={1}
+                data-tv-initial
+                tabIndex={0}
+                onClick={confirmDelete}
+                className="px-6 py-2.5 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-300 transform hover:scale-105 hover:-translate-y-0.5 flex items-center gap-2 shadow-lg shadow-red-500/25"
+              >
+                <span>🗑️</span>
+                {t('delete')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       </div>
     </div>

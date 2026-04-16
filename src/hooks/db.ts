@@ -1,4 +1,5 @@
 import Database, { QueryResult } from '@tauri-apps/plugin-sql';
+import { appDataDir, join } from '@tauri-apps/api/path';
 
 // =========================
 // 🗄️ GLOBAL DB SINGLETON with Write Queue
@@ -10,8 +11,17 @@ let initPromise: Promise<Database> | null = null;
 // Write queue for serializing DB operations (prevents "database is locked")
 let writeQueue: Promise<unknown> = Promise.resolve();
 
-export const DB_PATH = 'sqlite:iptv_data.db';
+let DB_PATH: string | null = null;
 export const CURRENT_SCHEMA_VERSION = 3;
+
+async function getDbPath(): Promise<string> {
+  if (!DB_PATH) {
+    const appDir = await appDataDir();
+    const dbPath = await join(appDir, 'iptv_data.db');
+    DB_PATH = `sqlite:${dbPath}`;
+  }
+  return DB_PATH;
+}
 
 /**
  * Queue a write operation with retry logic
@@ -84,7 +94,8 @@ export async function getDB(): Promise<Database> {
   if (initPromise !== null) return initPromise;
 
   initPromise = (async () => {
-    const db = await Database.load(DB_PATH);
+    const dbPath = await getDbPath();
+    const db = await Database.load(dbPath);
     
     // Enable WAL mode for better concurrency (reads don't block writes)
     await db.execute('PRAGMA journal_mode = WAL');
@@ -457,7 +468,12 @@ async function migrateFavoritesTable(db: Database, tableInfo: {name: string}[]):
   if (missingColumns.length > 0) {
     // Backup old data if possible
     try {
-      const existingColumns = tableInfo.map(c => c.name).join(', ');
+      // Filter out columns that don't exist in new schema (like category_id from old versions)
+      const newSchemaColumns = ['id', 'account_id', 'kind', 'type', 'item_id', 'parent_id', 'name', 'poster', 'cmd', 'season', 'episode', 'extra', 'created_at'];
+      const existingColumns = tableInfo
+        .map(c => c.name)
+        .filter(col => newSchemaColumns.includes(col))
+        .join(', ');
       const oldData = await db.select<unknown[]>(`SELECT ${existingColumns} FROM favorites LIMIT 1`);
       if (oldData.length > 0) {
         await db.execute(`DROP TABLE IF EXISTS favorites_backup`);

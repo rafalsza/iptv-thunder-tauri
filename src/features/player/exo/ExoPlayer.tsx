@@ -5,6 +5,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { playVideo } from 'tauri-plugin-videoplayer-api';
 import { useChannelEPG } from '@/features/epg/epg.hooks';
 import { getCurrentProgram } from '@/features/epg/epg.api';
 import { useResumeStore } from '@/store/resume.store';
@@ -82,7 +83,6 @@ function useExoPlayer(
   fallbackUrls: string[],
   isVod: boolean,
   movieId: string | undefined,
-  resumePosition: number,
   setPosition: (id: string, pos: number, duration?: number) => void,
   onEnded?: () => void,
   markAsWatched?: (movieId: string, duration: number) => void
@@ -104,7 +104,6 @@ function useExoPlayer(
   const positionUpdateIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const eventListenersRef = useRef<(() => void)[]>([]);
   const isStoppingRef = useRef(false);
-  const isInitializedRef = useRef(false);
   const isActiveRef = useRef(true);
   const isPausedRef = useRef(false);
 
@@ -160,7 +159,6 @@ function useExoPlayer(
     try {
       await invoke('exoplayer_stop');
     } catch (e) {
-      console.error('ExoPlayer stop failed:', e);
     } finally {
       // Clear stopping flag after cleanup completes
       isStoppingRef.current = false;
@@ -175,13 +173,11 @@ function useExoPlayer(
 
     // Prevent new play operations during cleanup
     if (isStoppingRef.current) {
-      console.log('⏭️ loadUrl skipped - player is stopping');
       return;
     }
 
     // Return existing promise if loading is in progress, with timeout watchdog
     if (lockRef.current) {
-      console.log('⏭️ loadUrl skipped - waiting for existing promise with timeout watchdog');
       try {
         await Promise.race([
           lockRef.current,
@@ -190,13 +186,11 @@ function useExoPlayer(
           )
         ]);
       } catch (err) {
-        console.warn('⚠️ Lock timeout - forcing unlock:', err);
         lockRef.current = null;
       }
 
       // If lock still exists after timeout, return it (might have been released)
       if (lockRef.current) {
-        console.log('⏭️ loadUrl skipped - returning existing promise after timeout check');
         return lockRef.current;
       }
     }
@@ -219,12 +213,15 @@ function useExoPlayer(
 
         setStreamState('connecting');
         const fallbackSuffix = urlIdx > 0 ? ` (fallback ${urlIdx})` : '';
-        setStatusMsg(
-          retry > 0
-            ? `Retry ${retry}/${MAX_RETRIES_PER_URL}${fallbackSuffix}…`
-            : urlIdx > 0 ? `Fallback ${urlIdx}…`
-            : 'Connecting…'
-        );
+        let statusMessage: string;
+        if (retry > 0) {
+          statusMessage = `Retry ${retry}/${MAX_RETRIES_PER_URL}${fallbackSuffix}…`;
+        } else if (urlIdx > 0) {
+          statusMessage = `Fallback ${urlIdx}…`;
+        } else {
+          statusMessage = 'Connecting…';
+        }
+        setStatusMsg(statusMessage);
         setErrorMsg(null);
 
         // Loop-based retry logic to prevent parallel execution
@@ -240,12 +237,16 @@ function useExoPlayer(
 
             // Update UI for this attempt
             const currentFallbackSuffix = urlIdxLoop > 0 ? ` (fallback ${urlIdxLoop})` : '';
-            setStatusMsg(
-              retryLoop > 0
-                ? `Retry ${retryLoop}/${MAX_RETRIES_PER_URL}${currentFallbackSuffix}…`
-                : urlIdxLoop > 0 ? `Fallback ${urlIdxLoop}…`
-                : 'Connecting…'
-            );
+
+            let statusMessage: string;
+            if (retryLoop > 0) {
+              statusMessage = `Retry ${retryLoop}/${MAX_RETRIES_PER_URL}${currentFallbackSuffix}…`;
+            } else if (urlIdxLoop > 0) {
+              statusMessage = `Fallback ${urlIdxLoop}…`;
+            } else {
+              statusMessage = 'Connecting…';
+            }
+            setStatusMsg(statusMessage);
 
             if (urlIdxLoop !== currentIdxRef.current) {
               currentIdxRef.current = urlIdxLoop;
@@ -256,40 +257,23 @@ function useExoPlayer(
             setTotalRetries(retryLoop);
 
             try {
-              // Initialize ExoPlayer only once (singleton init)
-              if (!isInitializedRef.current) {
-                try {
-                  await invoke('exoplayer_init');
-                  isInitializedRef.current = true;
-                } catch (e) {
-                  console.log('ExoPlayer init failed:', e);
-                }
-              }
-
-              // Check again after init
-              if (!isMountedRef.current || requestId !== requestIdRef.current) {
-                return;
-              }
-
               // Flag to prevent timeout after successful play
               let resolved = false;
 
-              // Set timeout for this specific attempt
-              const timeoutPromise = new Promise<never>((_, reject) => {
-                connTimeoutRef.current = setTimeout(() => {
-                  if (resolved) return;
-                  reject(new Error('Connection timeout'));
-                }, DEAD_TIMEOUT_MS);
-              });
+              // Note: playVideo from tauri-plugin-videoplayer handles initialization internally
 
-              // Play the stream with timeout
-              await Promise.race([
-                invoke('exoplayer_play', {
-                  url: allUrlsRef.current[urlIdxLoop],
-                  resumePosition: isVod ? resumePosition : 0,
-                }),
-                timeoutPromise,
-              ]);
+              // Set timeout for this specific attempt
+              connTimeoutRef.current = setTimeout(() => {
+                if (resolved) return;
+                throw new Error('Connection timeout');
+              }, DEAD_TIMEOUT_MS);
+
+              // Play the stream using tauri-plugin-videoplayer (opens native fullscreen player)
+              try {
+                await playVideo(allUrlsRef.current[urlIdxLoop]);
+              } catch (e) {
+                throw e;
+              }
 
               // Mark as resolved and clear timeout
               resolved = true;
@@ -346,7 +330,6 @@ function useExoPlayer(
                 (event) => {
                   if (!isMountedRef.current) return;
                   const { state } = event.payload;
-                  console.log('Playback state changed:', state);
                   if (state === 'playing') {
                     setStreamState('playing');
                     setStatusMsg('');
@@ -366,7 +349,6 @@ function useExoPlayer(
                 (event) => {
                   if (!isMountedRef.current) return;
                   const { errorMessage } = event.payload;
-                  console.error('ExoPlayer error event:', errorMessage);
                   setStreamState('dead');
                   setErrorMsg(errorMessage);
                 }
@@ -403,7 +385,6 @@ function useExoPlayer(
               break;
 
             } catch (err) {
-              console.error(`❌ Attempt ${retryLoop + 1} for URL ${urlIdxLoop} failed:`, err);
               lastError = err as Error;
 
               // Clear timeout on error
@@ -416,7 +397,6 @@ function useExoPlayer(
               try {
                 await invoke('exoplayer_stop');
               } catch (stopErr) {
-                console.error('Failed to stop player after timeout:', stopErr);
               }
 
               // If this was a timeout and we have retries left, continue to next retry
@@ -440,7 +420,6 @@ function useExoPlayer(
 
         // If we exhausted all URLs without success
         if (!success && isMountedRef.current && requestId === requestIdRef.current) {
-          console.log('💀 All URLs exhausted');
           setStreamState('dead');
           setErrorMsg(lastError?.message || 'All streams failed');
         }
@@ -480,7 +459,6 @@ function useExoPlayer(
         if (now - lastRetryRef.current < 10000) return;
         lastRetryRef.current = now;
 
-        console.warn(`⚠️ Stream stalled - no time update for ${STALL_TIMEOUT / 1000}s`);
         setStreamState('stalled');
         handleManualRetry(true);
       }
@@ -493,14 +471,14 @@ function useExoPlayer(
     try {
       await invoke('exoplayer_set_track', { trackId: Number.parseInt(id), trackType: 'audio' });
       setCurrentAudioId(id);
-    } catch (e) { console.error('Set audio track failed:', e); }
+    } catch (e) { /* silent */ }
   }, []);
 
   const setSubTrack = useCallback(async (id: string) => {
     try {
       await invoke('exoplayer_set_track', { trackId: id === 'no' ? -1 : Number.parseInt(id), trackType: 'text' });
       setCurrentSubId(id === 'no' ? null : id);
-    } catch (e) { console.error('Set sub track failed:', e); }
+    } catch (e) { /* silent */ }
   }, []);
 
   return {
@@ -572,7 +550,7 @@ function useExoPlayerControls(): UseExoPlayerControlsReturn {
       // For Android TV, fullscreen is handled by the system
       setIsFullscreen(!isFullscreen);
       setShowUi(!isFullscreen);
-    } catch (e) { console.error('Fullscreen failed:', e); }
+    } catch (e) { /* silent */ }
   }, [isFullscreen]);
 
   const exitFullscreen = useCallback(async () => {
@@ -580,7 +558,7 @@ function useExoPlayerControls(): UseExoPlayerControlsReturn {
     try {
       setIsFullscreen(false);
       setShowUi(true);
-    } catch (e) { console.error('Exit fullscreen failed:', e); }
+    } catch (e) { /* silent */ }
   }, [isFullscreen]);
 
   const handleClose = useCallback(async (onClose: () => void) => {
@@ -597,7 +575,7 @@ function useExoPlayerControls(): UseExoPlayerControlsReturn {
       } else {
         await invoke('exoplayer_resume');
       }
-    } catch (e) { console.error('Play/Pause failed:', e); }
+    } catch (e) { /* silent */ }
   }, []);
 
   const handleStop = useCallback(async (onClose: () => void) => {
@@ -605,27 +583,27 @@ function useExoPlayerControls(): UseExoPlayerControlsReturn {
       await invoke('exoplayer_stop');
       await exitFullscreen();
       onClose();
-    } catch (e) { console.error('Stop failed:', e); }
+    } catch (e) { /* silent */ }
   }, [exitFullscreen]);
 
   const handleVolumeChange = useCallback(async (newVol: number) => {
     try {
       await invoke('exoplayer_set_volume', { volume: newVol / 100 });
       setVolume(newVol);
-    } catch (e) { console.error('Volume failed:', e); }
+    } catch (e) { /* silent */ }
   }, []);
 
   const handleSeek = useCallback(async (seconds: number) => {
     try {
       await invoke('exoplayer_seek', { position: seconds });
-    } catch (e) { console.error('Seek failed:', e); }
+    } catch (e) { /* silent */ }
   }, []);
 
   const seekTo = useCallback(async (targetTime: number, duration: number) => {
     if (!duration) return;
     try {
       await invoke('exoplayer_seek', { position: targetTime });
-    } catch (e) { console.error('SeekTo failed:', e); }
+    } catch (e) { /* silent */ }
   }, []);
 
   return {
@@ -909,7 +887,7 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   url, fallbackUrls = [], name = 'Stream', channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, onClose, onEnded,
 }) => {
   const { setPosition, markAsWatched } = useResumeStore();
-  const exo = useExoPlayer(url, fallbackUrls, isVod, movieId, resumePosition, setPosition, onEnded, markAsWatched);
+  const exo = useExoPlayer(url, fallbackUrls, isVod, movieId, setPosition, onEnded, markAsWatched);
   const controls = useExoPlayerControls();
   const controlsRef = useRef(controls);
   useEffect(() => { controlsRef.current = controls; }, [controls]);
@@ -918,11 +896,7 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   useTVNavigation({
     selector: '[data-tv-focusable]',
     onBack: () => {
-      if (controls.isFullscreen) {
-        void controls.handleFullscreen();
-      } else {
-        void controls.handleClose(onClose);
-      }
+      void controls.handleClose(onClose);
     }
   });
 
@@ -968,7 +942,6 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   const { seekTo } = controls;
   useEffect(() => {
     if (isVod && resumePosition > 0 && exo.streamState === 'playing' && exo.duration > 0 && !hasResumedRef.current) {
-      console.log('▶️ Resume seeking to:', resumePosition, 'duration:', exo.duration);
       hasResumedRef.current = true;
       const timer = setTimeout(() => {
         void seekTo(resumePosition, exo.duration);
@@ -978,27 +951,6 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   }, [isVod, resumePosition, exo.streamState, exo.duration, seekTo]);
 
   const allUrls = useMemo(() => [url, ...fallbackUrls], [url, fallbackUrls]);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      if (controlsRef.current.isFullscreen) {
-        void controlsRef.current.handleFullscreen();
-      } else {
-        void controlsRef.current.handleClose(onClose);
-      }
-    }
-    if (e.key === 'f' || e.key === 'F') {
-      void controlsRef.current.handleFullscreen();
-    }
-    if (e.key === 'ArrowLeft' && isVod) {
-      e.preventDefault();
-      void controlsRef.current.handleSeek(-10);
-    }
-    if (e.key === 'ArrowRight' && isVod) {
-      e.preventDefault();
-      void controlsRef.current.handleSeek(10);
-    }
-  }, [isVod, onClose]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!isVod || !exo.duration) return;
@@ -1025,7 +977,6 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
     <main
       className="fixed inset-0 z-50 flex items-center justify-center bg-black"
       role="dialog"
-      onKeyDown={handleKeyDown}
       aria-modal="true"
       aria-labelledby="player-title"
       tabIndex={0}

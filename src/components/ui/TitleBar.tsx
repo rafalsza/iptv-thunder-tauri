@@ -4,15 +4,13 @@
 import React, { useState, useEffect } from 'react';
 import { Minus, X, Maximize2 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { platform } from '@tauri-apps/plugin-os';
 import { motion } from 'framer-motion';
 
 export const TitleBar: React.FC = () => {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const appWindow = getCurrentWindow();
-
-  useEffect(() => {
-    checkMaximized();
-  }, []);
 
   const checkMaximized = async () => {
     try {
@@ -22,6 +20,21 @@ export const TitleBar: React.FC = () => {
       console.error('Failed to check maximized state:', error);
     }
   };
+
+  useEffect(() => {
+    // Detect mobile platforms (Android/iOS) - no window controls needed
+    const checkPlatform = async () => {
+      const currentPlatform = await platform();
+      setIsMobile(currentPlatform === 'android' || currentPlatform === 'ios');
+    };
+    checkPlatform();
+    checkMaximized();
+  }, []);
+
+  // Hide title bar on mobile platforms
+  if (isMobile) {
+    return null;
+  }
 
   const handleMinimize = async () => {
     try {
@@ -59,7 +72,7 @@ export const TitleBar: React.FC = () => {
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.3 }}
       className="h-10 dark:bg-slate-900/90 bg-white/90 backdrop-blur-xl border-b dark:border-slate-700/50 border-gray-200/50 flex items-center justify-between px-4 select-none"
-      style={{ webkitAppRegion: 'drag' } as React.CSSProperties}
+      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       {/* Window Title */}
       <div className="flex items-center gap-2">
@@ -74,7 +87,7 @@ export const TitleBar: React.FC = () => {
       </div>
 
       {/* Window Controls */}
-      <div className="flex items-center gap-1" style={{ webkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         <motion.button
           onClick={handleMinimize}
           whileHover={{ backgroundColor: 'rgba(34, 197, 94, 0.2)' }}

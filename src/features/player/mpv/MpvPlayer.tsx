@@ -11,6 +11,7 @@ import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerEPG } from '@/types';
 import { useResumeStore } from '@/store/resume.store';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getSetting } from '@/hooks/useSettings';
 import {
   MpvObservableProperty,
   init, observeProperties, command, setProperty, destroy,
@@ -547,10 +548,15 @@ function useMpvPlayer(
     setUsingMpv(true);
 
     try {
+      // Read settings
+      const volume = await getSetting('volume');
+      const hwAccelEnabled = await getSetting('hardwareAcceleration');
+      const hwdecValue = hwAccelEnabled ? 'auto-safe' : 'no';
+
       const mpvConfig = {
         initialOptions: {
-          'vo': 'gpu-next',
-          'hwdec': 'auto-safe',
+          // 'vo': 'gpu-next',
+          'hwdec': hwdecValue,
           'keep-open': 'yes',
           'cache': 'yes',
           'cache-secs': '10',
@@ -685,7 +691,7 @@ function useMpvPlayer(
       }
 
       await command('loadfile', [streamUrl]);
-      await setProperty('volume', 80);
+      await setProperty('volume', Math.round(volume * 100));
       console.log('✅ MPV loadfile sent');
 
     } catch (err) {

@@ -6,6 +6,7 @@
   "platforms": ["android", "iOS"],
   "permissions": [
     "core:default",
+    "os:default",
     "core:window:allow-set-fullscreen",
     "opener:default",
     "store:default",
@@ -22,6 +23,7 @@
     "fs:allow-appdata-meta",
     "fs:scope-appdata-recursive",
     "core:path:default",
-    "process:default"
+    "process:default",
+    "videoplayer:default"
   ]
 }
