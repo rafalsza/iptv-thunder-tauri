@@ -11,7 +11,9 @@ import { usePlayer } from '@/features/player/player.hooks';
 import { Navigation } from '@/components/ui/Navigation';
 import { TitleBar } from '@/components/ui/TitleBar';
 import { usePortalsStore } from '@/store/portals.store';
+import { useAppStore } from '@/store/app.store';
 import { useTranslation, useTVNavigation } from '@/hooks';
+import { addRecentViewed } from '@/hooks/useRecentItems';
 import { Settings } from '@/features/settings/Settings';
 import { ToastProvider } from '@/components/ui/Toast';
 import { getSeriesInfo } from '@/features/series/series.api';
@@ -74,7 +76,24 @@ function AppInner({ }: AppProps) {
   const activePortal = usePortalsStore(s =>
     s.portals.find(p => p.id === s.activePortalId) ?? null
   );
-  
+
+  const isFullscreen = useAppStore(s => s.isFullscreen);
+
+  // Hide system titlebar on startup (only in Tauri environment)
+  useEffect(() => {
+    const hideDecorations = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const window = getCurrentWindow();
+        await window.setDecorations(false);
+      } catch (err) {
+        // Not running in Tauri environment or API not available
+        console.debug('Not hiding decorations (not in Tauri):', err);
+      }
+    };
+    hideDecorations();
+  }, []);
+
   // Create client only when we have an active portal
   const client = activePortal ? new StalkerClient(activePortal as any) : null;
 
@@ -84,7 +103,16 @@ function AppInner({ }: AppProps) {
   const seriesPlayer = usePlayer(client!);
 
   const handleChannelSelect = (channel: StalkerChannel) => {
-    if (client) tvPlayer.play(channel, queryClient, false);
+    if (client) {
+      tvPlayer.play(channel, queryClient, false);
+      addRecentViewed(activePortal!.id, 'live', String(channel.id), {
+        name: channel.name,
+        poster: channel.logo,
+        cmd: channel.cmd,
+      });
+      // Invalidate recent viewed queries to update ForYouSection
+      queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });
+    }
   };
 
   const handleMovieSelect = (movie: StalkerVOD) => {
@@ -94,7 +122,16 @@ function AppInner({ }: AppProps) {
   };
 
   const handleMoviePlay = (movie: StalkerVOD, resumePosition?: number) => {
-    if (client) moviePlayer.play(movie as any, queryClient, true, resumePosition || 0, String(movie.id));
+    if (client) {
+      moviePlayer.play(movie as any, queryClient, true, resumePosition || 0, String(movie.id));
+      addRecentViewed(activePortal!.id, 'vod', String(movie.id), {
+        name: movie.name,
+        poster: movie.poster,
+        cmd: movie.cmd,
+      });
+      // Invalidate recent viewed queries to update ForYouSection
+      queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });
+    }
   };
 
   const handleMovieBack = () => {
@@ -106,6 +143,13 @@ function AppInner({ }: AppProps) {
     previousViewRef.current = activeView;
     setSelectedSeries(series);
     setActiveView('series-details');
+    addRecentViewed(activePortal!.id, 'series', String(series.id), {
+      name: series.name,
+      poster: series.poster,
+      cmd: series.cmd,
+    });
+    // Invalidate recent viewed queries to update ForYouSection
+    queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });
   };
 
   const handleSeriesBack = () => {
@@ -527,7 +571,11 @@ function AppInner({ }: AppProps) {
       case 'for-you':
         return (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading For You...</div>}>
-            <ForYouSection />
+            <ForYouSection
+              onChannelSelect={handleChannelSelect}
+              onSeriesSelect={handleSeriesSelect}
+              onMoviePlay={handleMoviePlay}
+            />
           </Suspense>
         );
 
@@ -541,11 +589,16 @@ function AppInner({ }: AppProps) {
   };
 
   const getCurrentPlayer = () => {
+    // First check if any player has active content
+    if (moviePlayer.current) return moviePlayer;
+    if (seriesPlayer.current) return seriesPlayer;
+    if (tvPlayer.current) return tvPlayer;
+
+    // No active player, return based on view
     switch (activeView) {
       case 'tv':
         return tvPlayer;
       case 'movies':
-        return moviePlayer;
       case 'movie-details':
         return moviePlayer;
       case 'series':
@@ -560,8 +613,8 @@ function AppInner({ }: AppProps) {
 
   return (
     <div className={`flex flex-col h-full ${currentPlayer.current ? 'bg-transparent' : 'dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 bg-gradient-to-br from-white via-gray-100 to-white'}`}>
-      {/* Custom TitleBar - always visible */}
-      <TitleBar />
+      {/* Custom TitleBar - hidden only when fullscreen */}
+      {!isFullscreen && <TitleBar />}
 
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">
@@ -574,7 +627,7 @@ function AppInner({ }: AppProps) {
 
         {/* Main Content - hidden when player active */}
         {!currentPlayer.current && (
-          <div id="main" data-tv-container="main" className="flex-1 flex flex-col">
+          <div id="main" data-tv-container="main" className="flex-1 flex flex-col min-w-0">
             {/* Search Bar - only show for list views */}
             {activeView !== 'portals' && activeView !== 'movie-details' && activeView !== 'series-details' && activePortal && (
               <div className="p-4 dark:border-b border-slate-700/50 border-b-gray-300/50">

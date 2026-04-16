@@ -6,57 +6,29 @@ import { immer } from 'zustand/middleware/immer';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
 interface AppState {
-  favorites: string[]; // deprecated - do not use for new code
-  recentChannels: string[];
-  recentMovies: string[];
   isHydrated: boolean;
-  
+  isFullscreen: boolean;
+
   // Actions
-  addRecentChannel: (id: string) => void;
-  addRecentMovie: (id: string) => void;
   setHydrated: (value: boolean) => void;
+  setFullscreen: (value: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
   persist(
     immer((set) => ({
-      favorites: [],
-      recentChannels: [],
-      recentMovies: [],
       isHydrated: false,
-      
-      addRecentChannel: (id: string) => {
-        set((state) => {
-          // Remove if exists
-          const index = state.recentChannels.indexOf(id);
-          if (index > -1) {
-            state.recentChannels.splice(index, 1);
-          }
-          // Add to front
-          state.recentChannels.unshift(id);
-          // Keep only last 20
-          if (state.recentChannels.length > 20) {
-            state.recentChannels.pop();
-          }
-        });
-      },
-      
-      addRecentMovie: (id: string) => {
-        set((state) => {
-          const index = state.recentMovies.indexOf(id);
-          if (index > -1) {
-            state.recentMovies.splice(index, 1);
-          }
-          state.recentMovies.unshift(id);
-          if (state.recentMovies.length > 20) {
-            state.recentMovies.pop();
-          }
-        });
-      },
-      
+      isFullscreen: false,
+
       setHydrated: (value: boolean) => {
         set((state) => {
           state.isHydrated = value;
+        });
+      },
+
+      setFullscreen: (value: boolean) => {
+        set((state) => {
+          state.isFullscreen = value;
         });
       },
     })),
@@ -67,11 +39,7 @@ export const useAppStore = create<AppState>()(
         // Mark as hydrated when loaded
         state?.setHydrated(true);
       },
-      partialize: (state) => ({
-        favorites: state.favorites,
-        recentChannels: state.recentChannels,
-        recentMovies: state.recentMovies,
-      }),
+      partialize: () => ({}),
     }
   )
 );

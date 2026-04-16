@@ -16,12 +16,6 @@ const notifyListeners = (lang: Language) => {
   listeners.forEach(cb => cb(lang));
 };
 
-// Reset function for testing
-export const _resetLanguageState = (lang: Language = 'pl') => {
-  globalLanguage = lang;
-  listeners.clear();
-};
-
 export const useTranslation = () => {
   const [currentLang, setCurrentLang] = useState<Language>(globalLanguage);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,8 +46,14 @@ export const useTranslation = () => {
     return () => { unsubscribe(); };
   }, []);
 
-  const t = useCallback((key: TranslationKey): string => {
-    return translations[currentLang][key] || translations['pl'][key] || key;
+  const t = useCallback((key: TranslationKey, values?: Record<string, string | number>): string => {
+    let text: string = translations[currentLang][key] || translations['pl'][key] || key;
+    if (values) {
+      Object.entries(values).forEach(([k, v]) => {
+        text = text.replaceAll(`{{${k}}}`, String(v));
+      });
+    }
+    return text;
   }, [currentLang]);
 
   const changeLanguage = useCallback(async (lang: Language) => {

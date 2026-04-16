@@ -10,6 +10,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerEPG } from '@/types';
 import { useResumeStore } from '@/store/resume.store';
+import { useAppStore } from '@/store/app.store';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getSetting } from '@/hooks/useSettings';
 import {
@@ -843,7 +844,8 @@ interface UsePlayerControlsReturn {
 
 function usePlayerControls(): UsePlayerControlsReturn {
   const [volume, setVolume] = useState(80);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const setFullscreen = useAppStore(state => state.setFullscreen);
+  const isFullscreen = useAppStore(state => state.isFullscreen);
   const [showUi, setShowUi] = useState(true);
   const uiHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
@@ -870,21 +872,32 @@ function usePlayerControls(): UsePlayerControlsReturn {
     try {
       const window = getCurrentWindow();
       const newState = !isFullscreen;
-      await window.setFullscreen(newState);
-      setIsFullscreen(newState);
+
+      if (newState) {
+        // Entering fullscreen: enable decorations for proper Windows behavior
+        await window.setDecorations(true);
+        await window.setFullscreen(true);
+      } else {
+        // Exiting fullscreen: disable decorations and exit fullscreen
+        await window.setFullscreen(false);
+        await window.setDecorations(false);
+      }
+
+      setFullscreen(newState);
       setShowUi(!newState);
     } catch (e) { console.error('Fullscreen failed:', e); }
-  }, [isFullscreen]);
+  }, [isFullscreen, setFullscreen]);
 
   const exitFullscreen = useCallback(async () => {
     if (!isFullscreen) return;
     try {
       const window = getCurrentWindow();
       await window.setFullscreen(false);
-      setIsFullscreen(false);
+      await window.setDecorations(false);
+      setFullscreen(false);
       setShowUi(true);
     } catch (e) { console.error('Exit fullscreen failed:', e); }
-  }, [isFullscreen]);
+  }, [isFullscreen, setFullscreen]);
 
   const handleClose = useCallback(async (onClose: () => void) => {
     await exitFullscreen();
@@ -986,7 +999,6 @@ interface PlayerHeaderProps {
   statusMsg: string;
   isFullscreen: boolean;
   showUi: boolean;
-  onClose: () => void;
 }
 
 // Extracted Video Params Badge component
@@ -1037,7 +1049,7 @@ const STATE_LABEL: Record<StreamState, string> = {
 
 const PlayerHeader: React.FC<PlayerHeaderProps> = ({
   name, streamState, usingMpv, videoParams, totalRetries, currentUrlIdx, urlCount,
-  currentProgram, isVod, isLoading, statusMsg, isFullscreen, showUi, onClose
+  currentProgram, isVod, isLoading, statusMsg, isFullscreen, showUi
 }) => {
 
   if (isFullscreen && !showUi) return null;
@@ -1058,7 +1070,7 @@ const PlayerHeader: React.FC<PlayerHeaderProps> = ({
           <span className="text-sm px-3 py-1 rounded-full flex-shrink-0" style={{
             background: `${STATE_COLOR[streamState]}22`, color: STATE_COLOR[streamState],
             border: `1px solid ${STATE_COLOR[streamState]}55`,
-          }}>{STATE_LABEL[streamState]}</span>
+          }}>{isVod && streamState === 'playing' ? 'Playing' : STATE_LABEL[streamState]}</span>
           {usingMpv && (
             <span className="text-sm px-3 py-1 rounded-full flex-shrink-0"
               style={{ background: '#22c55e22', color: '#22c55e', border: '1px solid #22c55e44' }}>
@@ -1070,14 +1082,10 @@ const PlayerHeader: React.FC<PlayerHeaderProps> = ({
 
         <div className="flex items-center gap-3 flex-shrink-0">
           {totalRetries > 0 && (
-            <span className="text-xs text-gray-500">{totalRetries} retry{totalRetries !== 1 ? 's' : ''}</span>
+            <span className="text-xs text-gray-500">{totalRetries} retry{totalRetries === 1 ? '' : 's'}</span>
           )}
           {currentUrlIdx > 0 && (
             <span className="text-xs text-yellow-500">fallback {currentUrlIdx}/{urlCount - 1}</span>
-          )}
-          {!isFullscreen && (
-            <button onClick={onClose} aria-label="Close" data-tv-focusable tabIndex={0}
-              className="text-gray-400 hover:text-white transition-colors text-xl leading-none">✕</button>
           )}
         </div>
       </div>
@@ -1635,8 +1643,8 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
 
   return (
     <main
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'transparent' }}
+      className={`fixed z-50 flex items-center justify-center ${controls.isFullscreen ? 'inset-0' : 'left-0 right-0 bottom-0'}`}
+      style={{ background: 'transparent', top: controls.isFullscreen ? 0 : 40 }}
       aria-labelledby="player-title"
       role="application"
     >
@@ -1659,7 +1667,6 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
           statusMsg={mpv.statusMsg}
           isFullscreen={controls.isFullscreen}
           showUi={controls.showUi}
-          onClose={handleClosePlayer}
         />
 
         <div className="flex-1 relative overflow-hidden" style={{ background: 'transparent' }}>

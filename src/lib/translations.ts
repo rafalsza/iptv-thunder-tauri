@@ -93,7 +93,7 @@ export const translations = {
     format: 'Format',
 
     // TV Channels
-    channels: 'Kanały',
+    channels: 'Kanały TV',
     channelsCount: '{{count}} kanałów',
     allChannels: 'Wszystkie kanały',
     favoriteChannels: 'Ulubione kanały',
@@ -104,6 +104,17 @@ export const translations = {
     forYou: 'Dla Ciebie',
     basedOnHistory: 'Na podstawie historii',
     noWatchHistory: 'Rozpocznij oglądanie, aby zobaczyć rekomendacje',
+    recentlyViewed: 'Ostatnio oglądane',
+    recentChannels: 'Ostatnie kanały',
+    recentMovies: 'Ostatnie filmy',
+    recentSeries: 'Ostatnie seriale',
+    items: 'elementów',
+    justNow: 'Przed chwilą',
+    minutesAgo: '{{count}} min temu',
+    hoursAgo: '{{count}} godz. temu',
+    daysAgo: '{{count}} dni temu',
+    longTimeAgo: 'Dawno temu',
+    clearHistory: 'Wyczyść historię',
 
     // Movies & Series
     movies: 'Filmy',
@@ -288,6 +299,17 @@ export const translations = {
     forYou: 'For You',
     basedOnHistory: 'Based on history',
     noWatchHistory: 'Start watching to see recommendations',
+    recentlyViewed: 'Recently viewed',
+    recentChannels: 'Recent Channels',
+    recentMovies: 'Recent Movies',
+    recentSeries: 'Recent Series',
+    items: 'items',
+    justNow: 'Just now',
+    minutesAgo: '{{count}} min ago',
+    hoursAgo: '{{count}} hr ago',
+    daysAgo: '{{count}} days ago',
+    longTimeAgo: 'Long ago',
+    clearHistory: 'Clear history',
 
     // Movies & Series
     movies: 'Movies',

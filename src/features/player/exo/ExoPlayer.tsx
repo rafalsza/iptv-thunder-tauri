@@ -694,7 +694,7 @@ const PlayerHeader: React.FC<PlayerHeaderProps> = ({
           <span className="text-sm px-3 py-1 rounded-full flex-shrink-0" style={{
             background: `${STATE_COLOR[streamState]}22`, color: STATE_COLOR[streamState],
             border: `1px solid ${STATE_COLOR[streamState]}55`,
-          }}>{STATE_LABEL[streamState]}</span>
+          }}>{isVod && streamState === 'playing' ? 'Playing' : STATE_LABEL[streamState]}</span>
           <span className="text-sm px-3 py-1 rounded-full flex-shrink-0"
             style={{ background: '#22c55e22', color: '#22c55e', border: '1px solid #22c55e44' }}>
             ExoPlayer
@@ -703,7 +703,7 @@ const PlayerHeader: React.FC<PlayerHeaderProps> = ({
 
         <div className="flex items-center gap-3 flex-shrink-0">
           {totalRetries > 0 && (
-            <span className="text-xs text-gray-500">{totalRetries} retry{totalRetries !== 1 ? 's' : ''}</span>
+            <span className="text-xs text-gray-500">{totalRetries} retry{totalRetries === 1 ? '' : 's'}</span>
           )}
           {currentUrlIdx > 0 && (
             <span className="text-xs text-yellow-500">fallback {currentUrlIdx}/{urlCount - 1}</span>

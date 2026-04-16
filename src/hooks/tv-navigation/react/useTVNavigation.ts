@@ -120,23 +120,39 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       // Find the nearest scrollable ancestor (prefer the sidebar nav if inside it)
       const scrollableContainer = el.closest('[data-tv-container="navigation"] nav') ||
                                   el.closest('.overflow-y-auto') ||
+                                  el.closest('.overflow-x-auto') ||
                                   el.closest('[data-tv-container]') ||
                                   document.documentElement;
 
       if (scrollableContainer && scrollableContainer !== document.documentElement) {
-        // Calculate scroll position to center the element
         const containerRect = scrollableContainer.getBoundingClientRect();
         const elementRect = el.getBoundingClientRect();
-        const relativeTop = elementRect.top - containerRect.top;
-        const scrollTop = scrollableContainer.scrollTop + relativeTop - (containerRect.height / 2) + (elementRect.height / 2);
+        const isHorizontal = scrollableContainer.classList.contains('overflow-x-auto') ||
+                             (scrollableContainer as HTMLElement).style.overflowX === 'auto' ||
+                             (scrollableContainer as HTMLElement).style.overflowX === 'scroll';
 
-        scrollableContainer.scrollTo({
-          top: scrollTop,
-          behavior: 'auto'
-        });
+        if (isHorizontal) {
+          // Horizontal carousel - center element horizontally
+          const relativeLeft = elementRect.left - containerRect.left;
+          const scrollLeft = scrollableContainer.scrollLeft + relativeLeft - (containerRect.width / 2) + (elementRect.width / 2);
+
+          scrollableContainer.scrollTo({
+            left: scrollLeft,
+            behavior: 'auto'
+          });
+        } else {
+          // Vertical scroll - center element vertically
+          const relativeTop = elementRect.top - containerRect.top;
+          const scrollTop = scrollableContainer.scrollTop + relativeTop - (containerRect.height / 2) + (elementRect.height / 2);
+
+          scrollableContainer.scrollTo({
+            top: scrollTop,
+            behavior: 'auto'
+          });
+        }
       } else {
         // Fallback to default scrollIntoView if no scrollable container found
-        el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+        el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
       }
       scrollTimeoutRef.current = null;
     });

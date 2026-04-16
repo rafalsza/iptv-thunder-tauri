@@ -53,7 +53,7 @@ export class StalkerClient {
     this.useTauri = !!osPlatform || hasTauriAPI || isTauriBuild || isLocalhost;
 
     // Sanitize portalUrl - remove null bytes and other problematic characters
-    const sanitizedPortalUrl = account.portalUrl.replace(/\x00/g, '').trim();
+    const sanitizedPortalUrl = account.portalUrl.replaceAll('\x00', '').trim();
 
     const baseURL = sanitizedPortalUrl.endsWith('/')
       ? sanitizedPortalUrl
@@ -434,7 +434,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     // Map API fields to StalkerEPG interface
     // API returns: start_timestamp, stop_timestamp, descr, ch_id
     // StalkerEPG expects: start_time, end_time, description, channel_id
-    const epg: StalkerEPG[] = rawEpg.map((item: any) => ({
+    return rawEpg.map((item: any) => ({
       id: Number(item.id),
       name: item.name,
       description: item.descr || item.description || '',
@@ -450,8 +450,6 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
       year: item.year,
       icon: item.icon,
     }));
-
-    return epg;
   }
 
 

@@ -17,9 +17,9 @@
   <polygon points="210,220 210,310 302,265" fill="white" opacity="0.9"/>
   
   <!-- Thunder bolt - scaled and positioned -->
-  <path d="M 230 110 L 300 200 L 380 180 L 460 310 L 380 230 L 300 250 Z" 
-        fill="#fbbf24" 
-        stroke="#f59e0b" 
+  <path d="M 230 110 L 300 200 L 380 180 L 460 310 L 380 230 L 300 250 Z"
+        fill="#1a5c3a"
+        stroke="#145c32"
         stroke-width="4"
         opacity="0.95"/>
   

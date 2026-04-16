@@ -1,124 +1,83 @@
 // =========================
-// 🪟 CUSTOM TITLEBAR COMPONENT
+// 🎨 CUSTOM TITLE BAR
 // =========================
-import React, { useState, useEffect } from 'react';
-import { Minus, X, Maximize2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Minimize2, Maximize2, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { platform } from '@tauri-apps/plugin-os';
-import { motion } from 'framer-motion';
 
 export const TitleBar: React.FC = () => {
   const [isMaximized, setIsMaximized] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const appWindow = getCurrentWindow();
-
-  const checkMaximized = async () => {
-    try {
-      const maximized = await appWindow.isMaximized();
-      setIsMaximized(maximized);
-    } catch (error) {
-      console.error('Failed to check maximized state:', error);
-    }
-  };
-
-  useEffect(() => {
-    // Detect mobile platforms (Android/iOS) - no window controls needed
-    const checkPlatform = async () => {
-      const currentPlatform = await platform();
-      setIsMobile(currentPlatform === 'android' || currentPlatform === 'ios');
-    };
-    checkPlatform();
-    checkMaximized();
-  }, []);
-
-  // Hide title bar on mobile platforms
-  if (isMobile) {
-    return null;
-  }
-
-  const handleMinimize = async () => {
-    try {
-      await appWindow.minimize();
-    } catch (error) {
-      console.error('Failed to minimize window:', error);
-    }
-  };
 
   const handleMaximize = async () => {
     try {
+      const window = getCurrentWindow();
       if (isMaximized) {
-        await appWindow.unmaximize();
+        await window.unmaximize();
+        setIsMaximized(false);
       } else {
-        await appWindow.maximize();
+        await window.maximize();
+        setIsMaximized(true);
       }
-      setIsMaximized(!isMaximized);
     } catch (error) {
       console.error('Failed to toggle maximize:', error);
     }
   };
 
+  const handleMinimize = async () => {
+    try {
+      const window = getCurrentWindow();
+      await window.minimize();
+    } catch (error) {
+      console.error('Failed to minimize:', error);
+    }
+  };
+
   const handleClose = async () => {
     try {
-      await appWindow.close();
+      const window = getCurrentWindow();
+      await window.close();
     } catch (error) {
       console.error('Failed to close window:', error);
     }
   };
 
   return (
-    <motion.div
+    <div
       data-tauri-drag-region
-      initial={{ y: -50, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.3 }}
-      className="h-10 dark:bg-slate-900/90 bg-white/90 backdrop-blur-xl border-b dark:border-slate-700/50 border-gray-200/50 flex items-center justify-between px-4 select-none"
+      className="flex items-center justify-between px-4 py-2 dark:bg-slate-900/80 bg-white/80 backdrop-blur-md border-b dark:border-slate-700/30 border-gray-200/30 select-none relative z-60"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      {/* Window Title */}
       <div className="flex items-center gap-2">
-        <motion.img
-          src="/logo.svg"
-          alt="IPTV Thunder"
-          className="h-6 w-auto"
-          whileHover={{ scale: 1.1 }}
-          transition={{ duration: 0.2 }}
-        />
-        <span className="text-sm font-medium dark:text-white text-slate-900 opacity-80">IPTV Thunder</span>
+        <img src="/logo.svg" alt="IPTV Thunder" className="h-6 w-auto" />
       </div>
 
-      {/* Window Controls */}
       <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        <motion.button
+        <button
           onClick={handleMinimize}
-          whileHover={{ backgroundColor: 'rgba(34, 197, 94, 0.2)' }}
-          whileTap={{ scale: 0.9 }}
-          className="p-2 rounded-lg dark:hover:bg-green-500/10 hover:bg-green-500/10 dark:text-slate-400 text-slate-600 dark:hover:text-green-400 hover:text-green-400 transition-all duration-200"
+          className="w-10 h-8 flex items-center justify-center rounded hover:bg-slate-700/30 dark:hover:bg-slate-700/50 transition-colors group"
+          title="Minimalizuj"
         >
-          <Minus className="w-4 h-4" />
-        </motion.button>
-
-        <motion.button
+          <Minimize2 className="w-4 h-4 dark:text-slate-400 text-slate-600 group-hover:dark:text-white group-hover:text-slate-900 transition-colors" />
+        </button>
+        <button
           onClick={handleMaximize}
-          whileHover={{ backgroundColor: 'rgba(34, 197, 94, 0.2)' }}
-          whileTap={{ scale: 0.9 }}
-          className="p-2 rounded-lg dark:hover:bg-green-500/10 hover:bg-green-500/10 dark:text-slate-400 text-slate-600 dark:hover:text-green-400 hover:text-green-400 transition-all duration-200"
+          className="w-10 h-8 flex items-center justify-center rounded hover:bg-slate-700/30 dark:hover:bg-slate-700/50 transition-colors group"
+          title={isMaximized ? "Przywróć" : "Maksymalizuj"}
         >
           {isMaximized ? (
-            <div className="w-4 h-4 border-2 dark:border-green-400 border-green-500 rounded-sm" />
+            <Minimize2 className="w-4 h-4 dark:text-slate-400 text-slate-600 group-hover:dark:text-white group-hover:text-slate-900 transition-colors" />
           ) : (
-            <Maximize2 className="w-4 h-4" />
+            <Maximize2 className="w-4 h-4 dark:text-slate-400 text-slate-600 group-hover:dark:text-white group-hover:text-slate-900 transition-colors" />
           )}
-        </motion.button>
-
-        <motion.button
+        </button>
+        <button
           onClick={handleClose}
-          whileHover={{ backgroundColor: 'rgba(239, 68, 68, 0.2)' }}
-          whileTap={{ scale: 0.9 }}
-          className="p-2 rounded-lg dark:hover:bg-red-500/10 hover:bg-red-500/10 dark:text-slate-400 text-slate-600 dark:hover:text-red-400 hover:text-red-400 transition-all duration-200"
+          className="w-10 h-8 flex items-center justify-center rounded hover:bg-red-500/20 transition-colors group"
+          title="Zamknij"
         >
-          <X className="w-4 h-4" />
-        </motion.button>
+          <X className="w-4 h-4 dark:text-slate-400 text-slate-600 group-hover:dark:text-red-400 group-hover:text-red-500 transition-colors" />
+        </button>
       </div>
-    </motion.div>
+    </div>
   );
 };
