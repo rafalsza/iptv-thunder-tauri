@@ -156,6 +156,17 @@ export async function addRecentViewed(
   }
 }
 
+export async function clearRecentViewed(accountId: string): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.execute(`DELETE FROM recently_viewed WHERE account_id = ?`, [accountId]);
+    logger.info('Cleared recent viewed for account:', accountId);
+  } catch (error) {
+    logger.error('Error clearing recent viewed:', error);
+    throw error;
+  }
+}
+
 export function useRecentViewed(accountId: string, type?: 'live' | 'vod' | 'series', limit: number = 20) {
   const tableReady = useTableReady();
 

@@ -153,7 +153,6 @@ export const getSeriesInfo = async (
   seasons: string[];
   episodes: StalkerVOD[];
 }> => {
-  console.log('🔥 getSeriesInfo ENTERED with seriesId:', seriesId);
 
   await client.ensureAuthenticated();
 
@@ -214,9 +213,6 @@ export const getSeriesInfo = async (
     });
 
     const fallbackData = client.useTauri ? fallback?.js : fallback.data?.js;
-
-    console.log('⚠️ Fallback raw response:', fallback);
-    console.log('⚠️ Fallback data:', fallbackData);
 
     if (Array.isArray(fallbackData?.episodes)) {
       episodesList = fallbackData.episodes;

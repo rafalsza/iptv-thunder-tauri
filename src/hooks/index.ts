@@ -42,8 +42,6 @@ export {
   clearImageCache, getCacheSize, getCacheStats,
   // Utilities
   rebuildLruFromFs,
-  /** @deprecated Use getCachedImage instead */
-  isImageCached,
 } from './useImageCache';
 
 // ⚙️ CONFIG: App settings, preferences

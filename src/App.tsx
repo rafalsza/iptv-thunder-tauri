@@ -107,7 +107,7 @@ function AppInner({ }: AppProps) {
       tvPlayer.play(channel, queryClient, false);
       addRecentViewed(activePortal!.id, 'live', String(channel.id), {
         name: channel.name,
-        poster: channel.logo,
+        poster: client.resolveLogoUrl(channel.logo),
         cmd: channel.cmd,
       });
       // Invalidate recent viewed queries to update ForYouSection
@@ -126,7 +126,7 @@ function AppInner({ }: AppProps) {
       moviePlayer.play(movie as any, queryClient, true, resumePosition || 0, String(movie.id));
       addRecentViewed(activePortal!.id, 'vod', String(movie.id), {
         name: movie.name,
-        poster: movie.poster,
+        poster: client.resolvePosterUrl(movie),
         cmd: movie.cmd,
       });
       // Invalidate recent viewed queries to update ForYouSection
@@ -143,13 +143,6 @@ function AppInner({ }: AppProps) {
     previousViewRef.current = activeView;
     setSelectedSeries(series);
     setActiveView('series-details');
-    addRecentViewed(activePortal!.id, 'series', String(series.id), {
-      name: series.name,
-      poster: series.poster,
-      cmd: series.cmd,
-    });
-    // Invalidate recent viewed queries to update ForYouSection
-    queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });
   };
 
   const handleSeriesBack = () => {
@@ -212,19 +205,25 @@ function AppInner({ }: AppProps) {
   const handleEpisodeSelect = async (episode: StalkerVOD, resumePosition?: number) => {
     if (!client) return;
 
+    let seriesData: any = null;
+
     // Store episodes list and current index for auto-play
     if (selectedSeries?.id) {
       try {
-        const seriesData = await queryClient.fetchQuery({
+        seriesData = await queryClient.fetchQuery({
           queryKey: ['series', String(selectedSeries.id), 'info'],
           queryFn: async () => {
             return await getSeriesInfo(client, String(selectedSeries.id));
           },
         });
         if (seriesData?.episodes) {
-          const episodeIndex = seriesData.episodes.findIndex(ep => String(ep.id) === String(episode.id));
+          // Deduplicate episodes by ID
+          const uniqueEpisodes = seriesData.episodes.filter((ep: StalkerVOD, index: number, self: StalkerVOD[]) =>
+            index === self.findIndex((e: StalkerVOD) => String(e.id) === String(ep.id))
+          );
+          const episodeIndex = uniqueEpisodes.findIndex((ep: StalkerVOD) => String(ep.id) === String(episode.id));
           if (episodeIndex !== -1) {
-            setEpisodesList(seriesData.episodes);
+            setEpisodesList(uniqueEpisodes);
             setCurrentEpisodeIndex(episodeIndex);
           }
         }
@@ -272,6 +271,20 @@ function AppInner({ }: AppProps) {
         movieId: String(episode.id),
         resumePosition: resumePosition || 0
       });
+
+      // Add series to recently viewed only when an episode is actually played
+      const seriesInfo = seriesData?.series || selectedSeries;
+      if (seriesInfo) {
+        addRecentViewed(activePortal!.id, 'series', String(seriesInfo.id), {
+          name: seriesInfo.name,
+          poster: client.resolvePosterUrl(seriesInfo),
+          cmd: seriesInfo.cmd,
+          season: episode.season !== undefined ? Number(episode.season) : undefined,
+          episode: episode.episode !== undefined ? Number(episode.episode) : undefined,
+        });
+      }
+      // Invalidate recent viewed queries to update ForYouSection
+      queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });
     } catch (error) {
       console.error('❌ Failed to play episode:', error);
       // Toast notification handled in component
@@ -572,6 +585,7 @@ function AppInner({ }: AppProps) {
         return (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading For You...</div>}>
             <ForYouSection
+              client={client!}
               onChannelSelect={handleChannelSelect}
               onSeriesSelect={handleSeriesSelect}
               onMoviePlay={handleMoviePlay}
@@ -627,7 +641,7 @@ function AppInner({ }: AppProps) {
 
         {/* Main Content - hidden when player active */}
         {!currentPlayer.current && (
-          <div id="main" data-tv-container="main" className="flex-1 flex flex-col min-w-0">
+          <div id="main" data-tv-container="main" className="flex-1 flex flex-col min-w-0 overflow-y-auto">
             {/* Search Bar - only show for list views */}
             {activeView !== 'portals' && activeView !== 'movie-details' && activeView !== 'series-details' && activePortal && (
               <div className="p-4 dark:border-b border-slate-700/50 border-b-gray-300/50">

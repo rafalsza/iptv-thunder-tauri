@@ -5,7 +5,7 @@ import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { findNextNode } from '../core/engine';
 import { Direction, NavigationState, PluginContext, ContainerState } from '../core/types';
 import { buildNavigationState, findElementById, filterVisibleElements } from '..';
-import { gridPlugin, containerPlugin, wrapPlugin, spatialPlugin, initAutoFocus, navbarPlugin, trapFocusPlugin, settingsPlugin, movieDetailsPlugin } from '../plugins';
+import { gridPlugin, containerPlugin, wrapPlugin, spatialPlugin, initAutoFocus, navbarPlugin, trapFocusPlugin, settingsPlugin, movieDetailsPlugin, modalTrapPlugin } from '../plugins';
 import { setActiveContainerId, saveContainerFocus, getLastFocus } from '../plugins/containerPlugin';
 
 interface TVNavigationOptions {
@@ -56,7 +56,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   // Combine default plugins with custom plugins
   // Order: specific plugins first, then general plugins as fallback
   const allPlugins = useMemo(
-    () => [settingsPlugin, trapFocusPlugin, navbarPlugin, movieDetailsPlugin, containerPlugin, gridPlugin, wrapPlugin, spatialPlugin, ...customPlugins],
+    () => [settingsPlugin, modalTrapPlugin, trapFocusPlugin, navbarPlugin, movieDetailsPlugin, containerPlugin, gridPlugin, wrapPlugin, spatialPlugin, ...customPlugins],
     [customPlugins]
   );
 
@@ -96,7 +96,13 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       return elements;
     }
 
-    const elements = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+    // Use more specific selector to limit elements processed
+    const specificSelector = activeContainer 
+      ? `${selector} [data-tv-container="${activeContainer.dataset.tvContainer}"], ${selector}[data-tv-container="${activeContainer.dataset.tvContainer}"]`
+      : selector;
+    
+    const elements = Array.from(document.querySelectorAll(specificSelector)) as HTMLElement[];
+    
     // Filter out disabled elements
     const enabledElements = elements.filter(el =>
       !el.hasAttribute('disabled') &&
@@ -125,7 +131,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
                                   document.documentElement;
 
       if (scrollableContainer && scrollableContainer !== document.documentElement) {
-        const containerRect = scrollableContainer.getBoundingClientRect();
+        const containerRect = (scrollableContainer as HTMLElement).getBoundingClientRect();
         const elementRect = el.getBoundingClientRect();
         const isHorizontal = scrollableContainer.classList.contains('overflow-x-auto') ||
                              (scrollableContainer as HTMLElement).style.overflowX === 'auto' ||
@@ -176,11 +182,37 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   }, [getFocusableElements]);
 
   const focusElement = useCallback((el: HTMLElement | null) => {
+    console.log('[useTVNavigation] focusElement called:', el?.dataset?.tvId ?? el?.id, 'currentElementRef:', currentElementRef.current?.dataset?.tvId ?? currentElementRef.current?.id, 'document.activeElement:', (document.activeElement as HTMLElement | null)?.dataset?.tvId ?? document.activeElement?.id);
     if (!el) return;
-    if (currentElementRef.current === el) return;
+    if (currentElementRef.current === el) {
+      console.log('[useTVNavigation] focusElement: same element, skipping');
+      return;
+    }
 
     el.focus({ preventScroll: true });
-    scrollToElement(el);
+    console.log('[useTVNavigation] focusElement: el.focus() called, new activeElement:', (document.activeElement as HTMLElement | null)?.dataset?.tvId ?? document.activeElement?.id);
+
+    // Special case: reset scroll to top when focusing first element of for-you-live
+    const isFirstForYouLive = el.dataset.tvGroup === 'for-you-live' && el.dataset.tvIndex === '0';
+    if (isFirstForYouLive) {
+      // Use requestAnimationFrame to ensure it happens after all layout/focus changes
+      requestAnimationFrame(() => {
+        // Find and reset ALL scrollable elements
+        const allElements = document.querySelectorAll('*');
+        allElements.forEach(el => {
+          const style = window.getComputedStyle(el);
+          if (style.overflowY === 'auto' || style.overflowY === 'scroll' || (el as HTMLElement).scrollTop > 0) {
+            (el as HTMLElement).scrollTo({ top: 0, behavior: 'auto' });
+          }
+        });
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        // Update state after scroll reset completes
+        updateState();
+      });
+    } else {
+      scrollToElement(el);
+    }
+
     currentElementRef.current = el;
 
     onTVFocusRef.current?.(el);
@@ -191,8 +223,13 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       saveContainerFocus(pluginContext, container.id, el.id || el.dataset.tvId || '');
     }
 
-    // Update state with new currentId
-    updateState();
+    // Update state with new currentId - defer to RAF to ensure scroll completes first
+    // (unless already handled in the for-you-live case above)
+    if (!isFirstForYouLive) {
+      requestAnimationFrame(() => {
+        updateState();
+      });
+    }
   }, [updateState, pluginContext]);
 
 
@@ -240,8 +277,20 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
     update();
 
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
+    const resizeListener = () => update();
+    
+    // Throttled scroll listener to prevent excessive updates during fast scrolling
+    let scrollTimeout: number | null = null;
+    const scrollListener = () => {
+      if (scrollTimeout) return;
+      scrollTimeout = window.setTimeout(() => {
+        update();
+        scrollTimeout = null;
+      }, 16); // ~60fps throttling
+    };
+    
+    window.addEventListener('resize', resizeListener);
+    window.addEventListener('scroll', scrollListener, true);
 
     let mutationScheduled = false;
     const observer = new MutationObserver((mutations) => {
@@ -265,11 +314,14 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     });
 
     return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', resizeListener);
+      window.removeEventListener('scroll', scrollListener, true);
       observer.disconnect();
       if (scrollTimeoutRef.current !== null) {
         cancelAnimationFrame(scrollTimeoutRef.current);
+      }
+      if (scrollTimeout !== null) {
+        clearTimeout(scrollTimeout);
       }
     };
   }, [updateState]);
@@ -283,6 +335,25 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   // Update handler refs when dependencies change
   useEffect(() => {
     handleKeyDownRef.current = (e: KeyboardEvent) => {
+      // Check if document.activeElement matches our tracked current element
+      // If not, sync our state to match the actual DOM focus
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (activeEl && activeEl !== currentElementRef.current) {
+        if (activeEl.matches('[data-tv-focusable]') || activeEl.closest('[data-tv-focusable]')) {
+          currentElementRef.current = activeEl;
+          updateState();
+        }
+      }
+
+      // Check if Radix Select/Dropdown is open - let Radix handle navigation
+      const isSelectOpen = document.querySelector('[data-radix-select-viewport]') !== null ||
+                           document.querySelector('[data-radix-popper-content-wrapper]') !== null ||
+                           document.querySelector('[data-state="open"][role="combobox"]') !== null ||
+                           document.querySelector('[data-state="open"][data-radix-menu-content]') !== null;
+      if (isSelectOpen) {
+        return; // Let Radix handle all keys when dropdown is open
+      }
+
       // Check if user is typing in an input field
       const isTyping =
         e.target instanceof HTMLInputElement ||
@@ -326,21 +397,53 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
           const current = currentElementRef.current;
           if (current) {
             onEnterRef.current?.(current);
-            current.click();
+            // Special handling for select elements
+            if (current instanceof HTMLSelectElement) {
+              // Try to open select dropdown by dispatching mousedown event
+              const mousedown = new MouseEvent('mousedown', {
+                bubbles: true,
+                cancelable: true,
+                view: window
+              });
+              current.dispatchEvent(mousedown);
+              current.focus();
+            } else {
+              current.click();
+            }
           }
         },
         OK: () => {
           const current = currentElementRef.current;
           if (current) {
             onEnterRef.current?.(current);
-            current.click();
+            if (current instanceof HTMLSelectElement) {
+              const mousedown = new MouseEvent('mousedown', {
+                bubbles: true,
+                cancelable: true,
+                view: window
+              });
+              current.dispatchEvent(mousedown);
+              current.focus();
+            } else {
+              current.click();
+            }
           }
         },
         Select: () => {
           const current = currentElementRef.current;
           if (current) {
             onEnterRef.current?.(current);
-            current.click();
+            if (current instanceof HTMLSelectElement) {
+              const mousedown = new MouseEvent('mousedown', {
+                bubbles: true,
+                cancelable: true,
+                view: window
+              });
+              current.dispatchEvent(mousedown);
+              current.focus();
+            } else {
+              current.click();
+            }
           }
         },
         Backspace: () => {
@@ -383,13 +486,68 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         handler();
       }
     };
-  }, [move]);
+  }, [move, updateState]);
+
+  // Track last focused element before Radix dropdown opened
+  const lastFocusBeforeDropdownRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     handleFocusRef.current = (e: FocusEvent) => {
       const target = e.target as HTMLElement;
+
+      // Check if Radix dropdown is currently open
+      const isRadixOpen = document.querySelector('[data-radix-select-viewport]') !== null ||
+                          document.querySelector('[data-radix-popper-content-wrapper]') !== null ||
+                          document.querySelector('[data-radix-menu-content]') !== null;
+
+      // If focus is moving into a Radix dropdown, save the current element
+      if (isRadixOpen && target?.closest('[data-radix-popper-content-wrapper], [data-radix-menu-content]')) {
+        // Focus moved inside dropdown - don't update
+        return;
+      }
+
+      // If dropdown was open and now closed, restore focus to last element
+      if (!isRadixOpen && lastFocusBeforeDropdownRef.current) {
+        const savedElement = lastFocusBeforeDropdownRef.current;
+        lastFocusBeforeDropdownRef.current = null;
+        
+        // Use multiple attempts to restore focus - Radix may move focus multiple times
+        let attempts = 0;
+        const maxAttempts = 5;
+        const tryRestore = () => {
+          const currentActive = document.activeElement as HTMLElement | null;
+          const currentTvId = currentActive?.dataset?.tvId;
+          const savedTvId = savedElement?.dataset?.tvId;
+          
+          // Restore if: body, no tv-id, or different element than saved
+          // No tv-id means sidebar or other untracked element
+          if (currentActive === document.body || 
+              !currentTvId ||
+              currentTvId !== savedTvId) {
+            savedElement?.focus();
+            
+            // Try again if focus didn't stick
+            attempts++;
+            if (attempts < maxAttempts) {
+              setTimeout(tryRestore, 50);
+            }
+          }
+        };
+        
+        // Start restoration attempts
+        setTimeout(tryRestore, 50);
+      }
+
+      // Check if this is a TV focusable element
       if (target.matches('[data-tv-focusable]') || target.closest('[data-tv-focusable]')) {
-        currentElementRef.current = target;
+        const focusableEl = target.matches('[data-tv-focusable]') ? target : target.closest('[data-tv-focusable]');
+
+        // If Radix is opening, save this element
+        if (isRadixOpen && !lastFocusBeforeDropdownRef.current) {
+          lastFocusBeforeDropdownRef.current = focusableEl as HTMLElement;
+        }
+
+        currentElementRef.current = focusableEl as HTMLElement;
         updateState();
       }
     };
@@ -397,14 +555,39 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
   // Stable event listeners - never re-bind
   useEffect(() => {
-    const keyHandler = (e: KeyboardEvent) => handleKeyDownRef.current?.(e);
+    const keyHandler = (e: KeyboardEvent) => {
+      const targetEl = e.target as HTMLElement;
+      
+      // Check if Radix dropdown is open - let it handle navigation naturally
+      const isRadixOpen = document.querySelector('[data-radix-select-viewport]') !== null ||
+                          document.querySelector('[data-radix-popper-content-wrapper]') !== null ||
+                          document.querySelector('[data-radix-menu-content]') !== null;
+      if (isRadixOpen) {
+        // Don't block - let Radix handle the event
+        return;
+      }
+      
+      // If Enter is pressed on a Radix Select trigger, save focus before dropdown opens
+      if (e.key === 'Enter' && targetEl?.dataset?.tvId === 'series-season-select') {
+        lastFocusBeforeDropdownRef.current = targetEl;
+      }
+
+      // Block browser default navigation immediately for arrow keys
+      const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Up', 'Down', 'Left', 'Right'];
+      if (arrowKeys.includes(e.key)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+      handleKeyDownRef.current?.(e);
+    };
     const focusHandler = (e: FocusEvent) => handleFocusRef.current?.(e);
 
-    globalThis.addEventListener('keydown', keyHandler);
+    // Use capturing phase to intercept before browser default navigation
+    globalThis.addEventListener('keydown', keyHandler, true);
     document.addEventListener('focusin', focusHandler);
 
     return () => {
-      globalThis.removeEventListener('keydown', keyHandler);
+      globalThis.removeEventListener('keydown', keyHandler, true);
       document.removeEventListener('focusin', focusHandler);
     };
   }, []);

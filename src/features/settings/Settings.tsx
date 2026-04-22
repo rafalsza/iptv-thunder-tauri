@@ -4,11 +4,14 @@ import { getSettings, setSetting, AppSettings } from '@/hooks/useSettings';
 import { getVersion } from '@tauri-apps/api/app';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Settings as SettingsIcon, MonitorPlay, Tv, Wrench, Info, X } from 'lucide-react';
+import { Settings as SettingsIcon, MonitorPlay, Tv, Wrench, Info, X, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from '@/hooks/useTranslation';
 import { TranslationKey } from '@/lib/translations';
 import { useTheme } from '@/components/theme-provider';
+import { usePortalsStore } from '@/store/portals.store';
+import { clearRecentViewed } from '@/hooks/useRecentItems';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -28,15 +31,20 @@ const useTabs = (t: (key: TranslationKey) => string) => [
 export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   const { t, currentLang, changeLanguage } = useTranslation();
   const { setTheme } = useTheme();
+  const queryClient = useQueryClient();
   const TABS = useTabs(t);
 
-  const { 
-    externalEpgUrl, 
-    setExternalEpgUrl, 
-    selectedEpgService, 
+  const {
+    externalEpgUrl,
+    setExternalEpgUrl,
+    selectedEpgService,
     setSelectedEpgService,
-    getEffectiveEpgUrl 
+    getEffectiveEpgUrl
   } = usePortalStore();
+
+  const activePortal = usePortalsStore(s =>
+    s.portals.find(p => p.id === s.activePortalId) ?? null
+  );
 
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [version, setVersion] = useState<string>('');
@@ -115,6 +123,18 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     setEpgUrl('');
     setSelectedEpgService('auto');
     setExternalEpgUrl(null);
+  };
+
+  const handleClearRecentViewed = async () => {
+    if (activePortal) {
+      try {
+        await clearRecentViewed(activePortal.id);
+        // Invalidate the recent-viewed query to refresh the UI
+        queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });
+      } catch (error) {
+        console.error('Failed to clear recent viewed:', error);
+      }
+    }
   };
 
   if (!isOpen || !settings) return null;
@@ -433,6 +453,26 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         checked={settings.debugMode}
                         onCheckedChange={(v) => updateSetting('debugMode', v)}
                       />
+                    </div>
+
+                    <div className="pt-4 dark:border-t border-slate-700 border-t-gray-300">
+                      <p className="font-medium dark:text-white text-slate-900 mb-2">Wyczyść historię oglądania</p>
+                      <p className="text-sm dark:text-slate-400 text-slate-600 mb-4">
+                        Usuwa zapisane pozycje z sekcji "Dla Ciebie". Przydatne jeśli plakaty nie wyświetlają się poprawnie.
+                      </p>
+                      <Button
+                        data-tv-focusable
+                        data-tv-group="settings-content"
+                        data-tv-index="41"
+                        tabIndex={0}
+                        variant="outline"
+                        onClick={handleClearRecentViewed}
+                        disabled={!activePortal}
+                        className="flex items-center gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Wyczyść historię
+                      </Button>
                     </div>
                   </div>
                 )}

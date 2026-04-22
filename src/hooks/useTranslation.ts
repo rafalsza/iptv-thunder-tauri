@@ -25,9 +25,8 @@ export const useTranslation = () => {
       try {
         const savedLang = await getSetting('language');
         if (savedLang && ['pl', 'en'].includes(savedLang)) {
-          const lang = savedLang as Language;
-          setCurrentLang(lang);
-          globalLanguage = lang;
+          setCurrentLang(savedLang);
+          globalLanguage = savedLang;
         }
       } catch (error) {
         console.error('[useTranslation] Error loading language:', error);

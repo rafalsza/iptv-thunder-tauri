@@ -69,6 +69,23 @@ export const MediaCard: React.FC<MediaCardProps> = ({
     }
   };
 
+  const handleFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+    // Special case: reset for-you-live carousel to beginning when first element gets focus
+    if (index === 0 && tvGroup === 'for-you-live') {
+      const carouselContainer = e.currentTarget.closest('.overflow-x-auto') as HTMLElement | null;
+      if (carouselContainer) {
+        // Reset first, then scrollIntoView will handle the element
+        carouselContainer.scrollTo({ left: 0, behavior: 'auto' });
+      }
+    } else {
+      // Auto-scroll focused card into view (MUST HAVE for TV)
+      e.currentTarget.scrollIntoView({
+        inline: 'center',
+        block: 'nearest',
+      });
+    }
+  };
+
   return (
     <motion.div
       key={`${type}-${id}`}
@@ -78,10 +95,12 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       whileHover={{ scale: 1.05, y: -4 }}
       onClick={onSelect}
       onKeyDown={handleKeyDown}
+      onFocus={handleFocus}
       data-tv-focusable
       data-tv-group={tvGroup}
       data-tv-index={index}
       data-tv-initial={tvInitial || undefined}
+      data-media-card
       tabIndex={0}
       className="relative group/card cursor-pointer flex-shrink-0 w-[150px] sm:w-[170px] md:w-[190px] rounded-lg m-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)] snap-start"
     >

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Navigation, NavigationItem } from '../Navigation';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -76,7 +76,7 @@ describe('Navigation', () => {
       btn.textContent?.includes('TV')
     );
 
-    expect(activeButton).toHaveClass('from-green-700', 'to-green-800');
+    expect(activeButton).toHaveClass('bg-green-700/90');
   });
 
   it('should call onClick when item clicked', () => {
@@ -147,7 +147,7 @@ describe('Navigation', () => {
   });
 
   describe('submenu interaction', () => {
-    it('should expand/collapse submenu on click', () => {
+    it('should expand/collapse submenu on click', async () => {
       const subItemClick = jest.fn();
       const items: NavigationItem[] = [
         {
@@ -171,7 +171,11 @@ describe('Navigation', () => {
 
       // Click again to collapse
       fireEvent.click(screen.getByText('TV'));
-      expect(screen.queryByText('Na żywo')).not.toBeInTheDocument();
+      // AnimatePresence keeps elements in DOM during exit animation,
+      // so we use waitFor to wait for the element to be removed
+      await waitFor(() => {
+        expect(screen.queryByText('Na żywo')).not.toBeInTheDocument();
+      });
     });
 
     it('should call subItem onClick when clicked', () => {

@@ -16,7 +16,7 @@ const { useTranslation } = jest.requireActual('../useTranslation');
 describe('translations', () => {
   it('should have Polish translations', () => {
     expect(translations.pl).toBeDefined();
-    expect(translations.pl.channels).toBe('Kanały');
+    expect(translations.pl.channels).toBe('Kanały TV');
     expect(translations.pl.movies).toBe('Filmy');
     expect(translations.pl.series).toBe('Seriale');
   });
@@ -131,7 +131,7 @@ describe('useTranslation hook', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(result.current.t('channels')).toBe('Kanały');
+    expect(result.current.t('channels')).toBe('Kanały TV');
     expect(result.current.t('movies')).toBe('Filmy');
     expect(result.current.t('series')).toBe('Seriale');
     expect(result.current.t('settings')).toBe('Ustawienia');
@@ -308,7 +308,7 @@ describe('useTranslation hook', () => {
 
     // Test Polish translations (default)
     expect(result.current.currentLang).toBe('pl');
-    expect(result.current.t('channels')).toBe('Kanały');
+    expect(result.current.t('channels')).toBe('Kanały TV');
     expect(result.current.t('movies')).toBe('Filmy');
     expect(result.current.t('series')).toBe('Seriale');
     expect(result.current.t('settings')).toBe('Ustawienia');
@@ -349,7 +349,7 @@ describe('useTranslation hook', () => {
 
     // Start with Polish
     expect(result.current.currentLang).toBe('pl');
-    expect(result.current.t('channels')).toBe('Kanały');
+    expect(result.current.t('channels')).toBe('Kanały TV');
 
     // Switch to English
     await act(async () => {
@@ -363,7 +363,7 @@ describe('useTranslation hook', () => {
       await result.current.changeLanguage('pl');
     });
     expect(result.current.currentLang).toBe('pl');
-    expect(result.current.t('channels')).toBe('Kanały');
+    expect(result.current.t('channels')).toBe('Kanały TV');
 
     // Switch to English again
     await act(async () => {

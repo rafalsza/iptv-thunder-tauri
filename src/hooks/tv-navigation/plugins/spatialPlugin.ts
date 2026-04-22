@@ -7,14 +7,32 @@ import { getCenter, getDistance, isSameRow, isSameColumn, overlapsVertically, is
 export const spatialPlugin: NavigationPlugin = {
   name: 'spatial',
   findNext: (state: NavigationState, direction: Direction) => {
-    console.log('[SpatialPlugin] checking direction:', direction);
     if (direction === 'back') return null;
     const current = state.nodes.find(n => n.id === state.currentId);
     if (!current) {
-      console.log('[SpatialPlugin] no current node');
       return null;
     }
-    console.log('[SpatialPlugin] current node id:', JSON.stringify(current.id), 'container:', current.containerId);
+    // Prevent navigation loops by tracking recent positions
+    const recentPositions = state.lastPositionByAxis;
+    if (recentPositions && direction === 'down') {
+      // If we're going down and the current position is very close to where we just were,
+      // we might be in a loop. Try to find a different target.
+      const currentY = current.rect.top;
+      const lastY = recentPositions.y;
+      if (Math.abs(currentY - lastY) < 5) {
+        return null;
+      }
+    }
+
+    // Block DOWN on last episode of series-episodes
+    if (direction === 'down' && current.groupId === 'series-episodes') {
+      const episodes = state.nodes.filter(n => n.groupId === 'series-episodes' && !n.disabled);
+      const sortedEpisodes = episodes.toSorted((a, b) => (a.index ?? 0) - (b.index ?? 0));
+      const lastEpisode = sortedEpisodes.at(-1);
+      if (current.id === lastEpisode?.id) {
+        return null;
+      }
+    }
 
     // Phase 1: Search in same container only
     let best = findBestInContainer(current, state.nodes, direction, state, current.containerId);
@@ -23,13 +41,11 @@ export const spatialPlugin: NavigationPlugin = {
     // IMPORTANT: Don't leave modal containers (e.g., settings-modal, portal-actions)
     const isModalContainer = (id: string) => id && id !== 'main' && id !== 'navigation';
     if (!best && current.containerId && !isModalContainer(current.containerId)) {
-      console.log('[SpatialPlugin] no result in same container, searching globally');
       best = findBestGlobally(current, state.nodes, direction, state);
     } else if (!best && current.containerId && isModalContainer(current.containerId)) {
-      console.log('[SpatialPlugin] no result in modal container, staying inside:', current.containerId);
+      return null;
     }
 
-    console.log('[SpatialPlugin] best:', best?.id ?? 'none');
     return best?.id ?? null;
   },
 };
@@ -50,7 +66,6 @@ function findBestInContainer(
     if (!isInDirection(current.rect, node.rect, direction)) continue;
 
     const score = calculateScore(current, node, direction, state);
-    console.log('[SpatialPlugin] [same container] checking:', node.id, 'container:', node.containerId, 'score:', score);
     if (score < bestScore) {
       bestScore = score;
       best = node;
@@ -77,10 +92,8 @@ function findBestGlobally(
     // Penalty for different container
     if (node.containerId !== current.containerId) {
       score += 50000;
-      console.log('[SpatialPlugin] [global] penalty for different container:', node.id);
     }
 
-    console.log('[SpatialPlugin] [global] checking:', node.id, 'container:', node.containerId, 'score:', score);
     if (score < bestScore) {
       bestScore = score;
       best = node;
@@ -102,60 +115,119 @@ function calculateScore(
   const sameRow = isSameRow(current.rect, target.rect);
   const sameColumn = isSameColumn(current.rect, target.rect);
   const overlaps = overlapsVertically(current.rect, target.rect);
-  const sameContainer = current.containerId && target.containerId && current.containerId === target.containerId;
-  const sameGroup = current.groupId && target.groupId && current.groupId === target.groupId;
+  const sameContainer = !!(current.containerId && target.containerId && current.containerId === target.containerId);
+  const sameGroup = !!(current.groupId && target.groupId && current.groupId === target.groupId);
 
-  let distance = 0;
+  let priority = calculateContainerPriority(sameContainer, sameGroup);
+  priority = calculateAntiLoopPriority(direction, dy, priority);
+
+  const { distance, additionalPriority } = calculateDirectionalScore(direction, {
+    dx, dy, sameRow, sameColumn, overlaps, current,
+    targetRect: target.rect, targetCenter, state,
+  });
+
+  return distance - (priority + additionalPriority);
+}
+
+function calculateContainerPriority(sameContainer: boolean, sameGroup: boolean): number {
   let priority = 0;
-
-  // Big bonus for staying in same container
   if (sameContainer) {
     priority += 10000;
-    console.log('[SpatialPlugin] sameContainer bonus for', target.containerId);
   }
-
-  // Even bigger bonus for staying in same group (handles submenus)
   if (sameGroup) {
     priority += 20000;
-    console.log('[SpatialPlugin] sameGroup bonus for', target.groupId);
   }
+  return priority;
+}
 
+function calculateAntiLoopPriority(direction: Direction, dy: number, priority: number): number {
+  if (direction === 'down' && dy < 0) {
+    priority -= 50000;
+  }
+  if (direction === 'up' && dy > 0) {
+    priority -= 50000;
+  }
+  return priority;
+}
+
+interface DirectionalContext {
+  dx: number;
+  dy: number;
+  sameRow: boolean;
+  sameColumn: boolean;
+  overlaps: boolean;
+  current: NavNode;
+  targetRect: DOMRect;
+  targetCenter: { x: number; y: number };
+  state: NavigationState;
+}
+
+function calculateDirectionalScore(
+  direction: Direction,
+  ctx: DirectionalContext
+): { distance: number; additionalPriority: number } {
   switch (direction) {
     case 'right':
-      distance = dx + Math.abs(dy) * 2;
-      if (sameRow) priority += 1000;
-      if (overlaps) priority += 500;
-      break;
-    case 'left': {
-      distance = Math.abs(dx) + Math.abs(dy) * 2;
-      if (sameRow) priority += 1000;
-      if (overlaps) priority += 500;
-      // Directional memory for Y position
-      const yDistanceFromMemory = Math.abs(targetCenter.y - (state.lastPositionByAxis?.y ?? 0));
-      priority -= yDistanceFromMemory * 50;
-      break;
-    }
-    case 'down': {
-      distance = dy + Math.abs(dx) * 5;
-      if (sameColumn) priority += 5000;
-      // Row memory: prefer elements close to stored X position
-      const targetRowDown = getRowKey(target.rect);
-      const rememberedXDown = state.lastXByRow?.get(targetRowDown) ?? state.lastPositionByAxis?.x ?? 0;
-      const xDistanceFromMemoryDown = Math.abs(targetCenter.x - rememberedXDown);
-      priority -= xDistanceFromMemoryDown * 20;
-      break;
-    }
-    case 'up': {
-      distance = Math.abs(dy) + Math.abs(dx) * 5;
-      if (sameColumn) priority += 3000;
-      // Row memory: prefer elements close to stored X position
-      const targetRowUp = getRowKey(target.rect);
-      const rememberedXUp = state.lastXByRow?.get(targetRowUp) ?? state.lastPositionByAxis?.x ?? 0;
-      const xDistanceFromMemoryUp = Math.abs(targetCenter.x - rememberedXUp);
-      priority -= xDistanceFromMemoryUp * 20;
-      break;
-    }
+      return calculateRightScore(ctx);
+    case 'left':
+      return calculateLeftScore(ctx);
+    case 'down':
+      return calculateDownScore(ctx);
+    case 'up':
+      return calculateUpScore(ctx);
+    default:
+      return { distance: 0, additionalPriority: 0 };
   }
+}
 
-  return distance - priority;
+function calculateRightScore(ctx: DirectionalContext): { distance: number; additionalPriority: number } {
+  let priority = 0;
+  const distance = ctx.dx + Math.abs(ctx.dy) * 2;
+  if (ctx.sameRow) priority += 1000;
+  if (ctx.overlaps) priority += 500;
+  return { distance, additionalPriority: priority };
+}
+
+function calculateLeftScore(ctx: DirectionalContext): { distance: number; additionalPriority: number } {
+  let priority = 0;
+  const distance = Math.abs(ctx.dx) + Math.abs(ctx.dy) * 2;
+  if (ctx.sameRow) priority += 1000;
+  if (ctx.overlaps) priority += 500;
+  const yDistanceFromMemory = Math.abs(ctx.targetCenter.y - (ctx.state.lastPositionByAxis?.y ?? 0));
+  priority -= yDistanceFromMemory * 50;
+  return { distance, additionalPriority: priority };
+}
+
+function calculateDownScore(ctx: DirectionalContext): { distance: number; additionalPriority: number } {
+  let priority = 0;
+  const distance = ctx.dy + Math.abs(ctx.dx) * 5;
+  if (ctx.sameColumn) priority += 5000;
+  const xDistanceFromMemory = calculateXDistanceFromMemory(ctx.targetRect, ctx.targetCenter, ctx.state);
+  priority -= xDistanceFromMemory * 20;
+  if (ctx.current.groupId === 'series' && ctx.dy < 10) {
+    priority -= 10000;
+  }
+  return { distance, additionalPriority: priority };
+}
+
+function calculateUpScore(ctx: DirectionalContext): { distance: number; additionalPriority: number } {
+  let priority = 0;
+  const distance = Math.abs(ctx.dy) + Math.abs(ctx.dx) * 5;
+  if (ctx.sameColumn) priority += 3000;
+  const xDistanceFromMemory = calculateXDistanceFromMemory(ctx.targetRect, ctx.targetCenter, ctx.state);
+  priority -= xDistanceFromMemory * 20;
+  if (ctx.current.groupId === 'series' && Math.abs(ctx.dy) < 10) {
+    priority -= 10000;
+  }
+  return { distance, additionalPriority: priority };
+}
+
+function calculateXDistanceFromMemory(
+  targetRect: DOMRect,
+  targetCenter: { x: number; y: number },
+  state: NavigationState
+): number {
+  const targetRow = getRowKey(targetRect);
+  const rememberedX = state.lastXByRow?.get(targetRow) ?? state.lastPositionByAxis?.x ?? 0;
+  return Math.abs(targetCenter.x - rememberedX);
 }

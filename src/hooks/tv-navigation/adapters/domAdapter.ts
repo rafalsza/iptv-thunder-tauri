@@ -41,6 +41,58 @@ export function buildNavigationState(
   };
 }
 
+function clusterNodesIntoRows(sortedNodes: NavNode[], threshold: number): NavNode[][] {
+  const rowGroups: NavNode[][] = [];
+  let currentRow: NavNode[] = [];
+
+  for (const node of sortedNodes) {
+    if (currentRow.length === 0) {
+      currentRow.push(node);
+    } else {
+      const lastTop = currentRow.at(-1)!.rect.top;
+      const topDiff = Math.abs(node.rect.top - lastTop);
+      if (topDiff < threshold) {
+        currentRow.push(node);
+      } else {
+        rowGroups.push(currentRow);
+        currentRow = [node];
+      }
+    }
+  }
+  if (currentRow.length > 0) {
+    rowGroups.push(currentRow);
+  }
+
+  return rowGroups;
+}
+
+function assignGridPositions(rowGroups: NavNode[][]): void {
+  for (let rowIdx = 0; rowIdx < rowGroups.length; rowIdx++) {
+    rowGroups[rowIdx].sort((a, b) => a.rect.left - b.rect.left);
+    for (let colIdx = 0; colIdx < rowGroups[rowIdx].length; colIdx++) {
+      rowGroups[rowIdx][colIdx].gridPosition = { row: rowIdx, col: colIdx };
+    }
+  }
+}
+
+function calculateColumnCount(rowGroups: NavNode[][]): number {
+  let maxElementsInRow = 1;
+  for (const elements of rowGroups) {
+    maxElementsInRow = Math.max(maxElementsInRow, elements.length);
+  }
+  return Math.max(1, maxElementsInRow);
+}
+
+function buildIndexMap(groupNodes: NavNode[]): Map<number, NavNode> {
+  const indexMap = new Map<number, NavNode>();
+  for (const node of groupNodes) {
+    if (node.index !== undefined) {
+      indexMap.set(node.index, node);
+    }
+  }
+  return indexMap;
+}
+
 function computeGridData(nodes: NavNode[]): Map<string, GridData> {
   const gridMap = new Map<string, GridData>();
   const ROW_THRESHOLD = 20; // pixels - elements within this distance are considered same row
@@ -68,52 +120,28 @@ function computeGridData(nodes: NavNode[]): Map<string, GridData> {
     // Sort by top position
     const sortedNodes = [...groupNodes].sort((a, b) => a.rect.top - b.rect.top);
 
-    // Cluster into rows and assign grid positions
-    const rowGroups: NavNode[][] = [];
-    let currentRow: NavNode[] = [];
+    // Check if this is a vertical list (all elements at same top position, like episodes)
+    // or a horizontal grid (elements at different tops)
+    const uniqueTops = new Set(sortedNodes.map(n => Math.round(n.rect.top)));
+    const isVerticalList = uniqueTops.size === 1 && sortedNodes.length > 1;
 
-    for (const node of sortedNodes) {
-      if (currentRow.length === 0) {
-        currentRow.push(node);
-      } else {
-        const lastTop = currentRow.at(-1)!.rect.top;
-        const topDiff = Math.abs(node.rect.top - lastTop);
-        if (topDiff < ROW_THRESHOLD) {
-          currentRow.push(node);
-        } else {
-          rowGroups.push(currentRow);
-          currentRow = [node];
-        }
-      }
-    }
-    if (currentRow.length > 0) {
-      rowGroups.push(currentRow);
+    let rowGroups: NavNode[][];
+    if (isVerticalList) {
+      // For vertical lists (like episodes), create one row per element based on index
+      rowGroups = sortedNodes.map(node => [node]);
+    } else {
+      // For horizontal grids, cluster by position
+      rowGroups = clusterNodesIntoRows(sortedNodes, ROW_THRESHOLD);
     }
 
     // Sort each row by left position and assign row/col positions
-    for (let rowIdx = 0; rowIdx < rowGroups.length; rowIdx++) {
-      // Sort by left position within each row
-      rowGroups[rowIdx].sort((a, b) => a.rect.left - b.rect.left);
-      for (let colIdx = 0; colIdx < rowGroups[rowIdx].length; colIdx++) {
-        rowGroups[rowIdx][colIdx].gridPosition = { row: rowIdx, col: colIdx };
-      }
-    }
+    assignGridPositions(rowGroups);
 
-    // Calculate max elements in row
-    let maxElementsInRow = 1;
-    for (const elements of rowGroups) {
-      maxElementsInRow = Math.max(maxElementsInRow, elements.length);
-    }
-
-    const columnCount = Math.max(1, maxElementsInRow);
+    // Calculate column count
+    const columnCount = calculateColumnCount(rowGroups);
 
     // Build index map for O(1) lookup
-    const indexMap = new Map<number, NavNode>();
-    for (const node of groupNodes) {
-      if (node.index !== undefined) {
-        indexMap.set(node.index, node);
-      }
-    }
+    const indexMap = buildIndexMap(groupNodes);
 
     gridMap.set(groupKey, {
       rows: rowGroups,
@@ -129,31 +157,16 @@ const idCache = new WeakMap<HTMLElement, string>();
 
 function generateId(el: HTMLElement): string {
   if (!idCache.has(el)) {
-    idCache.set(el, `tv-${Math.random().toString(36).substr(2, 9)}`);
+    idCache.set(el, `tv-${Math.random().toString(36).substring(2, 11)}`);
   }
   return idCache.get(el)!;
 }
 
 export function findElementById(elements: HTMLElement[], id: string): HTMLElement | undefined {
-  console.log('[domAdapter] findElementById looking for:', id, 'in', elements.length, 'elements');
-  const found = elements.find(el => {
+  return elements.find(el => {
     const elId = el.dataset.tvId || el.id || idCache.get(el);
-    const match = elId === id;
-    if (match) {
-      console.log('[domAdapter] found match:', elId, 'for element:', el.tagName);
-    }
-    return match;
+    return elId === id;
   });
-  if (!found) {
-    console.log('[domAdapter] element not found, checking cache for each element:');
-    elements.forEach((el, i) => {
-      const cachedId = idCache.get(el);
-      const dataId = el.dataset.tvId;
-      const elId = el.id;
-      console.log(`[domAdapter] element ${i}:`, { dataId, elId, cachedId, cacheHas: idCache.has(el) });
-    });
-  }
-  return found;
 }
 
 export { isVisible } from '../utils/visibility';

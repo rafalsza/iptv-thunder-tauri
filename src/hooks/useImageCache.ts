@@ -5,9 +5,9 @@ import { useCallback } from 'react';
 
 // Cache configuration
 const MAX_CACHE_SIZE = 200 * 1024 * 1024; // 200MB
-const FETCH_TIMEOUT_MS = 10000; // 10 seconds
-const MAX_RETRIES = 2;
-const MAX_CONCURRENT_FETCHES = 6; // Limit concurrent image downloads
+const FETCH_TIMEOUT_MS = 5000; // 5 seconds - reduced to prevent freezing
+const MAX_RETRIES = 1; // Reduced retries to prevent long waits
+const MAX_CONCURRENT_FETCHES = 4; // Reduced concurrent downloads
 
 let cacheDir: string | null = null;
 let lruInitialized = false;
@@ -414,8 +414,9 @@ export async function fetchAndCacheImage(url: string, signal?: AbortSignal): Pro
   const cleanupTimeout = globalThis.window.setTimeout(() => {
     pendingRequests.delete(url);
     releaseFetchSlot();
+    console.warn('[ImageCache] Timeout for:', url);
     rejectPromise(new Error('Timeout'));
-  }, FETCH_TIMEOUT_MS + 5000);
+  }, FETCH_TIMEOUT_MS + 2000); // Reduced buffer time
 
   // Register immediately (synchronously) to prevent race condition
   pendingRequests.set(url, { promise, timeout: cleanupTimeout, abortController });
@@ -681,14 +682,6 @@ export async function getCacheStats(): Promise<{
   };
 }
 
-/**
- * @deprecated Use getCachedImage which returns the cached file path or null
- */
-export async function isImageCached(url: string): Promise<boolean> {
-  console.warn('isImageCached is deprecated - use getCachedImage instead');
-  const result = await getCachedImage(url);
-  return result !== null;
-}
 
 // React hook - returns stable function references (safe for useEffect deps)
 export function useImageCache() {
@@ -704,6 +697,5 @@ export function useImageCache() {
     getCacheStats: useCallback(getCacheStats, []),
     // Utility
     rebuildLruFromFs: useCallback(rebuildLruFromFs, []),
-    isImageCached: useCallback(isImageCached, []),
   };
 }

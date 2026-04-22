@@ -1,17 +1,20 @@
 // =========================
 // 🎯 FOR YOU SECTION - Netflix Style Horizontal Carousels
 // =========================
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { usePortalsStore } from '@/store/portals.store';
 import { useRecentViewed, type RecentItem } from '@/hooks/useRecentItems';
 import { useResumeStore } from '@/store/resume.store';
+import { useCarousel } from '@/hooks/useCarousel';
 import { motion } from 'framer-motion';
 import { Star, Tv, Film, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { MediaCard } from '@/components/ui/MediaCard';
 import { StalkerChannel, StalkerVOD } from '@/types';
+import { StalkerClient } from '@/lib/stalkerAPI_new';
 
 interface ForYouSectionProps {
+  client: StalkerClient;
   onChannelSelect?: (channel: StalkerChannel) => void;
   onSeriesSelect?: (series: StalkerVOD) => void;
   onMoviePlay?: (movie: StalkerVOD, resumePosition?: number) => void;
@@ -30,20 +33,6 @@ interface CarouselRowProps {
   tvGroup: string;
 }
 
-// Virtualization constants - tune for TV performance
-const BUFFER_CARDS = 3; // Extra cards to render outside viewport
-const CARD_WIDTH_SM = 162; // 150px + 12px gap
-const CARD_WIDTH_MD = 182; // 170px + 12px gap  
-const CARD_WIDTH_LG = 202; // 190px + 12px gap
-
-const getCardWidth = () => {
-  if (globalThis.window === undefined) return CARD_WIDTH_MD;
-  const w = window.innerWidth;
-  if (w < 640) return CARD_WIDTH_SM;
-  if (w < 768) return CARD_WIDTH_MD;
-  return CARD_WIDTH_LG;
-};
-
 const CarouselRow: React.FC<CarouselRowProps> = ({
   title,
   icon,
@@ -53,105 +42,18 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
   formatTimeAgo,
   tvGroup,
 }) => {
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = React.useState(false);
-  const [canScrollRight, setCanScrollRight] = React.useState(true);
-  const [visibleRange, setVisibleRange] = React.useState({ start: 0, end: 10 });
-
-  // Stable checkScroll with useCallback
-  const checkScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    setCanScrollLeft(el.scrollLeft > 0);
-    setCanScrollRight(
-      el.scrollLeft < el.scrollWidth - el.clientWidth - 10
-    );
-  }, []);
-
-  // Throttled version for performance (important on TV)
-  const throttledCheckScroll = useMemo(() => {
-    let lastTime = 0;
-    const throttleMs = 100;
-    return () => {
-      const now = Date.now();
-      if (now - lastTime >= throttleMs) {
-        lastTime = now;
-        checkScroll();
-      }
-    };
-  }, [checkScroll]);
-
-  // Virtualization - update visible range on scroll
-  const updateVisibleRange = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    
-    const cardWidth = getCardWidth();
-    const containerWidth = el.clientWidth;
-    const scrollLeft = el.scrollLeft;
-    
-    // Calculate visible indices
-    const startIndex = Math.max(0, Math.floor(scrollLeft / cardWidth) - BUFFER_CARDS);
-    const visibleCount = Math.ceil(containerWidth / cardWidth) + BUFFER_CARDS * 2;
-    const endIndex = Math.min(items.length, startIndex + visibleCount);
-    
-    setVisibleRange({ start: startIndex, end: endIndex });
-  }, [items.length]);
-
-  // Throttled version for scroll
-  const throttledUpdateRange = useMemo(() => {
-    let lastTime = 0;
-    const throttleMs = 50; // Faster than checkScroll for smoother virtualization
-    return () => {
-      const now = Date.now();
-      if (now - lastTime >= throttleMs) {
-        lastTime = now;
-        updateVisibleRange();
-      }
-    };
-  }, [updateVisibleRange]);
-
-  React.useEffect(() => {
-    const ref = scrollRef.current;
-    if (!ref) return;
-
-    // Initial check
-    checkScroll();
-    updateVisibleRange();
-
-    // Combined scroll listener
-    const handleScroll = () => {
-      throttledCheckScroll();
-      throttledUpdateRange();
-    };
-    
-    ref.addEventListener('scroll', handleScroll);
-    
-    // Update on resize
-    const handleResize = () => {
-      checkScroll();
-      updateVisibleRange();
-    };
-    window.addEventListener('resize', handleResize);
-    
-    return () => {
-      ref.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [items, checkScroll, throttledCheckScroll, updateVisibleRange, throttledUpdateRange]);
-
-  const scroll = (direction: 'left' | 'right') => {
-    if (scrollRef.current) {
-      // Responsive scroll amount based on card width + gap
-      const cardWidth = window.innerWidth < 640 ? 150 : window.innerWidth < 768 ? 170 : 190;
-      const scrollAmount = cardWidth * 3 + 36; // 3 cards + gaps
-      scrollRef.current.scrollBy({
-        left: direction === 'left' ? -scrollAmount : scrollAmount,
-        behavior: 'smooth',
-      });
-    }
-  };
+  const {
+    scrollRef,
+    canScrollLeft,
+    canScrollRight,
+    visibleRange,
+    isTV,
+    scroll,
+    getCardWidth,
+  } = useCarousel({
+    items,
+    virtualization: true,
+  });
 
   if (items.length === 0) return null;
 
@@ -186,8 +88,8 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
             scrollPaddingRight: '1.5rem',
           }}
         >
-          {/* Left placeholder for virtualization */}
-          {visibleRange.start > 0 && (
+          {/* Left placeholder for virtualization - hidden on TV */}
+          {!isTV && visibleRange.start > 0 && (
             <div 
               className="flex-shrink-0 snap-start"
               style={{ 
@@ -220,8 +122,8 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
             );
           })}
           
-          {/* Right placeholder for virtualization */}
-          {visibleRange.end < items.length && (
+          {/* Right placeholder for virtualization - hidden on TV */}
+          {!isTV && visibleRange.end < items.length && (
             <div 
               className="flex-shrink-0"
               style={{ 
@@ -248,6 +150,7 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
 };
 
 export const ForYouSection: React.FC<ForYouSectionProps> = ({
+  client,
   onChannelSelect,
   onSeriesSelect,
   onMoviePlay,
@@ -256,11 +159,40 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
   const activePortal = usePortalsStore(s =>
     s.portals.find(p => p.id === s.activePortalId) ?? null
   );
-  const { recentItems, isLoading } = useRecentViewed(activePortal?.id || '', undefined, 50) as { 
-    recentItems: RecentItem[], 
+  const { recentItems, isLoading } = useRecentViewed(activePortal?.id || '', undefined, 50) as {
+    recentItems: RecentItem[],
     isLoading: boolean
   };
   const { getInProgressMovies } = useResumeStore();
+
+  // Re-resolve poster URLs using the client
+  const resolvedRecentItems = recentItems.map(item => {
+    // If the stored poster is already an absolute URL, keep it
+    // Otherwise, try to resolve it through the client
+    if (item.poster && item.poster.startsWith('http')) {
+      return item;
+    }
+    // For relative URLs or missing posters, try to resolve
+    if (item.type === 'live') {
+      return {
+        ...item,
+        poster: client.resolveLogoUrl(item.poster)
+      };
+    }
+    // For vod/series, we need the original item data to properly resolve
+    // Since we only have stored metadata, return as-is and let the component handle missing posters
+    return item;
+  });
+
+  const formatTimeAgo = useCallback((timestamp: number, isLive?: boolean) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 30) return isLive ? t('now') : t('justNow');
+    if (seconds < 60) return t('justNow');
+    if (seconds < 3600) return t('minutesAgo', { count: Math.floor(seconds / 60) });
+    if (seconds < 86400) return t('hoursAgo', { count: Math.floor(seconds / 3600) });
+    if (seconds < 604800) return t('daysAgo', { count: Math.floor(seconds / 86400) });
+    return t('longTimeAgo');
+  }, [t]);
 
   if (!activePortal) {
     return null;
@@ -271,9 +203,9 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
   const inProgressMap = new Map(inProgressMovies.map(m => [m.movieId, m.progress]));
 
   // Group items by type
-  const liveItems = recentItems.filter(item => item.type === 'live');
-  const vodItems = recentItems.filter(item => item.type === 'vod');
-  const seriesItems = recentItems.filter(item => item.type === 'series');
+  const liveItems = resolvedRecentItems.filter(item => item.type === 'live');
+  const vodItems = resolvedRecentItems.filter(item => item.type === 'vod');
+  const seriesItems = resolvedRecentItems.filter(item => item.type === 'series');
 
   // Type-safe mappers from RecentItem to domain types
   const mapToChannel = (item: RecentItem): StalkerChannel => ({
@@ -310,16 +242,6 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
     }
   };
 
-  const formatTimeAgo = (timestamp: number, isLive?: boolean) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 30) return isLive ? t('now') : t('justNow');
-    if (seconds < 60) return t('justNow');
-    if (seconds < 3600) return t('minutesAgo', { count: Math.floor(seconds / 60) });
-    if (seconds < 86400) return t('hoursAgo', { count: Math.floor(seconds / 3600) });
-    if (seconds < 604800) return t('daysAgo', { count: Math.floor(seconds / 86400) });
-    return t('longTimeAgo');
-  };
-
   if (isLoading) {
     return (
       <div className="p-6">
@@ -336,7 +258,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
     );
   }
 
-  if (recentItems.length === 0) {
+  if (resolvedRecentItems.length === 0) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -363,6 +285,9 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
     return progress?.percentage || 0;
   };
 
+  // Check for reduced motion preference
+  const prefersReducedMotion = globalThis.window?.matchMedia('(prefers-reduced-motion: reduce)').matches ?? false;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -374,15 +299,23 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
       <div className="flex items-center justify-between mb-6 px-6">
         <div className="flex items-center gap-3">
           <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{
+              scale: prefersReducedMotion ? 1 : [1, 1.1, 1],
+              opacity: 1,
+            }}
+            transition={{
+              duration: prefersReducedMotion ? 0.3 : 2,
+              repeat: prefersReducedMotion ? 1 : Infinity,
+              ease: 'easeInOut',
+            }}
           >
             <Star className="w-6 h-6 text-green-500" />
           </motion.div>
           <div>
             <h2 className="text-2xl font-bold dark:text-white text-slate-900">{t('forYou') || 'Dla Ciebie'}</h2>
             <p className="text-sm dark:text-slate-400 text-slate-600">
-              {recentItems.length} {t('recentlyViewed') || 'ostatnio oglądanych'}
+              {resolvedRecentItems.length} {t('recentlyViewed') || 'ostatnio oglądanych'}
             </p>
           </div>
         </div>
