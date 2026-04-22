@@ -139,7 +139,7 @@ const EpisodeList: React.FC<EpisodeListProps> = ({
         const hasResume = resumePos > 30 && watchStatus === 'in_progress';
         const isWatched = watchStatus === 'watched';
         const epNum = index + 1;
-        const displayName = (episode.episodeName || episode.name || `${t('episode')} ${epNum}`).replaceAll(/Season (\d+)/g, `${t('season')} $1`);
+        const displayName = `${t('episode')} ${epNum}`;
 
         return (
           <div

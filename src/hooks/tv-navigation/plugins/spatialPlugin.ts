@@ -17,9 +17,10 @@ export const spatialPlugin: NavigationPlugin = {
     if (recentPositions && direction === 'down') {
       // If we're going down and the current position is very close to where we just were,
       // we might be in a loop. Try to find a different target.
+      // Only trigger if we've actually moved from the starting position (y > 0)
       const currentY = current.rect.top;
       const lastY = recentPositions.y;
-      if (Math.abs(currentY - lastY) < 5) {
+      if (currentY > 0 && Math.abs(currentY - lastY) < 5) {
         return null;
       }
     }

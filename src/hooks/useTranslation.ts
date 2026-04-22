@@ -67,3 +67,9 @@ export const useTranslation = () => {
 
   return { t, currentLang, changeLanguage, isLoading };
 };
+
+// Reset global language state (for testing)
+export const _resetLanguageState = (lang: Language = 'pl') => {
+  globalLanguage = lang;
+  listeners.clear();
+};

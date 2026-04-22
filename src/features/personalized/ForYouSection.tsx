@@ -1,7 +1,7 @@
 // =========================
 // 🎯 FOR YOU SECTION - Netflix Style Horizontal Carousels
 // =========================
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { usePortalsStore } from '@/store/portals.store';
 import { useRecentViewed, type RecentItem } from '@/hooks/useRecentItems';
@@ -166,9 +166,8 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
   const { getInProgressMovies } = useResumeStore();
 
   // Re-resolve poster URLs using the client
-  const resolvedRecentItems = recentItems.map(item => {
+  const resolvedRecentItems = useMemo(() => recentItems.map(item => {
     // If the stored poster is already an absolute URL, keep it
-    // Otherwise, try to resolve it through the client
     if (item.poster && item.poster.startsWith('http')) {
       return item;
     }
@@ -179,10 +178,24 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
         poster: client.resolveLogoUrl(item.poster)
       };
     }
-    // For vod/series, we need the original item data to properly resolve
-    // Since we only have stored metadata, return as-is and let the component handle missing posters
+    // For vod/series, construct a minimal VOD object to resolve poster URL
+    if (item.type === 'vod' || item.type === 'series') {
+      const minimalVod = {
+        id: Number(item.item_id) || 0,
+        name: item.name,
+        cmd: item.cmd ?? '',
+        poster: item.poster,
+        screenshot_uri: item.poster,
+        logo: item.poster,
+      };
+      const resolvedPoster = client.resolvePosterUrl(minimalVod);
+      return {
+        ...item,
+        poster: resolvedPoster
+      };
+    }
     return item;
-  });
+  }), [recentItems, client]);
 
   const formatTimeAgo = useCallback((timestamp: number, isLive?: boolean) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -218,12 +231,14 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
   });
 
   const mapToVOD = (item: RecentItem): StalkerVOD => ({
-    id: Number(item.item_id) || 0,
+    id: item.item_id as any,
     name: item.name,
     cmd: item.cmd ?? '',
     description: '',
     added: new Date().toISOString(),
     censored: false,
+    poster: item.poster,
+    logo: item.poster,
   });
 
   const handleItemClick = (item: RecentItem) => {

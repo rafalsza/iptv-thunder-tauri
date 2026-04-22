@@ -423,9 +423,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     )}
 
                     <div className="pt-4 dark:border-t border-slate-700 border-t-gray-300">
-                      <p className="text-xs dark:text-slate-400 text-slate-600 mb-1">Aktualnie używany EPG:</p>
+                      <p className="text-xs dark:text-slate-400 text-slate-600 mb-1">{t('currentEpgUrl')}</p>
                       <p className="text-emerald-400 break-all text-sm font-mono">
-                        {effectiveEpgUrl || 'Automatyczny z portalu IPTV'}
+                        {effectiveEpgUrl || t('autoEpgFromPortal')}
                       </p>
                     </div>
 
@@ -441,8 +441,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                   <div className="max-w-md space-y-8">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium dark:text-white text-slate-900">Tryb debugowania</p>
-                        <p className="text-sm dark:text-slate-400 text-slate-600">Pokazuje szczegółowe logi w konsoli (Debug Mode)</p>
+                        <p className="font-medium dark:text-white text-slate-900">{t('debugMode')}</p>
+                        <p className="text-sm dark:text-slate-400 text-slate-600">{t('debugModeDescription')}</p>
                       </div>
                       <Switch
                         data-tv-focusable="true"
@@ -456,9 +456,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     </div>
 
                     <div className="pt-4 dark:border-t border-slate-700 border-t-gray-300">
-                      <p className="font-medium dark:text-white text-slate-900 mb-2">Wyczyść historię oglądania</p>
+                      <p className="font-medium dark:text-white text-slate-900 mb-2">{t('clearWatchHistory')}</p>
                       <p className="text-sm dark:text-slate-400 text-slate-600 mb-4">
-                        Usuwa zapisane pozycje z sekcji "Dla Ciebie". Przydatne jeśli plakaty nie wyświetlają się poprawnie.
+                        {t('clearWatchHistoryDescription')}
                       </p>
                       <Button
                         data-tv-focusable
@@ -471,7 +471,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         className="flex items-center gap-2"
                       >
                         <Trash2 className="w-4 h-4" />
-                        Wyczyść historię
+                        {t('clearHistory')}
                       </Button>
                     </div>
                   </div>
@@ -486,7 +486,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     <p className="dark:text-slate-400 text-slate-600 mb-8">{t('version')} {version || '—'}</p>
                     
                     <div className="text-sm dark:text-slate-500 text-slate-500 max-w-xs">
-                      Nowoczesna aplikacja IPTV stworzona z użyciem Tauri + React
+                      {t('appDescription')}
                     </div>
                   </div>
                 )}

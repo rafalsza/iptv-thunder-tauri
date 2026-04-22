@@ -1,41 +1,20 @@
 // =========================
 // 🧠 COMPLETE APP WITH ALL FEATURES
 // =========================
-import React, { useState, useRef, useEffect, Suspense, lazy, useCallback } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
-import { StalkerChannel, StalkerVOD, StalkerGenre } from '@/types';
-import { usePlayer } from '@/features/player/player.hooks';
-import { Navigation } from '@/components/ui/Navigation';
-import { TitleBar } from '@/components/ui/TitleBar';
 import { usePortalsStore } from '@/store/portals.store';
 import { useAppStore } from '@/store/app.store';
-import { useTranslation, useTVNavigation } from '@/hooks';
-import { addRecentViewed } from '@/hooks/useRecentItems';
-import { Settings } from '@/features/settings/Settings';
+import { useTVNavigation } from '@/hooks';
 import { ToastProvider } from '@/components/ui/Toast';
-import { getSeriesInfo } from '@/features/series/series.api';
-
-// Lazy load components
-const TVList = lazy(() => import('@/features/tv/TVList').then(module => ({ default: module.TVList })));
-const MovieList = lazy(() => import('@/features/movies/MovieList').then(module => ({ default: module.MovieList })));
-const MovieDetails = lazy(() => import('@/features/movies/MovieDetails').then(module => ({ default: module.MovieDetails })));
-const SeriesList = lazy(() => import('@/features/series/SeriesList').then(module => ({ default: module.SeriesList })));
-const SeriesDetails = lazy(() => import('@/features/series/SeriesDetails').then(module => ({ default: module.SeriesDetails })));
-const Player = lazy(() => import('@/features/player/Player').then(module => ({ default: module.Player })));
-const PortalsPage = lazy(() => import('@/features/portals/PortalsPage').then(module => ({ default: module.PortalsPage })));
-const ChannelCategoriesList = lazy(() => import('@/features/tv/ChannelCategoriesList').then(module => ({ default: module.ChannelCategoriesList })));
-const FavoriteCategoriesList = lazy(() => import('@/features/tv/FavoriteCategoriesList').then(module => ({ default: module.FavoriteCategoriesList })));
-const MovieCategoriesList = lazy(() => import('@/features/movies/MovieCategoriesList').then(module => ({ default: module.MovieCategoriesList })));
-const FavoriteChannelsList = lazy(() => import('@/features/tv/FavoriteChannelsList').then(module => ({ default: module.FavoriteChannelsList })));
-const FavoriteMovieCategoriesList = lazy(() => import('@/features/movies/FavoriteMovieCategoriesList').then(module => ({ default: module.FavoriteMovieCategoriesList })));
-const FavoriteMoviesList = lazy(() => import('@/features/movies/FavoriteMoviesList').then(module => ({ default: module.FavoriteMoviesList })));
-const SeriesCategoriesList = lazy(() => import('@/features/series/SeriesCategoriesList').then(module => ({ default: module.SeriesCategoriesList })));
-const FavoriteSeriesCategoriesList = lazy(() => import('@/features/series/FavoriteSeriesCategoriesList').then(module => ({ default: module.FavoriteSeriesCategoriesList })));
-const FavoriteSeriesList = lazy(() => import('@/features/series/FavoriteSeriesList').then(module => ({ default: module.FavoriteSeriesList })));
-const ForYouSection = lazy(() => import('@/features/personalized/ForYouSection').then(module => ({ default: module.ForYouSection })));
+import { useTypedRouter, isMovieDetails, isSeriesDetails } from '@/hooks/useTypedRouter';
+import { usePlaybackManager } from '@/hooks/usePlaybackManager';
+import { useNavigationMenu } from '@/hooks/useNavigationMenu';
+import { AppLayout } from '@/components/AppLayout';
+import { AppContent } from '@/components/AppContent';
 
 // Create a client with persistent cache
 const queryClient = new QueryClient({
@@ -53,25 +32,13 @@ const persister = createAsyncStoragePersister({
   storage: globalThis.localStorage,
 });
 
-type ActiveView = 'tv' | 'movies' | 'series' | 'portals' | 'categories' | 'favorite-categories' | 'favorite-channels' | 'movie-categories' | 'favorite-movie-categories' | 'favorite-movies' | 'movie-details' | 'series-details' | 'series-categories' | 'favorite-series-categories' | 'favorite-series' | 'for-you';
-
 interface AppProps {
   // Remove activeAccount prop - we'll get it from store
 }
 
 function AppInner({ }: AppProps) {
-  const { t } = useTranslation();
-  const [activeView, setActiveView] = useState<ActiveView>('portals');
-  const [search, setSearch] = useState('');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
-  const [selectedMovie, setSelectedMovie] = useState<StalkerVOD | null>(null);
-  const [selectedSeries, setSelectedSeries] = useState<StalkerVOD | null>(null);
-  const [episodesList, setEpisodesList] = useState<StalkerVOD[]>([]);
-  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
-
-  // Track previous view for back navigation
-  const previousViewRef = useRef<ActiveView>('movies');
+  const [search, setSearch] = React.useState('');
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
 
   const activePortal = usePortalsStore(s =>
     s.portals.find(p => p.id === s.activePortalId) ?? null
@@ -94,70 +61,86 @@ function AppInner({ }: AppProps) {
     hideDecorations();
   }, []);
 
-  // Create client only when we have an active portal
-  const client = activePortal ? new StalkerClient(activePortal as any) : null;
+  // Routing logic
+  const {
+    route,
+    navigate,
+    navigateToMovie,
+    navigateToSeries,
+    navigateToCategory,
+    goBack,
+    selectedCategory,
+    selectedMovie,
+    selectedSeries,
+    activeView,
+  } = useTypedRouter();
 
-  // Player hooks for different content types
-  const tvPlayer = usePlayer(client!);
-  const moviePlayer = usePlayer(client!);
-  const seriesPlayer = usePlayer(client!);
+  // Track last focused element per route for Smart TV navigation
+  const lastFocusRef = useRef<Record<string, string>>({});
+  const previousRouteRef = useRef<string>('');
 
-  const handleChannelSelect = (channel: StalkerChannel) => {
-    if (client) {
-      tvPlayer.play(channel, queryClient, false);
-      addRecentViewed(activePortal!.id, 'live', String(channel.id), {
-        name: channel.name,
-        poster: client.resolveLogoUrl(channel.logo),
-        cmd: channel.cmd,
-      });
-      // Invalidate recent viewed queries to update ForYouSection
-      queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });
+  // Save current focus when route changes
+  useEffect(() => {
+    const currentRouteType = route.type;
+    const previousRouteType = previousRouteRef.current;
+
+    if (previousRouteType && currentRouteType !== previousRouteType) {
+      // Save the current focused element for the previous route
+      const focusedElement = document.activeElement as HTMLElement;
+      if (focusedElement?.dataset.tvFocusable) {
+        lastFocusRef.current[previousRouteType] = focusedElement.id || focusedElement.dataset.tvId || '';
+      }
+
+      // Restore focus for the current route if we have a saved element
+      const savedFocusId = lastFocusRef.current[currentRouteType];
+      if (savedFocusId) {
+        setTimeout(() => {
+          const savedElement = document.getElementById(savedFocusId) || document.querySelector(`[data-tv-id="${savedFocusId}"]`);
+          if (savedElement && 'focus' in savedElement) {
+            savedElement.focus();
+          }
+        }, 50);
+      }
     }
-  };
 
-  const handleMovieSelect = (movie: StalkerVOD) => {
-    previousViewRef.current = activeView;
-    setSelectedMovie(movie);
-    setActiveView('movie-details');
-  };
+    previousRouteRef.current = currentRouteType;
+  }, [route.type]);
 
-  const handleMoviePlay = (movie: StalkerVOD, resumePosition?: number) => {
-    if (client) {
-      moviePlayer.play(movie as any, queryClient, true, resumePosition || 0, String(movie.id));
-      addRecentViewed(activePortal!.id, 'vod', String(movie.id), {
-        name: movie.name,
-        poster: client.resolvePosterUrl(movie),
-        cmd: movie.cmd,
-      });
-      // Invalidate recent viewed queries to update ForYouSection
-      queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });
-    }
-  };
+  // Create client only when we have an active portal (memoized to avoid recreation on every render)
+  const client = useMemo(() => 
+    activePortal ? new StalkerClient(activePortal as any) : null,
+    [activePortal]
+  );
 
-  const handleMovieBack = () => {
-    setSelectedMovie(null);
-    setActiveView(previousViewRef.current);
-  };
+  // Playback manager
+  const {
+    player,
+    handleChannelSelect,
+    handleMoviePlay,
+    handleEpisodeSelect,
+    handleEpisodeEnded,
+    close: closePlayer,
+  } = usePlaybackManager({
+    client,
+    activePortal,
+    selectedSeries,
+    queryClient,
+  });
 
-  const handleSeriesSelect = (series: StalkerVOD) => {
-    previousViewRef.current = activeView;
-    setSelectedSeries(series);
-    setActiveView('series-details');
-  };
-
-  const handleSeriesBack = () => {
-    setSelectedSeries(null);
-    setActiveView(previousViewRef.current);
-  };
+  // Navigation menu
+  const navigationItems = useNavigationMenu({
+    activeView,
+    activePortal,
+    navigate,
+    setIsSettingsOpen,
+  });
 
   // TV Navigation (D-pad support for Android TV)
   const { setActiveContainer } = useTVNavigation({
     selector: '[data-tv-focusable]',
     onBack: () => {
-      if (activeView === 'movie-details' && selectedMovie) {
-        handleMovieBack();
-      } else if (activeView === 'series-details' && selectedSeries) {
-        handleSeriesBack();
+      if ((isMovieDetails(route) && selectedMovie) || (isSeriesDetails(route) && selectedSeries)) {
+        goBack();
       }
     },
     onEnter: (_element) => {
@@ -188,502 +171,38 @@ function AppInner({ }: AppProps) {
         }, 100);
       }
     }
-  }, [activeView, isSettingsOpen, setActiveContainer]);
-
-  const handleEpisodeEnded = useCallback(async () => {
-    const { getSetting } = await import('@/hooks/useSettings');
-    const autoPlayEpisodes = await getSetting('autoPlayEpisodes');
-
-    if (autoPlayEpisodes && selectedSeries && episodesList.length > 0 && currentEpisodeIndex < episodesList.length - 1) {
-      const nextIndex = currentEpisodeIndex + 1;
-      const nextEpisode = episodesList[nextIndex];
-      setCurrentEpisodeIndex(nextIndex);
-      await handleEpisodeSelect(nextEpisode, 0);
-    }
-  }, [episodesList, currentEpisodeIndex, selectedSeries]);
-
-  const handleEpisodeSelect = async (episode: StalkerVOD, resumePosition?: number) => {
-    if (!client) return;
-
-    let seriesData: any = null;
-
-    // Store episodes list and current index for auto-play
-    if (selectedSeries?.id) {
-      try {
-        seriesData = await queryClient.fetchQuery({
-          queryKey: ['series', String(selectedSeries.id), 'info'],
-          queryFn: async () => {
-            return await getSeriesInfo(client, String(selectedSeries.id));
-          },
-        });
-        if (seriesData?.episodes) {
-          // Deduplicate episodes by ID
-          const uniqueEpisodes = seriesData.episodes.filter((ep: StalkerVOD, index: number, self: StalkerVOD[]) =>
-            index === self.findIndex((e: StalkerVOD) => String(e.id) === String(ep.id))
-          );
-          const episodeIndex = uniqueEpisodes.findIndex((ep: StalkerVOD) => String(ep.id) === String(episode.id));
-          if (episodeIndex !== -1) {
-            setEpisodesList(uniqueEpisodes);
-            setCurrentEpisodeIndex(episodeIndex);
-          }
-        }
-      } catch (e) {
-        console.error('Failed to fetch series episodes for auto-play:', e);
-      }
-    }
-
-    try {
-      const url = await queryClient.fetchQuery({
-        queryKey: ['series', episode.cmd, episode.episode],
-        queryFn: async () => {
-          const response = await client._makeRequest({
-            action: 'create_link',
-            cmd: episode.cmd,
-            type: 'vod',
-            series: String(episode.episode || '1'),
-            disable_ad: '0',
-            download: '0',
-            mac: client.getAccount().mac,
-            JsHttpRequest: '1-xml',
-          });
-          const streamUrl = response?.js?.cmd || response.data?.js?.cmd;
-          if (!streamUrl) throw new Error('No stream URL in response');
-          return streamUrl.replace(/^ffmpeg\s+/, '');
-        },
-        staleTime: 0,
-      });
-      
-      if (url?.includes('stream=.')) {
-        console.error('❌ Invalid stream URL');
-        throw new Error('Invalid stream URL from server');
-      }
-      
-      // Build full episode name: "Gra o Tron - Season 7 - Odcinek 3"
-      const seriesName = selectedSeries?.name || '';
-      const episodeName = episode.episodeName || episode.name || `Odcinek ${episode.episode}`;
-      const fullName = seriesName ? `${seriesName} - ${episodeName}` : episodeName;
-      
-      seriesPlayer.setMedia({
-        url,
-        name: fullName,
-        channelId: Number.parseInt(String(episode.id)),
-        isVod: true,
-        movieId: String(episode.id),
-        resumePosition: resumePosition || 0
-      });
-
-      // Add series to recently viewed only when an episode is actually played
-      const seriesInfo = seriesData?.series || selectedSeries;
-      if (seriesInfo) {
-        addRecentViewed(activePortal!.id, 'series', String(seriesInfo.id), {
-          name: seriesInfo.name,
-          poster: client.resolvePosterUrl(seriesInfo),
-          cmd: seriesInfo.cmd,
-          season: episode.season !== undefined ? Number(episode.season) : undefined,
-          episode: episode.episode !== undefined ? Number(episode.episode) : undefined,
-        });
-      }
-      // Invalidate recent viewed queries to update ForYouSection
-      queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });
-    } catch (error) {
-      console.error('❌ Failed to play episode:', error);
-      // Toast notification handled in component
-    }
-  };
-
-  const handleCategorySelect = (category: StalkerGenre) => {
-    setSelectedCategory(category);
-    setSearch(''); // Reset search when changing category
-
-    // Use functional update to get current activeView value
-    setActiveView(currentView => {
-      // Navigate to appropriate view based on current context
-      if (currentView === 'movie-categories' || currentView === 'favorite-movie-categories') {
-        return 'movies';
-      } else if (currentView === 'series-categories' || currentView === 'favorite-series-categories') {
-        return 'series';
-      } else if (currentView === 'movies' || currentView === 'series' || currentView === 'tv') {
-        // Already in the correct content view, don't navigate away
-        return currentView;
-      } else {
-        return 'tv';
-      }
-    });
-
-  };
-
-  const navigationItems = [
-    {
-      id: 'portals',
-      label: t('managePortals'),
-      icon: '🌐',
-      active: activeView === 'portals',
-      onClick: () => setActiveView('portals'),
-    },
-    {
-      id: 'for-you',
-      label: t('forYou') || 'Dla Ciebie',
-      icon: '⭐',
-      active: activeView === 'for-you',
-      disabled: !activePortal,
-      onClick: () => setActiveView('for-you'),
-    },
-    {
-      id: 'tv',
-      label: t('channels'),
-      icon: '📡',
-      active: activeView === 'tv' || activeView === 'categories' || activeView === 'favorite-categories' || activeView === 'favorite-channels',
-      disabled: !activePortal,
-      subItems: [
-        {
-          id: 'categories',
-          label: t('categories'),
-          onClick: () => setActiveView('categories'),
-        },
-        {
-          id: 'favorite-categories',
-          label: t('favoriteCategories'),
-          onClick: () => setActiveView('favorite-categories'),
-        },
-        {
-          id: 'favorite-channels',
-          label: t('favoriteChannels'),
-          onClick: () => setActiveView('favorite-channels'),
-        },
-      ],
-    },
-    {
-      id: 'movies',
-      label: t('movies'),
-      icon: '🎬',
-      active: activeView === 'movies' || activeView === 'movie-categories' || activeView === 'favorite-movie-categories' || activeView === 'favorite-movies' || activeView === 'movie-details',
-      disabled: !activePortal,
-      subItems: [
-        {
-          id: 'movie-categories',
-          label: t('categories'),
-          onClick: () => setActiveView('movie-categories'),
-        },
-        {
-          id: 'favorite-movie-categories',
-          label: t('favoriteCategories'),
-          onClick: () => setActiveView('favorite-movie-categories'),
-        },
-        {
-          id: 'favorite-movies',
-          label: t('favorites'),
-          onClick: () => setActiveView('favorite-movies'),
-        },
-      ],
-    },
-    {
-      id: 'series',
-      label: t('series'),
-      icon: '📺',
-      active: activeView === 'series' || activeView === 'series-categories' || activeView === 'favorite-series-categories' || activeView === 'favorite-series' || activeView === 'series-details',
-      disabled: !activePortal,
-      subItems: [
-        {
-          id: 'series-categories',
-          label: t('categories'),
-          onClick: () => setActiveView('series-categories'),
-        },
-        {
-          id: 'favorite-series-categories',
-          label: t('favoriteCategories'),
-          onClick: () => setActiveView('favorite-series-categories'),
-        },
-        {
-          id: 'favorite-series',
-          label: t('favorites'),
-          onClick: () => setActiveView('favorite-series'),
-        },
-      ],
-    },
-    {
-      id: 'settings',
-      label: t('settings'),
-      icon: '⚙️',
-      active: false,
-      onClick: () => setIsSettingsOpen(true),
-    },
-  ];
-
-  const renderActiveView = () => {
-    // Show portals page if no active portal
-    if (!activePortal || activeView === 'portals') {
-      return (
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Portals...</div>}>
-          <PortalsPage />
-        </Suspense>
-      );
-    }
-
-    switch (activeView) {
-      case 'tv':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading TV...</div>}>
-            <TVList
-              client={client!}
-              accountId={activePortal.id}
-              search={search}
-              selectedCategory={selectedCategory}
-              onChannelSelect={handleChannelSelect}
-            />
-          </Suspense>
-        );
-      
-      case 'categories':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Categories...</div>}>
-            <ChannelCategoriesList
-              client={client!}
-              search={search}
-              onCategorySelect={handleCategorySelect}
-            />
-          </Suspense>
-        );
-      
-      case 'favorite-categories':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Categories...</div>}>
-            <FavoriteCategoriesList
-              client={client!}
-              search={search}
-              onCategorySelect={handleCategorySelect}
-            />
-          </Suspense>
-        );
-      
-      case 'favorite-channels':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Channels...</div>}>
-            <FavoriteChannelsList
-              client={client!}
-              accountId={activePortal.id}
-              search={search}
-              onChannelSelect={handleChannelSelect}
-            />
-          </Suspense>
-        );
-      
-      case 'movies':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Movies...</div>}>
-            <MovieList
-              client={client!}
-              selectedCategory={selectedCategory}
-              onMovieSelect={handleMovieSelect}
-              search={search}
-            />
-          </Suspense>
-        );
-      
-      case 'movie-categories':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Movie Categories...</div>}>
-            <MovieCategoriesList
-              client={client!}
-              search={search}
-              onCategorySelect={handleCategorySelect}
-            />
-          </Suspense>
-        );
-      
-      case 'favorite-movie-categories':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Movie Categories...</div>}>
-            <FavoriteMovieCategoriesList
-              client={client!}
-              search={search}
-              onCategorySelect={handleCategorySelect}
-            />
-          </Suspense>
-        );
-      
-      case 'movie-details':
-        return selectedMovie && client ? (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Movie Details...</div>}>
-            <MovieDetails
-              movie={selectedMovie}
-              client={client}
-              onPlay={handleMoviePlay}
-              onBack={handleMovieBack}
-            />
-          </Suspense>
-        ) : null;
-      
-      case 'favorite-movies':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Movies...</div>}>
-            <FavoriteMoviesList
-              accountId={activePortal.id}
-              search={search}
-              onMovieSelect={handleMovieSelect}
-            />
-          </Suspense>
-        );
-      
-      case 'series':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Series...</div>}>
-            <SeriesList
-              client={client!}
-              onSeriesSelect={handleSeriesSelect}
-              selectedCategory={selectedCategory}
-              search={search}
-            />
-          </Suspense>
-        );
-      
-      case 'series-details':
-        return selectedSeries ? (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Series Details...</div>}>
-            <SeriesDetails
-              series={selectedSeries}
-              client={client!}
-              onPlay={handleEpisodeSelect}
-              onBack={handleSeriesBack}
-            />
-          </Suspense>
-        ) : null;
-      
-      case 'series-categories':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Series Categories...</div>}>
-            <SeriesCategoriesList
-              client={client!}
-              search={search}
-              onCategorySelect={handleCategorySelect}
-            />
-          </Suspense>
-        );
-      
-      case 'favorite-series-categories':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Series Categories...</div>}>
-            <FavoriteSeriesCategoriesList
-              client={client!}
-              search={search}
-              onCategorySelect={handleCategorySelect}
-            />
-          </Suspense>
-        );
-      
-      case 'favorite-series':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Series...</div>}>
-            <FavoriteSeriesList
-              accountId={activePortal.id}
-              search={search}
-              onSeriesSelect={handleSeriesSelect}
-            />
-          </Suspense>
-        );
-
-      case 'for-you':
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading For You...</div>}>
-            <ForYouSection
-              client={client!}
-              onChannelSelect={handleChannelSelect}
-              onSeriesSelect={handleSeriesSelect}
-              onMoviePlay={handleMoviePlay}
-            />
-          </Suspense>
-        );
-
-      default:
-        return (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Portals...</div>}>
-            <PortalsPage />
-          </Suspense>
-        );
-    }
-  };
-
-  const getCurrentPlayer = () => {
-    // First check if any player has active content
-    if (moviePlayer.current) return moviePlayer;
-    if (seriesPlayer.current) return seriesPlayer;
-    if (tvPlayer.current) return tvPlayer;
-
-    // No active player, return based on view
-    switch (activeView) {
-      case 'tv':
-        return tvPlayer;
-      case 'movies':
-      case 'movie-details':
-        return moviePlayer;
-      case 'series':
-      case 'series-details':
-        return seriesPlayer;
-      default:
-        return tvPlayer;
-    }
-  };
-
-  const currentPlayer = getCurrentPlayer();
+  }, [route.type, isSettingsOpen, setActiveContainer]);
 
   return (
-    <div className={`flex flex-col h-full ${currentPlayer.current ? 'bg-transparent' : 'dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 bg-gradient-to-br from-white via-gray-100 to-white'}`}>
-      {/* Custom TitleBar - hidden only when fullscreen */}
-      {!isFullscreen && <TitleBar />}
-
-      {/* Main Content Area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Navigation - hidden when player active */}
-        {!currentPlayer.current && (
-          <Navigation
-            items={navigationItems}
-          />
-        )}
-
-        {/* Main Content - hidden when player active */}
-        {!currentPlayer.current && (
-          <div id="main" data-tv-container="main" className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-            {/* Search Bar - only show for list views */}
-            {activeView !== 'portals' && activeView !== 'movie-details' && activeView !== 'series-details' && activePortal && (
-              <div className="p-4 dark:border-b border-slate-700/50 border-b-gray-300/50">
-                <input
-                  type="text"
-                  placeholder={`${t('search')}...`}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  data-tv-focusable
-                  data-tv-search
-                  tabIndex={0}
-                  className="w-full px-4 py-3 dark:bg-slate-800/50 bg-gray-200/50 dark:bg-opacity-50 bg-opacity-50 dark:border border-slate-600/50 border-gray-300/50 rounded-lg dark:text-white text-slate-900 dark:placeholder-slate-400 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-700 focus:border-green-700 backdrop-blur-sm shadow-sm transition-all duration-200"
-                />
-              </div>
-            )}
-
-            {/* Active View */}
-            {renderActiveView()}
-          </div>
-        )}
-
-        {/* Player */}
-        <Suspense fallback={<div className="fixed inset-0 bg-black z-50 flex items-center justify-center"><div className="text-white">Loading player...</div></div>}>
-          {currentPlayer.current && (
-            <Player
-              url={currentPlayer.current.url}
-              name={currentPlayer.current.name}
-              channelId={currentPlayer.current.channelId}
-              client={client || undefined}
-              buffering={currentPlayer.buffering}
-              isVod={currentPlayer.current.isVod}
-              movieId={currentPlayer.current.movieId}
-              resumePosition={currentPlayer.current.resumePosition}
-              onClose={currentPlayer.close}
-              onEnded={handleEpisodeEnded}
-            />
-          )}
-        </Suspense>
-      </div>
-
-      <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-    </div>
+    <AppLayout
+      activeView={activeView}
+      activePortal={activePortal}
+      client={client}
+      search={search}
+      isSettingsOpen={isSettingsOpen}
+      isFullscreen={isFullscreen}
+      player={player}
+      closePlayer={closePlayer}
+      navigationItems={navigationItems}
+      setIsSettingsOpen={setIsSettingsOpen}
+      setSearch={setSearch}
+      handleEpisodeEnded={handleEpisodeEnded}
+    >
+      <AppContent
+        route={route}
+        activePortal={activePortal}
+        client={client}
+        search={search}
+        selectedCategory={selectedCategory}
+        handleChannelSelect={handleChannelSelect}
+        navigateToMovie={navigateToMovie}
+        navigateToSeries={navigateToSeries}
+        navigateToCategory={navigateToCategory}
+        goBack={goBack}
+        handleMoviePlay={handleMoviePlay}
+        handleEpisodeSelect={handleEpisodeSelect}
+      />
+    </AppLayout>
   );
 }
 

@@ -59,6 +59,21 @@ export { useTranslation } from './useTranslation';
 // 📺 TV NAVIGATION: Android TV / D-pad support
 export { useTVNavigation } from './tv-navigation/react/useTVNavigation';
 
+// 🧭 TYPED ROUTER: Type-safe routing with discriminated unions
+export {
+  useTypedRouter,
+  type Route,
+  type SimpleRoute,
+  type ParamRoute,
+  isMovieDetails,
+  isSeriesDetails,
+  getRouteType,
+  isRouteType,
+} from './useTypedRouter';
+
+// 🧭 APP ROUTER: Backward compatibility alias
+export { useAppRouter } from './useAppRouter';
+
 // ❤️ FAVORITES: User favorites (channels, movies, series, categories)
 export {
   useFavorites,

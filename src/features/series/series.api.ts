@@ -236,7 +236,6 @@ export const getSeriesInfo = async (
           id: `${ep.id}:ep${epNum}`, // Unique ID for each episode
           season: ep.name?.match(/Season\s*(\d+)/i)?.[1] || '1',
           episode: String(epNum),
-          episodeName: `${ep.name} - Odcinek ${epNum}`,
         });
       });
     } else {

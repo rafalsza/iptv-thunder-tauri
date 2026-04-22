@@ -34,6 +34,14 @@ export const translations = {
 
     epgSource: 'Źródło EPG',
     customEpgUrl: 'Własny URL EPG',
+    currentEpgUrl: 'Aktualnie używany EPG:',
+    autoEpgFromPortal: 'Automatyczny z portalu IPTV',
+
+    debugMode: 'Tryb debugowania',
+    debugModeDescription: 'Pokazuje szczegółowe logi w konsoli (Debug Mode)',
+    clearWatchHistory: 'Wyczyść historię oglądania',
+    clearWatchHistoryDescription: 'Usuwa zapisane pozycje z sekcji "Dla Ciebie". Przydatne jeśli plakaty nie wyświetlają się poprawnie.',
+    clearHistory: 'Wyczyść historię',
 
     saveChanges: 'Zapisz zmiany',
     cancel: 'Anuluj',
@@ -41,6 +49,7 @@ export const translations = {
 
     // About
     version: 'Wersja',
+    appDescription: 'Nowoczesna aplikacja IPTV stworzona z użyciem Tauri + React',
 
     // Common actions
     exit: 'Wyjdź',
@@ -114,7 +123,6 @@ export const translations = {
     hoursAgo: '{{count}} godz. temu',
     daysAgo: '{{count}} dni temu',
     longTimeAgo: 'Dawno temu',
-    clearHistory: 'Wyczyść historię',
 
     // Movies & Series
     movies: 'Filmy',
@@ -230,12 +238,21 @@ export const translations = {
 
     epgSource: 'EPG Source',
     customEpgUrl: 'Custom EPG URL',
+    currentEpgUrl: 'Currently used EPG:',
+    autoEpgFromPortal: 'Automatic from IPTV portal',
+
+    debugMode: 'Debug Mode',
+    debugModeDescription: 'Shows detailed logs in console (Debug Mode)',
+    clearWatchHistory: 'Clear watch history',
+    clearWatchHistoryDescription: 'Removes saved items from "For You" section. Useful if posters are not displaying correctly.',
+    clearHistory: 'Clear history',
 
     saveChanges: 'Save Changes',
     cancel: 'Cancel',
     reset: 'Reset',
 
     version: 'Version',
+    appDescription: 'Modern IPTV application built with Tauri + React',
 
     // Common actions
     exit: 'Exit',
@@ -309,7 +326,6 @@ export const translations = {
     hoursAgo: '{{count}} hr ago',
     daysAgo: '{{count}} days ago',
     longTimeAgo: 'Long ago',
-    clearHistory: 'Clear history',
 
     // Movies & Series
     movies: 'Movies',
