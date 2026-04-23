@@ -278,6 +278,7 @@ class NativePlayerActivity : AppCompatActivity() {
 
         buttons.forEach { btn ->
             btn?.setOnFocusChangeListener { v, hasFocus ->
+                android.util.Log.d("NativePlayerActivity", "Focus change: ${v.id} hasFocus=$hasFocus")
                 // Reset all buttons to unfocused state first
                 buttons.forEach { b ->
                     b?.scaleX = 1f
