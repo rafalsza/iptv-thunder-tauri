@@ -254,12 +254,15 @@ class NativePlayerActivity : AppCompatActivity() {
 
         playPauseButton?.setOnClickListener {
             player?.let {
+                android.util.Log.d("NativePlayerActivity", "PlayPause clicked: isPlaying=${it.isPlaying}")
                 if (it.isPlaying) {
                     it.pause()
                     wasPlayingBeforeStop = false // User manually paused
+                    android.util.Log.d("NativePlayerActivity", "Paused playback")
                 } else {
                     it.play()
                     wasPlayingBeforeStop = true // User manually resumed
+                    android.util.Log.d("NativePlayerActivity", "Resumed playback")
                 }
             }
             resetHideTimer()
