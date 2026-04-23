@@ -278,8 +278,8 @@ class NativePlayerActivity : AppCompatActivity() {
 
         buttons.forEach { btn ->
             btn?.setOnFocusChangeListener { v, hasFocus ->
-                v.scaleX = if (hasFocus) 1.15f else 1f
-                v.scaleY = if (hasFocus) 1.15f else 1f
+                v.scaleX = if (hasFocus) 1.1f else 1f
+                v.scaleY = if (hasFocus) 1.1f else 1f
                 v.alpha = if (hasFocus) 1f else 0.8f
             }
         }
