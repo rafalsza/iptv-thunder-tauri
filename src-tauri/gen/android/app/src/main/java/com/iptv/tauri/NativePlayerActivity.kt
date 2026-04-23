@@ -493,7 +493,9 @@ class NativePlayerActivity : AppCompatActivity() {
                 // TODO: Twoje API IPTV / Stalker / Xtream
                 val epg = fetchEpgForChannel(channel)
 
-                updateEPG(epg.title, epg.start, epg.end, epg.nextTitle, epg.nextStart, epg.nextEnd)
+                runOnUiThread {
+                    updateEPG(epg.title, epg.start, epg.end, epg.nextTitle, epg.nextStart, epg.nextEnd)
+                }
 
             } catch (e: Exception) {
                 android.util.Log.e("EPG", "Failed", e)
