@@ -126,6 +126,7 @@ class NativePlayerActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        android.util.Log.e("NativePlayerActivity", "=== onCreate START ===")
         super.onCreate(savedInstanceState)
         currentInstance = this
 
