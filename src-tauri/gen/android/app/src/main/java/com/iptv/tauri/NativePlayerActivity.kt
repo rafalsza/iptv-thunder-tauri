@@ -278,9 +278,18 @@ class NativePlayerActivity : AppCompatActivity() {
 
         buttons.forEach { btn ->
             btn?.setOnFocusChangeListener { v, hasFocus ->
-                v.scaleX = if (hasFocus) 1.1f else 1f
-                v.scaleY = if (hasFocus) 1.1f else 1f
-                v.alpha = if (hasFocus) 1f else 0.8f
+                // Reset all buttons to unfocused state first
+                buttons.forEach { b ->
+                    b?.scaleX = 1f
+                    b?.scaleY = 1f
+                    b?.alpha = 0.8f
+                }
+                // Set focused state for current button
+                if (hasFocus) {
+                    v.scaleX = 1.1f
+                    v.scaleY = 1.1f
+                    v.alpha = 1f
+                }
             }
         }
 
