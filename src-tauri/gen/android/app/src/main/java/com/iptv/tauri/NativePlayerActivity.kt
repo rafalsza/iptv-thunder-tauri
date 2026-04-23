@@ -311,9 +311,6 @@ class NativePlayerActivity : AppCompatActivity() {
             }
         }
 
-        // Set initial focus to play/pause button for TV navigation
-        playPauseButton?.requestFocus()
-
         // Start auto-hide timer
         resetHideTimer()
     }

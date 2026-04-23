@@ -77,82 +77,68 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:orientation="horizontal"
         android:gravity="center"
+        android:orientation="horizontal"
         android:padding="20dp"
         android:background="@drawable/controls_gradient">
 
         <Button
             android:id="@+id/seek_backward_button"
-            android:layout_width="50dp"
-            android:layout_height="50dp"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
             android:text="⏪"
             android:textSize="24sp"
             android:textColor="#FFFFFF"
             android:background="@drawable/control_button"
-            android:layout_marginEnd="12dp"
-            android:stateListAnimator="@null"
             android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:contentDescription="Seek backward 10 seconds"
-            android:nextFocusRight="@+id/play_pause_button"
-            android:nextFocusUp="@+id/stop_button"
-            android:nextFocusDown="@+id/stop_button" />
+            android:defaultFocusHighlightEnabled="false"
+            android:foreground="@null"
+            android:nextFocusRight="@id/play_pause_button" />
 
         <Button
             android:id="@+id/play_pause_button"
             android:layout_width="60dp"
             android:layout_height="60dp"
             android:text="▶"
-            android:textSize="28sp"
+            android:textSize="24sp"
             android:textColor="#FFFFFF"
             android:background="@drawable/control_button_primary"
             android:layout_marginStart="8dp"
             android:layout_marginEnd="8dp"
-            android:stateListAnimator="@null"
             android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:contentDescription="Play or pause"
-            android:nextFocusLeft="@+id/seek_backward_button"
-            android:nextFocusRight="@+id/seek_forward_button"
-            android:nextFocusUp="@+id/stop_button"
-            android:nextFocusDown="@+id/stop_button" />
+            android:defaultFocusHighlightEnabled="false"
+            android:foreground="@null"
+            android:nextFocusLeft="@id/seek_backward_button"
+            android:nextFocusRight="@id/seek_forward_button" />
 
         <Button
             android:id="@+id/seek_forward_button"
-            android:layout_width="50dp"
-            android:layout_height="50dp"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
             android:text="⏩"
             android:textSize="24sp"
             android:textColor="#FFFFFF"
             android:background="@drawable/control_button"
             android:layout_marginStart="12dp"
-            android:stateListAnimator="@null"
             android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:contentDescription="Seek forward 10 seconds"
-            android:nextFocusLeft="@+id/play_pause_button"
-            android:nextFocusRight="@+id/stop_button"
-            android:nextFocusUp="@+id/stop_button"
-            android:nextFocusDown="@+id/stop_button" />
+            android:defaultFocusHighlightEnabled="false"
+            android:foreground="@null"
+            android:nextFocusLeft="@id/play_pause_button"
+            android:nextFocusRight="@id/stop_button" />
 
         <Button
             android:id="@+id/stop_button"
-            android:layout_width="50dp"
-            android:layout_height="50dp"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
             android:text="⏹"
             android:textSize="24sp"
             android:textColor="#FFFFFF"
             android:background="@drawable/control_button_danger"
             android:layout_marginStart="16dp"
-            android:stateListAnimator="@null"
             android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:contentDescription="Stop playback"
-            android:nextFocusLeft="@+id/seek_forward_button"
-            android:nextFocusRight="@+id/seek_backward_button"
-            android:nextFocusUp="@+id/seek_backward_button"
-            android:nextFocusDown="@+id/seek_backward_button" />
+            android:defaultFocusHighlightEnabled="false"
+            android:foreground="@null"
+            android:nextFocusLeft="@id/seek_forward_button" />
     </LinearLayout>
 
     <ProgressBar
