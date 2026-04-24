@@ -15,7 +15,14 @@ import { StalkerVOD, StalkerGenre } from '@/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ROW_HEIGHT = 320;
+// Responsive row height based on screen size (calculated dynamically)
+const getRowHeight = () => {
+  if (typeof window === 'undefined') return 240;
+  const width = window.innerWidth;
+  if (width > 3000) return 280;
+  if (width > 2000) return 240;
+  return 200;
+};
 const IMAGE_CACHE_LIMIT = 500;
 
 // ─── Image cache (module-level, survives re-renders, bounded size) ─────────────
@@ -186,14 +193,19 @@ export const SeriesList: React.FC<SeriesListProps> = ({
   const [columnCount, setColumnCount] = useState(() => {
     if (typeof window === 'undefined') return 5;
     const availableWidth = window.innerWidth - 256 - 32;
-    return Math.max(2, Math.floor(availableWidth / 180));
+    // Responsive card width: larger screens get larger cards
+    const cardWidth = availableWidth > 3000 ? 160 : availableWidth > 2000 ? 140 : 120;
+    return Math.max(2, Math.floor(availableWidth / cardWidth));
   });
 
   // Responsive column count
   useEffect(() => {
     const calc = () => {
       if (!parentRef.current) return;
-      setColumnCount(Math.max(2, Math.floor(parentRef.current.offsetWidth / 180)));
+      const availableWidth = parentRef.current.offsetWidth;
+      // Responsive card width based on screen size
+      const cardWidth = availableWidth > 3000 ? 160 : availableWidth > 2000 ? 140 : 120;
+      setColumnCount(Math.max(2, Math.floor(availableWidth / cardWidth)));
     };
     calc();
     const ro = new ResizeObserver(calc);
@@ -213,7 +225,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => getRowHeight(),
     overscan: 5,
   });
 
@@ -340,7 +352,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
                   top: 0,
                   left: 0,
                   width: '100%',
-                  height: ROW_HEIGHT,
+                  height: getRowHeight(),
                   transform: `translateY(${vRow.start}px)`,
                 }}
               >

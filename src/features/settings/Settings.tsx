@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { usePortalStore, PREDEFINED_EPG_SERVICES } from '@/store/usePortalStore';
+import { usePortalsStore, PREDEFINED_EPG_SERVICES } from '@/store/portals.store';
 import { getSettings, setSetting, AppSettings } from '@/hooks/useSettings';
 import { getVersion } from '@tauri-apps/api/app';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from '@/hooks/useTranslation';
 import { TranslationKey } from '@/lib/translations';
 import { useTheme } from '@/components/theme-provider';
-import { usePortalsStore } from '@/store/portals.store';
 import { clearRecentViewed } from '@/hooks/useRecentItems';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -40,7 +39,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     selectedEpgService,
     setSelectedEpgService,
     getEffectiveEpgUrl
-  } = usePortalStore();
+  } = usePortalsStore();
 
   const activePortal = usePortalsStore(s =>
     s.portals.find(p => p.id === s.activePortalId) ?? null

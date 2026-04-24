@@ -13,10 +13,30 @@ import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('Portals');
 
+// Predefined EPG services
+export interface EpgService {
+  id: string;
+  name: string;
+  url: string;
+  description?: string;
+}
+
+export const PREDEFINED_EPG_SERVICES: EpgService[] = [
+  { id: 'auto', name: 'Automatyczny (z serwera IPTV)', url: '', description: 'Używa EPG dostarczonego przez Twój serwer IPTV' },
+  { id: 'epg_ovh_pl', name: 'EPG OVH (Polska)', url: 'https://epg.ovh/pl.xml', description: 'EPG dla polskich kanałów TV' },
+  { id: 'epg_share', name: 'EPG Share (epg-share.com)', url: 'https://epgshare01.online/epg_ripper_US_LOCALS2.xml.gz', description: 'Darmowy EPG głównie dla kanałów USA' },
+  { id: 'github_epg', name: 'IPTV Org EPG', url: 'https://epg.pw/xmltv.xml.gz', description: 'EPG z iptv-org.github.io - globalne kanały' },
+  { id: 'custom', name: 'Własny URL', url: '', description: 'Wprowadź własny adres URL do pliku XMLTV' },
+];
+
 interface PortalsState {
   portals: PortalAccount[];
   activePortalId: string | null;
-  
+
+  // EPG Settings
+  externalEpgUrl: string | null;
+  selectedEpgService: string | null;
+
   // Actions
   addPortal: (portal: Omit<PortalAccount, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updatePortal: (id: string, updates: Partial<PortalAccount>) => void;
@@ -24,6 +44,9 @@ interface PortalsState {
   setActivePortal: (id: string | null) => void;
   getActivePortal: () => PortalAccount | null;
   getPortalById: (id: string) => PortalAccount | undefined;
+  setExternalEpgUrl: (url: string | null) => void;
+  setSelectedEpgService: (serviceId: string | null) => void;
+  getEffectiveEpgUrl: () => string | null;
 }
 
 export const usePortalsStore = create<PortalsState>()(
@@ -31,6 +54,8 @@ export const usePortalsStore = create<PortalsState>()(
     immer((set, get) => ({
       portals: [],
       activePortalId: null,
+      externalEpgUrl: null,
+      selectedEpgService: 'auto',
 
       addPortal: (portalData) => {
         set((state) => {
@@ -110,10 +135,45 @@ export const usePortalsStore = create<PortalsState>()(
       getPortalById: (id) => {
         return get().portals.find((portal) => portal.id === id);
       },
+
+      setExternalEpgUrl: (url) => {
+        set((state) => {
+          state.externalEpgUrl = url;
+        });
+      },
+
+      setSelectedEpgService: (serviceId) => {
+        set((state) => {
+          state.selectedEpgService = serviceId;
+          const service = PREDEFINED_EPG_SERVICES.find(s => s.id === serviceId);
+          if (service && serviceId !== 'custom') {
+            state.externalEpgUrl = service.url || null;
+          }
+        });
+      },
+
+      getEffectiveEpgUrl: () => {
+        const state = get();
+        const service = PREDEFINED_EPG_SERVICES.find(s => s.id === state.selectedEpgService);
+
+        if (!service || service.id === 'auto') {
+          return null;
+        }
+        if (service.id === 'custom') {
+          return state.externalEpgUrl;
+        }
+        return service.url;
+      },
     })),
     {
       name: 'portals-storage-v2',
       storage: tauriStorage,
+      partialize: (state: PortalsState) => ({
+        portals: state.portals,
+        activePortalId: state.activePortalId,
+        externalEpgUrl: state.externalEpgUrl,
+        selectedEpgService: state.selectedEpgService,
+      }),
     }
   )
 );

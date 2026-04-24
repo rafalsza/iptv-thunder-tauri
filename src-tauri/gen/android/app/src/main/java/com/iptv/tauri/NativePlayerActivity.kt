@@ -179,6 +179,9 @@ class NativePlayerActivity : AppCompatActivity() {
             is PlayerController.PlayerState.Ended -> {
                 if (isVod) resumeManager.clearPosition(currentUrl)
             }
+            else -> {
+                // Other states are handled through renderUiState
+            }
         }
     }
 

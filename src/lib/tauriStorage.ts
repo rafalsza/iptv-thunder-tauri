@@ -38,7 +38,6 @@ export const tauriStorage: PersistStorage<unknown> = {
       const s = await getStore();
       await s.set(name, value);
       await s.save();
-      console.log('[TauriStorage] setItem:', name, 'saved');
     } catch (error) {
       console.error('[TauriStorage] setItem error:', error);
     }

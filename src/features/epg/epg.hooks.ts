@@ -4,12 +4,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel, StalkerEPG } from '@/types';
-import { usePortalStore } from '@/store/usePortalStore';
+import { usePortalsStore } from '@/store/portals.store';
 import { usePortalCacheStore } from '@/store/portalCache.store';
-import { 
-  getChannelEPG, 
-  getChannelsEPG, 
-  getCurrentProgram, 
+import {
+  getChannelEPG,
+  getChannelsEPG,
+  getCurrentProgram,
   getNextProgram,
   getProgramsForTimeRange,
   getEPGTimeRange,
@@ -18,8 +18,8 @@ import {
 
 export const useChannelEPG = (client: StalkerClient | undefined, channelId: number, channelName?: string, hours: number = 24, enabled: boolean = true) => {
   const { from, to } = getEPGTimeRange(hours);
-  const effectiveEpgUrl = usePortalStore((state) => state.getEffectiveEpgUrl());
-  const portalId = usePortalStore((state) => state.currentPortalId);
+  const effectiveEpgUrl = usePortalsStore((state) => state.getEffectiveEpgUrl());
+  const portalId = usePortalsStore((state) => state.activePortalId);
   const getCachedEPG = usePortalCacheStore((state) => state.getChannelEPG);
   const setCachedEPG = usePortalCacheStore((state) => state.setChannelEPG);
 
@@ -102,7 +102,7 @@ export const useEPGForTimeRange = (client: StalkerClient, channelId: number, fro
 
 export const usePrefetchEPG = (client: StalkerClient) => {
   const queryClient = useQueryClient();
-  const portalId = usePortalStore((state) => state.currentPortalId);
+  const portalId = usePortalsStore((state) => state.activePortalId);
   const setCachedEPG = usePortalCacheStore((state) => state.setChannelEPG);
   const hasValidEPG = usePortalCacheStore((state) => state.hasValidEPG);
 
@@ -133,7 +133,7 @@ export const usePrefetchEPG = (client: StalkerClient) => {
 
 export const usePrefetchChannelsEPG = (client: StalkerClient) => {
   const queryClient = useQueryClient();
-  const portalId = usePortalStore((state) => state.currentPortalId);
+  const portalId = usePortalsStore((state) => state.activePortalId);
   const setCachedEPG = usePortalCacheStore((state) => state.setChannelEPG);
   const hasValidEPG = usePortalCacheStore((state) => state.hasValidEPG);
 
