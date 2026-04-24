@@ -88,6 +88,38 @@ class MainActivity : TauriActivity() {
     override fun onWebViewCreate(webView: WebView) {
         super.onWebViewCreate(webView)
         this.webView = webView
+
+        // Configure WebView for 4K TV density scaling
+        val metrics = resources.displayMetrics
+        val density = metrics.density
+        val densityDpi = metrics.densityDpi
+        Log.d("MainActivity", "Display density: $density, densityDpi: $densityDpi")
+
+        // Adjust text zoom based on screen density for 4K TVs
+        webView.settings.apply {
+            // Enable proper density scaling
+            setSupportZoom(true)
+            builtInZoomControls = false
+            displayZoomControls = false
+
+            // Adjust text scale for high-density displays (4K TVs often report 2x-3x density)
+            // Use smaller zoom for 4K to prevent oversized elements
+            when {
+                densityDpi >= 480 -> { // 4K/XXHDPI
+                    textZoom = 80
+                    Log.d("MainActivity", "Setting textZoom to 80 for 4K display")
+                }
+                densityDpi >= 320 -> { // 2K/XHDPI
+                    textZoom = 90
+                    Log.d("MainActivity", "Setting textZoom to 90 for 2K display")
+                }
+                else -> {
+                    textZoom = 100
+                    Log.d("MainActivity", "Setting textZoom to 100 for standard display")
+                }
+            }
+        }
+
         Log.d("MainActivity", "onWebViewCreate called - adding ExoPlayer JavascriptInterface")
 
         webView.addJavascriptInterface(object {

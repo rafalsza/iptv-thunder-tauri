@@ -154,7 +154,7 @@ html.light {
 /* Android TV 4K support - ensure proper scaling */
 @media (min-width: 3840px) {
   html, body, #root {
-    font-size: 16px;
+    font-size: 12px;
   }
 }
 
@@ -169,6 +169,19 @@ html.light {
 @media (min-width: 1920px) {
   html, body, #root {
     font-size: 14px;
+  }
+}
+
+/* High density displays (4K TVs often report as 1080p with 2x density) */
+@media (min-resolution: 2dppx), (min-resolution: 192dpi) {
+  html, body, #root {
+    font-size: 12px;
+  }
+}
+
+@media (min-resolution: 3dppx), (min-resolution: 288dpi) {
+  html, body, #root {
+    font-size: 10px;
   }
 }
 

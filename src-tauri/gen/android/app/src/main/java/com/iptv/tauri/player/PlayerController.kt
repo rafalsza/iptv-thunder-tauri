@@ -9,6 +9,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -44,6 +45,13 @@ class PlayerController(
     var wasPlayingBeforeStop = false
     private var updateJob: Job? = null
     private var currentUiState = PlayerUiState(channelName = initialChannelName)
+
+    // Watchdog for HLS freeze detection
+    private var lastPosition: Long = 0L
+    private var lastPositionTimestamp: Long = 0L
+    private var watchdogStuckCount: Int = 0
+    private val WATCHDOG_TIMEOUT_MS = 10000L // 10 seconds
+    private val WATCHDOG_MAX_STUCK_COUNT = 3 // After 3 checks (3s) of no change, trigger reprepare
 
     sealed class PlayerState {
         data object Loading : PlayerState()
@@ -95,7 +103,12 @@ class PlayerController(
                 .createMediaSource(MediaItem.fromUri(url))
         }
 
+        // Configure renderers with decoder fallback for problematic HEVC/AAC streams
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setEnableDecoderFallback(true)
+
         player = ExoPlayer.Builder(context)
+            .setRenderersFactory(renderersFactory)
             .setLoadControl(loadControl)
             .setSeekBackIncrementMs(10000)
             .setSeekForwardIncrementMs(10000)
@@ -137,6 +150,11 @@ class PlayerController(
                         val isLive = player?.isCurrentMediaItemLive == true
                         onStateChange(if (isLive) PlayerState.Live else PlayerState.Playing)
                         retryCount = 0
+
+                        // Reset watchdog on successful playback start
+                        watchdogStuckCount = 0
+                        lastPosition = 0L
+                        lastPositionTimestamp = System.currentTimeMillis()
 
                         // Update UI state immediately
                         currentUiState = currentUiState.copy(
@@ -180,6 +198,25 @@ class PlayerController(
         val isLive = player?.isCurrentMediaItemLive == true
         val isPlaying = player?.isPlaying == true
 
+        // Watchdog: detect if position hasn't changed while player reports playing
+        if (isPlaying && position > 0) {
+            if (position == lastPosition) {
+                watchdogStuckCount++
+                if (watchdogStuckCount >= WATCHDOG_MAX_STUCK_COUNT) {
+                    android.util.Log.w("PlayerController", "Watchdog: Position stuck at $position for ${watchdogStuckCount}s, triggering reprepare")
+                    watchdogStuckCount = 0
+                    triggerReprepare()
+                }
+            } else {
+                watchdogStuckCount = 0
+                lastPosition = position
+                lastPositionTimestamp = System.currentTimeMillis()
+            }
+        } else {
+            watchdogStuckCount = 0
+            lastPosition = position
+        }
+
         currentUiState = currentUiState.copy(
             isPlaying = isPlaying,
             isLive = isLive,
@@ -189,6 +226,15 @@ class PlayerController(
         )
 
         onUiStateChange(currentUiState)
+    }
+
+    private fun triggerReprepare() {
+        android.util.Log.d("PlayerController", "Watchdog: Repreparing player...")
+        player?.let { exoPlayer ->
+            val currentPosition = exoPlayer.currentPosition
+            exoPlayer.seekTo(currentPosition)
+            exoPlayer.prepare()
+        }
     }
 
     private fun stopPeriodicUpdate() {
@@ -230,6 +276,10 @@ class PlayerController(
     fun changeChannel(url: String, channelName: String = "", isVod: Boolean = false) {
         android.util.Log.d("PlayerController", "Changing channel to: $channelName, URL: $url, isVod: $isVod")
         retryCount = 0
+        // Reset watchdog state
+        watchdogStuckCount = 0
+        lastPosition = 0L
+        lastPositionTimestamp = 0L
         player?.stop()
 
         // Create appropriate media source for the URL
@@ -341,6 +391,9 @@ class PlayerController(
     fun release() {
         retryJob?.cancel()
         updateJob?.cancel()
+        watchdogStuckCount = 0
+        lastPosition = 0L
+        lastPositionTimestamp = 0L
         player?.stop()
         player?.clearMediaItems()
         player?.release()
