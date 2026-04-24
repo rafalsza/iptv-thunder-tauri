@@ -31,8 +31,6 @@ export const usePlaybackManager = ({
   const play = async (channel: StalkerChannel, queryClient: QueryClient, vodFlag: boolean = false, resumePos: number = 0, movieId?: string) => {
     if (!client) return;
 
-    console.log('🎬 play() called for channel:', channel.id, channel.name);
-
     // Cancel any previous request
     if (abortRef.current) {
       console.log('🎬 Aborting previous request');

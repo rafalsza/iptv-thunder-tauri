@@ -41,10 +41,8 @@ function getTargetContainer(
 ): { targetId: string | null; newContainerId: string | null } {
   for (const rule of rules) {
     const matched = rule.match(direction, current, state);
-    console.log('[ContainerPlugin] checking rule:', rule.log, 'matched:', matched);
     if (matched) {
       const targetId = rule.handler(state, current);
-      console.log('[ContainerPlugin] rule handler result:', targetId);
       if (targetId) {
         const targetNode = state.nodes.find(n => n.id === targetId);
         return { targetId, newContainerId: targetNode?.containerId ?? null };
@@ -98,13 +96,10 @@ function setActiveContainerId(context: PluginContext | undefined, containerId: s
 export const containerPlugin: NavigationPlugin = {
   name: 'container',
   findNext: (state: NavigationState, direction: Direction, context?: PluginContext) => {
-    console.log('[ContainerPlugin] checking direction:', direction);
     const current = state.nodes.find(n => n.id === state.currentId);
     if (!current) {
-      console.log('[ContainerPlugin] no current node');
       return null;
     }
-    console.log('[ContainerPlugin] current:', current.id, 'container:', current.containerId, 'isSearch:', current.isSearch);
 
     // Single source of truth for all container navigation
     const { targetId, newContainerId } = getTargetContainer(state, current, direction, context);
@@ -122,7 +117,6 @@ export const containerPlugin: NavigationPlugin = {
         if (targetNode?.groupId !== current.groupId) {
           const restoredId = restoreLastFocus(context, newContainerId, state);
           if (restoredId && restoredId !== targetId) {
-            console.log('[ContainerPlugin] restored last focus:', restoredId);
             return restoredId;
           }
         }
@@ -130,14 +124,12 @@ export const containerPlugin: NavigationPlugin = {
       return targetId;
     }
 
-    console.log('[ContainerPlugin] no match found');
     return null;
   },
   onContainerChange: (container: HTMLElement | null, context: PluginContext) => {
     const newContainerId = container?.id ?? null;
     const activeId = getActiveContainerId(context);
     if (newContainerId !== activeId) {
-      console.log('[ContainerPlugin] container changed:', activeId, '->', newContainerId);
       setActiveContainerId(context, newContainerId);
     }
   },
@@ -147,20 +139,16 @@ export const containerPlugin: NavigationPlugin = {
 export { getActiveContainerId, setActiveContainerId, saveContainerFocus, getLastFocus, restoreLastFocus };
 
 function findMainInitial(state: NavigationState): string | null {
-  console.log('[ContainerPlugin] findMainInitial, main elements:', state.nodes.filter(n => n.containerId === 'main').length);
   const mainElements = state.nodes.filter(n => n.containerId === 'main');
   const initialElement = mainElements.find(n => n.isInitial);
   const result = initialElement?.id ?? mainElements[0]?.id ?? null;
-  console.log('[ContainerPlugin] findMainInitial result:', result);
   return result;
 }
 
 function findNavigationActive(state: NavigationState): string | null {
-  console.log('[ContainerPlugin] findNavigationActive, nav elements:', state.nodes.filter(n => n.containerId === 'navigation').length);
   const navElements = state.nodes.filter(n => n.containerId === 'navigation');
   const activeElement = navElements.find(n => n.isActive);
   const result = activeElement?.id ?? navElements[0]?.id ?? null;
-  console.log('[ContainerPlugin] findNavigationActive result:', result);
   return result;
 }
 
@@ -206,15 +194,11 @@ function getSeriesActionsElements(state: NavigationState) {
 
 function findNextInSeriesActions(state: NavigationState, current: NavigationState['nodes'][0]): string | null {
   const elements = getSeriesActionsElements(state);
-  console.log('[ContainerPlugin] findNextInSeriesActions: elements count:', elements.length, 'ids:', elements.map(e => e.id));
   const currentIndex = elements.findIndex(n => n.id === current.id);
-  console.log('[ContainerPlugin] findNextInSeriesActions: currentIndex:', currentIndex, 'current.id:', current.id);
   if (currentIndex === -1 || currentIndex >= elements.length - 1) {
-    console.log('[ContainerPlugin] findNextInSeriesActions: at end or not found');
     return null; // At the end, let spatial plugin handle it or stay
   }
   const result = elements[currentIndex + 1]?.id ?? null;
-  console.log('[ContainerPlugin] findNextInSeriesActions: result:', result);
   return result;
 }
 
@@ -255,20 +239,16 @@ function findSeriesControlsFromAnyAction(state: NavigationState): string | null 
 }
 
 function checkLastEpisodeAndBlock(state: NavigationState, current: NavigationState['nodes'][0]): string | null {
-  console.log('[ContainerPlugin] checkLastEpisodeAndBlock called, current.id:', current.id, 'current.groupId:', current.groupId);
   // Check if current is the last episode in the group
   const episodes = state.nodes.filter(n => n.groupId === 'series-episodes' && !n.disabled);
   const sortedEpisodes = [...episodes].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
   const lastEpisode = sortedEpisodes.at(-1);
-  console.log('[ContainerPlugin] episodes count:', episodes.length, 'lastEpisode.id:', lastEpisode?.id);
 
   // If current is the last episode, block navigation (return empty string to stay on current)
   if (current.id === lastEpisode?.id) {
-    console.log('[ContainerPlugin] last episode reached, blocking DOWN');
     return current.id; // Return current ID to stay on current element
   }
 
   // Otherwise, let spatial plugin handle it
-  console.log('[ContainerPlugin] not last episode, letting spatial plugin handle');
   return null;
 }

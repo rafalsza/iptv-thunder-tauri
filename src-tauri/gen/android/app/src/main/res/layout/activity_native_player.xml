@@ -104,7 +104,8 @@
                 android:layout_height="wrap_content"
                 android:text="00:00"
                 android:textColor="#FFFFFF"
-                android:textSize="13sp" />
+                android:textSize="13sp"
+                android:visibility="gone" />
 
             <androidx.appcompat.widget.AppCompatSeekBar
                 android:id="@+id/seek_bar"
@@ -115,7 +116,8 @@
                 android:layout_marginEnd="12dp"
                 android:thumbTint="#FFFFFF"
                 android:progressTint="#2196F3"
-                android:progressBackgroundTint="#40FFFFFF" />
+                android:progressBackgroundTint="#40FFFFFF"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/duration_time"
@@ -123,7 +125,8 @@
                 android:layout_height="wrap_content"
                 android:text="-00:00"
                 android:textColor="#FFFFFF"
-                android:textSize="13sp" />
+                android:textSize="13sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Przyciski kontrolne -->
@@ -145,12 +148,12 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/play_pause_button"
                 style="@style/PlayerControlButton.Primary"
-                android:layout_width="72dp"
-                android:layout_height="72dp"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
                 android:layout_marginStart="24dp"
                 android:layout_marginEnd="24dp"
                 app:icon="@drawable/ic_play_arrow"
-                app:iconSize="36dp" />
+                app:iconSize="32dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/seek_forward_button"

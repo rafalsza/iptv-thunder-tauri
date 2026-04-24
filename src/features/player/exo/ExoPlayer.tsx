@@ -49,11 +49,8 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
 
     // Call native method to open NativePlayerActivity
     const openNativePlayer = () => {
-      const exoPlayer = (window as any).ExoPlayer;
-      console.log('[ExoPlayer] window.ExoPlayer:', exoPlayer);
-      console.log('[ExoPlayer] window.ExoPlayer.open_compose_player:', exoPlayer?.open_compose_player);
+      const exoPlayer = (globalThis.window as any).ExoPlayer;
       if (exoPlayer && typeof exoPlayer.open_compose_player === 'function') {
-        logger.info(`Opening native player: ${name}`);
 
         // Get credentials from playback store (set by usePlaybackManager)
         const player = usePlaybackStore.getState().current;
@@ -61,12 +58,8 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         const mac = player?.mac || '';
         const token = player?.token || '';
 
-        logger.info(`Credentials from store - portalUrl: ${portalUrl ? portalUrl : 'EMPTY'}, mac: ${mac ? mac : 'EMPTY'}, token: ${token ? 'SET' : 'EMPTY'}`);
-        console.log(`[ExoPlayer] Calling native with: url=${url}, name=${name}, channelId=${channelId}, portalUrl=${portalUrl}, mac=${mac}, token=${token ? 'SET' : 'EMPTY'}, isVod=${isVod}`);
-
         try {
           exoPlayer.open_compose_player(url, name, channelId?.toString() || '', portalUrl, mac, token, isVod || false);
-          console.log('[ExoPlayer] open_compose_player call succeeded');
         } catch (error) {
           console.error('[ExoPlayer] Error calling open_compose_player:', error);
           logger.error(`Error calling open_compose_player: ${error}`);
