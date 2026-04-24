@@ -260,6 +260,7 @@ export const MovieList: React.FC<MovieListProps> = ({
     parentRef.current?.scrollTo({ top: 0 });
   }, [selectedCategory?.id]);
 
+  
   // ── Virtualizer ───────────────────────────────────────────────────────────────
   const rowCount = Math.ceil(filtered.length / cols);
 

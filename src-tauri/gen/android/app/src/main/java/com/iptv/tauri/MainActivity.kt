@@ -32,8 +32,6 @@ class MainActivity : TauriActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        Log.d("MainActivity", "onKeyDown: keyCode=$keyCode, NativePlayerActivity.currentInstance=${NativePlayerActivity.currentInstance != null}")
-
         // If NativePlayerActivity is active, let it handle all D-pad keys
         if (NativePlayerActivity.currentInstance != null) {
             when (keyCode) {
@@ -43,46 +41,25 @@ class MainActivity : TauriActivity() {
                 KeyEvent.KEYCODE_DPAD_DOWN,
                 KeyEvent.KEYCODE_DPAD_LEFT,
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    Log.d("MainActivity", "NativePlayerActivity is active, passing D-pad key to it")
                     return false // Let NativePlayerActivity handle it
                 }
             }
         }
+        return super.onKeyDown(keyCode, event)
+    }
 
-        // Normal TV navigation
-        if (keyCode == KeyEvent.KEYCODE_DPAD_UP ||
-            keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
-            keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
-            keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
-            keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-            keyCode == KeyEvent.KEYCODE_ENTER) {
-            Log.d("MainActivity", "Forwarding key to WebView: keyCode=$keyCode")
-            val jsKeyCode = when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_UP -> "ArrowUp"
-                KeyEvent.KEYCODE_DPAD_DOWN -> "ArrowDown"
-                KeyEvent.KEYCODE_DPAD_LEFT -> "ArrowLeft"
-                KeyEvent.KEYCODE_DPAD_RIGHT -> "ArrowRight"
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> "Enter"
-                else -> return super.onKeyDown(keyCode, event)
-            }
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Handle BACK key only - send to WebView for tv-navigation system
+        if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK) {
             webView?.evaluateJavascript(
                 """
-                (function() {
-                    const event = new KeyboardEvent('keydown', {
-                        key: '$jsKeyCode',
-                        code: '$jsKeyCode',
-                        bubbles: true,
-                        cancelable: true
-                    });
-                    document.dispatchEvent(event);
-                    console.log('[MainActivity] Dispatched key: $jsKeyCode');
-                })();
+                window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Back', code: 'Back' }));
                 """.trimIndent(),
                 null
             )
-            return true
+            return true // Don't close app
         }
-        return super.onKeyDown(keyCode, event)
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onWebViewCreate(webView: WebView) {

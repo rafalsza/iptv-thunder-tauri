@@ -4,19 +4,6 @@
 import { gridPlugin } from '../plugins/gridPlugin';
 import { NavigationState, Direction, NavNode } from '../core/types';
 
-declare global {
-  var gc: (() => void) | undefined;
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface Performance {
-    memory?: {
-      usedJSHeapSize: number;
-      totalJSHeapSize: number;
-      jsHeapSizeLimit: number;
-    };
-  }
-}
-
 describe('gridPlugin Performance Tests', () => {
   const createMockNode = (
     id: string,

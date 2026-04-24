@@ -21,6 +21,7 @@ class UiController(
     private val controlsContainer: View?,
     private val channelNameTextView: TextView?,
     private val liveLabelTextView: TextView?,
+    private val qualityLabelTextView: TextView?,
     private val currentTimeTextView: TextView?,
     private val durationTimeTextView: TextView?,
     private val seekBar: AppCompatSeekBar?,
@@ -167,6 +168,11 @@ class UiController(
 
     fun updateStateLabel(state: String) {
         liveLabelTextView?.text = state
+    }
+
+    fun updateQualityLabel(quality: String) {
+        qualityLabelTextView?.text = quality
+        qualityLabelTextView?.visibility = if (quality.isNotEmpty()) View.VISIBLE else View.GONE
     }
 
     fun updateSeekBar(progress: Float, duration: Long, currentPosition: Long, isVod: Boolean) {

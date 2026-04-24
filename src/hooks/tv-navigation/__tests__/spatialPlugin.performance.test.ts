@@ -4,19 +4,6 @@
 import { spatialPlugin } from '../plugins';
 import { NavigationState, Direction, NavNode } from '../core/types';
 
-declare global {
-  var gc: (() => void) | undefined;
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface Performance {
-    memory?: {
-      usedJSHeapSize: number;
-      totalJSHeapSize: number;
-      jsHeapSizeLimit: number;
-    };
-  }
-}
-
 describe('spatialPlugin Performance Tests', () => {
   // Silence console.log from spatialPlugin during tests
   beforeAll(() => {

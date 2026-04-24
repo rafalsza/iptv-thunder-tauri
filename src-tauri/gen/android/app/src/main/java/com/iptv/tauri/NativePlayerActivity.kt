@@ -94,6 +94,7 @@ class NativePlayerActivity : AppCompatActivity() {
             controlsContainer = findViewById(R.id.controls_container),
             channelNameTextView = findViewById(R.id.channel_name),
             liveLabelTextView = findViewById(R.id.live_label),
+            qualityLabelTextView = findViewById(R.id.quality_label),
             currentTimeTextView = findViewById(R.id.current_time),
             durationTimeTextView = findViewById(R.id.duration_time),
             seekBar = findViewById(R.id.seek_bar),
@@ -178,7 +179,6 @@ class NativePlayerActivity : AppCompatActivity() {
             is PlayerController.PlayerState.Ended -> {
                 if (isVod) resumeManager.clearPosition(currentUrl)
             }
-            else -> {}
         }
     }
 
@@ -188,6 +188,7 @@ class NativePlayerActivity : AppCompatActivity() {
         uiController.updatePlayPauseButton(state.isPlaying)
         uiController.updateStatusIndicator(state.isPlaying)
         uiController.updateStateLabel(state.stateLabel)
+        uiController.updateQualityLabel(state.videoQuality)
         uiController.updateSeekBar(state.currentProgress, state.duration, state.currentPosition, state.isVod)
     }
 

@@ -136,7 +136,7 @@ function AppInner({ }: AppProps) {
   });
 
   // TV Navigation (D-pad support for Android TV)
-  const { setActiveContainer } = useTVNavigation({
+  useTVNavigation({
     selector: '[data-tv-focusable]',
     onBack: () => {
       if ((isMovieDetails(route) && selectedMovie) || (isSeriesDetails(route) && selectedSeries)) {
@@ -153,25 +153,22 @@ function AppInner({ }: AppProps) {
   // between sidebar and main content. Container system is only for modals/popups.
   const wasSettingsOpenRef = useRef(false);
   useEffect(() => {
-    if (isSettingsOpen) {
-      wasSettingsOpenRef.current = true;
-      // Focus trap for Settings modal
-      const settingsModal = document.querySelector('[data-tv-container="settings-modal"]') as HTMLElement;
-      setActiveContainer(settingsModal);
-    } else {
-      setActiveContainer(null);
-      // Restore focus to sidebar when Settings closes (but not on initial load)
-      if (wasSettingsOpenRef.current) {
-        wasSettingsOpenRef.current = false;
+    // Restore focus when Settings closes (but not on initial load)
+    if (!isSettingsOpen && wasSettingsOpenRef.current) {
+      wasSettingsOpenRef.current = false;
+      setTimeout(() => {
+        (document.activeElement as HTMLElement)?.blur();
         setTimeout(() => {
           const settingsButton = document.querySelector('[data-tv-index="40"]') as HTMLElement;
           if (settingsButton) {
             settingsButton.focus();
           }
-        }, 100);
-      }
+        }, 50);
+      }, 50);
+    } else if (isSettingsOpen) {
+      wasSettingsOpenRef.current = true;
     }
-  }, [route.type, isSettingsOpen, setActiveContainer]);
+  }, [isSettingsOpen]);
 
   return (
     <AppLayout

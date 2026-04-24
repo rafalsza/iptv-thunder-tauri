@@ -70,7 +70,8 @@ class PlayerController(
         val currentProgress: Float = 0f,
         val currentPosition: Long = 0L,
         val duration: Long = 0L,
-        val isVod: Boolean = false
+        val isVod: Boolean = false,
+        val videoQuality: String = ""
     )
 
     fun initialize(url: String, isVod: Boolean = false) {
@@ -156,6 +157,9 @@ class PlayerController(
                         lastPosition = 0L
                         lastPositionTimestamp = System.currentTimeMillis()
 
+                        // Detect video quality
+                        detectVideoQuality()
+
                         // Update UI state immediately
                         currentUiState = currentUiState.copy(
                             stateLabel = if (isLive) "Live" else "Playing"
@@ -237,6 +241,26 @@ class PlayerController(
         }
     }
 
+    private fun detectVideoQuality() {
+        val videoFormat = player?.videoFormat
+        if (videoFormat != null) {
+            val height = videoFormat.height
+            val width = videoFormat.width
+            val quality = when {
+                height >= 4320 -> "8K"
+                height >= 2160 -> "4K"
+                height >= 1440 -> "QHD"
+                height >= 1080 -> "FHD"
+                height >= 720 -> "HD"
+                height >= 480 -> "SD"
+                else -> "${width}x${height}"
+            }
+            android.util.Log.d("PlayerController", "Video quality detected: $quality (${width}x${height})")
+            currentUiState = currentUiState.copy(videoQuality = quality)
+            onUiStateChange(currentUiState)
+        }
+    }
+
     private fun stopPeriodicUpdate() {
         updateJob?.cancel()
         updateJob = null
@@ -307,7 +331,8 @@ class PlayerController(
         currentUiState = currentUiState.copy(
             channelName = channelName,
             isVod = isVod,
-            stateLabel = ""
+            stateLabel = "",
+            videoQuality = ""
         )
         onUiStateChange(currentUiState)
     }

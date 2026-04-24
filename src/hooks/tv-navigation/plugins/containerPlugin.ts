@@ -20,8 +20,15 @@ const rules: Rule[] = [
   // SeriesDetails navigation - LEFT/RIGHT within series-actions (PRIORITY before left from main)
   { match: (d, c, _) => d === 'right' && c.groupId === 'series-actions', handler: findNextInSeriesActions, log: 'right within series-actions' },
   { match: (d, c, _) => d === 'left' && c.groupId === 'series-actions', handler: findPrevInSeriesActions, log: 'left within series-actions' },
+  // PortalForm navigation - sequential by index (ONLY when in modal container)
+  { match: (d, c, _) => d === 'down' && c.groupId === 'portal-form' && c.containerId === 'modal', handler: findNextByIndex, log: 'down from portal-form by index' },
+  { match: (d, c, _) => d === 'up' && c.groupId === 'portal-form' && c.containerId === 'modal', handler: findPrevByIndex, log: 'up from portal-form by index' },
+  { match: (d, c, _) => d === 'right' && c.groupId === 'portal-form' && c.containerId === 'modal', handler: findNextByIndex, log: 'right from portal-form by index' },
+  { match: (d, c, _) => d === 'left' && c.groupId === 'portal-form' && c.containerId === 'modal', handler: findPrevByIndex, log: 'left from portal-form by index' },
   // General navigation rules
   { match: (d, c, _) => d === 'left' && c.containerId === 'main' && !GRID_GROUPS.has(c.groupId || '') && c.groupId !== 'movie-actions', handler: findNavigationActive, log: 'left from main (non-grid, non-movie-actions)' },
+  { match: (d, c, _) => d === 'right' && c.groupId === 'movie-categories', handler: findGridInitial, log: 'right from movie-categories to first movie' },
+  { match: (d, c, _) => d === 'right' && c.groupId === 'series-categories', handler: findGridInitial, log: 'right from series-categories to first series' },
   { match: (d, c, _) => d === 'up' && c.groupId === 'movie-actions' && !c.isInitial, handler: findMovieActionsInitial, log: 'up from movie-actions to X' },
   { match: (d, c, _) => d === 'back' && c.groupId === 'portal-actions', handler: findPortalsContentActive, log: 'back from portal-actions' },
   // From back button, go to poster (below), otherwise go to season selector
@@ -162,6 +169,42 @@ function findMovieActionsInitial(state: NavigationState): string | null {
   const movieActionsElements = state.nodes.filter(n => n.groupId === 'movie-actions');
   const initialElement = movieActionsElements.find(n => n.isInitial);
   return initialElement?.id ?? null;
+}
+
+function findGridInitial(state: NavigationState): string | null {
+  // Find the first grid element in main container
+  const gridElements = state.nodes.filter(n => 
+    n.containerId === 'main' && 
+    GRID_GROUPS.has(n.groupId || '') &&
+    n.groupId !== 'movie-categories' && 
+    n.groupId !== 'series-categories' &&
+    n.groupId !== 'favorite-movie-categories' && 
+    n.groupId !== 'favorite-series-categories'
+  );
+  const initialElement = gridElements.find(n => n.isInitial);
+  return initialElement?.id ?? gridElements[0]?.id ?? null;
+}
+
+function findNextByIndex(state: NavigationState, current: NavigationState['nodes'][0]): string | null {
+  const groupNodes = state.nodes
+    .filter(n => n.groupId === 'portal-form' && !n.disabled)
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  const currentIndex = groupNodes.findIndex(n => n.id === current.id);
+  if (currentIndex === -1 || currentIndex === groupNodes.length - 1) {
+    return null; // At the end, let spatial plugin handle it
+  }
+  return groupNodes[currentIndex + 1].id;
+}
+
+function findPrevByIndex(state: NavigationState, current: NavigationState['nodes'][0]): string | null {
+  const groupNodes = state.nodes
+    .filter(n => n.groupId === 'portal-form' && !n.disabled)
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  const currentIndex = groupNodes.findIndex(n => n.id === current.id);
+  if (currentIndex <= 0) {
+    return null; // At the start, let spatial plugin handle it
+  }
+  return groupNodes[currentIndex - 1].id;
 }
 
 // SeriesDetails navigation helpers

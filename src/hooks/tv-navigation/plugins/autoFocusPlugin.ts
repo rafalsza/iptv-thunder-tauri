@@ -61,6 +61,76 @@ export function initAutoFocus(): () => void {
       }
     }
 
+    // Check for new content in main container that needs initial focus
+    const mainContainer = containers.find(c => getContainerId(c) === 'main');
+    if (mainContainer) {
+      const movieElements = mainContainer.querySelectorAll('[data-tv-group="movies"][data-tv-initial="true"]');
+      const seriesElements = mainContainer.querySelectorAll('[data-tv-group="series"][data-tv-initial="true"]');
+      const movieDetailsElements = mainContainer.querySelectorAll('[data-tv-group="movie-actions"][data-tv-initial="true"]');
+      
+      // Check if MovieDetails is opening - save current focus only if it's on a movie/series
+      if (movieDetailsElements.length > 0 && activeElement?.matches('[data-tv-group="movies"], [data-tv-group="series"]')) {
+        state.lastFocusedElement = activeElement;
+        modalWasOpen = true; // Reuse this flag for MovieDetails
+      } else if (movieDetailsElements.length > 0) {
+        modalWasOpen = true; // Still set flag so we know MovieDetails was open
+      }
+      
+      // Check if MovieDetails was closed and we need to restore focus
+      const hadMovieDetails = Array.from(lastContainerIds).some(id => {
+        const prevContainer = containers.find(c => getContainerId(c) === id);
+        return prevContainer?.querySelector('[data-tv-group="movie-actions"][data-tv-initial="true"]');
+      });
+      const hasMovieDetailsNow = movieDetailsElements.length > 0;
+
+      
+      if (hadMovieDetails && !hasMovieDetailsNow && modalWasOpen && state.lastFocusedElement) {
+        const el = state.lastFocusedElement;
+        if (el && document.contains(el)) {
+          setTimeout(() => {
+            if (el.tabIndex === -1) {
+              el.tabIndex = 0;
+            }
+            el.focus({ preventScroll: true });
+          }, 150);
+        }
+        modalWasOpen = false;
+        state.lastFocusedElement = null;
+      } else if (hadMovieDetails && !hasMovieDetailsNow && modalWasOpen) {
+        modalWasOpen = false;
+      }
+      
+      // Check if we have new movie/series content and focus should be on it
+      if (movieElements.length > 0 || seriesElements.length > 0) {
+        const hasMovieContent = movieElements.length > 0;
+        const hasSeriesContent = seriesElements.length > 0;
+        
+        // Focus on movies/series if:
+        // 1. Focus is on categories, OR
+        // 2. Focus is on navbar and we have content (user navigated from categories)
+        // But NOT if focus is already on movie details or initial movie/series element
+        const shouldFocus = (activeElement?.matches('[data-tv-group="movie-categories"], [data-tv-group="series-categories"]') ||
+                           (activeElement?.matches('[data-tv-group="navbar"]') && (hasMovieContent || hasSeriesContent))) &&
+                           !activeElement?.matches('[data-tv-group="movie-details"]') &&
+                           !(activeElement?.matches('[data-tv-group="movies"], [data-tv-group="series"]') && activeElement?.dataset.tvInitial === 'true');
+        
+        if (shouldFocus) {
+          
+          if (hasMovieContent) {
+            const firstMovie = movieElements[0] as HTMLElement;
+            setTimeout(() => {
+              firstMovie.focus({ preventScroll: true });
+            }, 100);
+          } else if (hasSeriesContent) {
+            const firstSeries = seriesElements[0] as HTMLElement;
+            setTimeout(() => {
+              firstSeries.focus({ preventScroll: true });
+            }, 100);
+          }
+        }
+      }
+    }
+
     const modalContainers = containers.filter(c => {
       const id = getContainerId(c);
       return id && isModalContainer(id);

@@ -1,20 +1,6 @@
 // Performance tests for useImageCache
 // These tests measure execution time and ensure critical operations meet performance thresholds
 
-declare global {
-  // eslint-disable-next-line no-var
-  var gc: (() => void) | undefined;
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface Performance {
-    memory?: {
-      usedJSHeapSize: number;
-      totalJSHeapSize: number;
-      jsHeapSizeLimit: number;
-    };
-  }
-}
-
 import { readFile, writeFile, stat, readDir } from '@tauri-apps/plugin-fs';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { appDataDir, join } from '@tauri-apps/api/path';

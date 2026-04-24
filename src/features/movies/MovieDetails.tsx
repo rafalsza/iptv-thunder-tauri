@@ -32,10 +32,16 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
 
   // Set focus on first element with data-tv-initial when component mounts
   useEffect(() => {
+    console.log('MovieDetails: Component mounted, setting up focus');
     setTimeout(() => {
-      const firstElement = document.querySelector('[data-tv-initial]') as HTMLElement;
+      // Look for initial element within movie-actions group (MovieDetails uses movie-actions group)
+      const firstElement = document.querySelector('[data-tv-group="movie-actions"][data-tv-initial]') as HTMLElement;
+      console.log('MovieDetails: Looking for initial element in movie-details, found:', firstElement?.tagName, firstElement?.dataset.tvGroup);
       if (firstElement) {
         firstElement.focus();
+        console.log('MovieDetails: Focus set on initial element');
+      } else {
+        console.log('MovieDetails: No initial element found in movie-details');
       }
     }, 100);
   }, []);

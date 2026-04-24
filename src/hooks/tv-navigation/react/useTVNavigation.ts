@@ -206,7 +206,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         // Find and reset ALL scrollable elements
         const allElements = document.querySelectorAll('*');
         allElements.forEach(el => {
-          const style = window.getComputedStyle(el);
+          const style = globalThis.window.getComputedStyle(el);
           if (style.overflowY === 'auto' || style.overflowY === 'scroll' || (el as HTMLElement).scrollTop > 0) {
             (el as HTMLElement).scrollTo({ top: 0, behavior: 'auto' });
           }
@@ -289,7 +289,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     let scrollTimeout: number | null = null;
     const scrollListener = () => {
       if (scrollTimeout) return;
-      scrollTimeout = window.setTimeout(() => {
+      scrollTimeout = globalThis.window.setTimeout(() => {
         update();
         scrollTimeout = null;
       }, 16); // ~60fps throttling
@@ -409,7 +409,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
               const mousedown = new MouseEvent('mousedown', {
                 bubbles: true,
                 cancelable: true,
-                view: window
+                view: globalThis.window
               });
               current.dispatchEvent(mousedown);
               current.focus();
@@ -426,7 +426,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
               const mousedown = new MouseEvent('mousedown', {
                 bubbles: true,
                 cancelable: true,
-                view: window
+                view: globalThis.window
               });
               current.dispatchEvent(mousedown);
               current.focus();
@@ -443,7 +443,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
               const mousedown = new MouseEvent('mousedown', {
                 bubbles: true,
                 cancelable: true,
-                view: window
+                view: globalThis.window
               });
               current.dispatchEvent(mousedown);
               current.focus();

@@ -103,7 +103,7 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
     if (!data || data.length === 0) return;
 
     // Lightweight signature: count + first ID + last ID (detects add/remove/reorder)
-    const signature = `${data.length}-${data[0]?.id}-${data[data.length - 1]?.id}`;
+    const signature = `${data.length}-${data[0]?.id}-${data.at(-1)?.id}`;
     if (signature === prevSignatureRef.current) return;
     prevSignatureRef.current = signature;
 
@@ -244,7 +244,7 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
   const initialLoadDoneRef = React.useRef(false);
   const pageRef = React.useRef(1);
   const hasMoreRef = React.useRef(true);
-  const autoLoadTimeoutRef = React.useRef<number | null>(null);
+  const autoLoadTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const totalExpectedRef = React.useRef<number | null>(null);
 
   const loadMore = React.useCallback(async () => {
@@ -424,7 +424,7 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
     if (hasMoreRef.current) return;
 
     // Lightweight signature: count + first ID + last ID
-    const signature = `${allChannels.length}-${allChannels[0]?.id}-${allChannels[allChannels.length - 1]?.id}`;
+    const signature = `${allChannels.length}-${allChannels[0]?.id}-${allChannels.at(-1)?.id}`;
     if (signature === prevSignatureRef.current) return;
     prevSignatureRef.current = signature;
 

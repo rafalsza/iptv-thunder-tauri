@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { usePortalsStore } from '@/store/portals.store';
 import { PortalAccount, PortalFormData } from './portals.types';
 import { useToast } from '@/components/ui/Toast';
-import { useTranslation } from '@/hooks';
+import { useTranslation, useTVNavigation } from '@/hooks';
 
 interface PortalFormProps {
   portal?: PortalAccount | null;
@@ -20,8 +20,8 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
     name: '',
     login: '',
     password: '',
-    portalUrl: '',
-    mac: '',
+    portalUrl: 'http://',
+    mac: '00:1A:79:',
     description: '',
     tags: [],
   });
@@ -31,13 +31,25 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
 
   const { addPortal, updatePortal } = usePortalsStore();
 
+  // TV Navigation - simple isolated instance for this modal
+  const { setActiveContainer } = useTVNavigation({
+    onBack: onClose,
+  });
+
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (modal) {
+      setActiveContainer(modal);
+    }
+    return () => setActiveContainer(null);
+  }, [setActiveContainer]);
 
   useEffect(() => {
     if (portal) {
       setFormData({
         name: portal.name,
-        login: portal.login,
-        password: portal.password,
+        login: '',
+        password: '',
         portalUrl: portal.portalUrl,
         mac: portal.mac,
         description: portal.description || '',
@@ -150,6 +162,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               data-tv-focusable
               data-tv-initial
               data-tv-group="portal-form"
+              data-tv-index="0"
               tabIndex={0}
               type="text"
               value={formData.name}
@@ -173,6 +186,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               id="portal-url"
               data-tv-focusable
               data-tv-group="portal-form"
+              data-tv-index="1"
               tabIndex={0}
               type="url"
               value={formData.portalUrl}
@@ -187,54 +201,6 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
             )}
           </div>
 
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="portal-login" className="block text-sm font-medium text-slate-300 mb-2">
-                  {t('login')}
-                </label>
-                <input
-                  id="portal-login"
-                  data-tv-focusable
-                  data-tv-group="portal-form"
-                  tabIndex={0}
-                  type="text"
-                  autoComplete="username"
-                  value={formData.login}
-                  onChange={(e) => handleInputChange('login', e.target.value)}
-                  className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-white placeholder-slate-500 transition-all duration-200 ${
-                    errors.login ? 'border-red-500' : 'border-slate-700'
-                  }`}
-                  placeholder="Login"
-                />
-                {errors.login && (
-                  <p className="mt-1.5 text-sm text-red-400">{errors.login}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="portal-password" className="block text-sm font-medium text-slate-300 mb-2">
-                  {t('password')}
-                </label>
-                <input
-                  id="portal-password"
-                  data-tv-focusable
-                  data-tv-group="portal-form"
-                  tabIndex={0}
-                  type="password"
-                  autoComplete="current-password"
-                  value={formData.password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
-                  className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-white placeholder-slate-500 transition-all duration-200 ${
-                    errors.password ? 'border-red-500' : 'border-slate-700'
-                  }`}
-                  placeholder="Hasło"
-                />
-                {errors.password && (
-                  <p className="mt-1.5 text-sm text-red-400">{errors.password}</p>
-                )}
-              </div>
-            </div>
-
             <div>
               <label htmlFor="portal-mac" className="block text-sm font-medium text-slate-300 mb-2">
                 {t('macAddress')} *
@@ -243,6 +209,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
                 id="portal-mac"
                 data-tv-focusable
                 data-tv-group="portal-form"
+                data-tv-index="2"
                 tabIndex={0}
                 type="text"
                 value={formData.mac}
@@ -266,6 +233,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               type="button"
               data-tv-focusable
               data-tv-group="portal-form"
+              data-tv-index="3"
               tabIndex={0}
               onClick={onClose}
               className="px-5 py-2.5 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700/50 hover:text-white transition-all duration-200 hover:scale-105"
@@ -276,6 +244,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               type="submit"
               data-tv-focusable
               data-tv-group="portal-form"
+              data-tv-index="4"
               tabIndex={0}
               disabled={isSubmitting}
               className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 hover:-translate-y-0.5 flex items-center gap-2 shadow-lg shadow-emerald-500/25"
