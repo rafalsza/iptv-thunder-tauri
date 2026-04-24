@@ -189,7 +189,13 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       return;
     }
 
+    // Remove .tv-focused from previous element
+    if (currentElementRef.current) {
+      currentElementRef.current.classList.remove('tv-focused');
+    }
+
     el.focus({ preventScroll: true });
+    el.classList.add('tv-focused');
     console.log('[useTVNavigation] focusElement: el.focus() called, new activeElement:', (document.activeElement as HTMLElement | null)?.dataset?.tvId ?? document.activeElement?.id);
 
     // Special case: reset scroll to top when focusing first element of for-you-live

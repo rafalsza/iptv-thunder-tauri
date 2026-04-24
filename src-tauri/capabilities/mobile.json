@@ -23,7 +23,6 @@
     "fs:allow-appdata-meta",
     "fs:scope-appdata-recursive",
     "core:path:default",
-    "process:default",
-    "videoplayer:default"
+    "process:default"
   ]
 }

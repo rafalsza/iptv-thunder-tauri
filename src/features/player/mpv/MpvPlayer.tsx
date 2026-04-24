@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo, useSyncExtern
 import { useStreamStore } from '@/store/stream.store';
 import { useChannelEPG } from '@/features/epg/epg.hooks';
 import { getCurrentProgram } from '@/features/epg/epg.api';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow, LogicalSize, LogicalPosition } from '@tauri-apps/api/window';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerEPG } from '@/types';
 import { useResumeStore } from '@/store/resume.store';
@@ -188,6 +188,8 @@ function useMpvPlayer(
   const firstTimePosRef = useRef(0);
   const currentCacheSecsRef = useRef(10);
   const isEndedRef = useRef(false);
+  const volumeRef = useRef(0.8);
+  const hwAccelEnabledRef = useRef(true);
 
   // Smart retry metrics per URL
   interface UrlMetrics {
@@ -227,6 +229,21 @@ function useMpvPlayer(
   useEffect(() => {
     allUrlsRef.current = [url, ...fallbackUrls];
   }, [url, fallbackUrls]);
+
+  // Read settings once at hook initialization to avoid repeated API calls on retries
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const volume = await getSetting('volume');
+        const hwAccelEnabled = await getSetting('hardwareAcceleration');
+        volumeRef.current = volume;
+        hwAccelEnabledRef.current = hwAccelEnabled;
+      } catch (e) {
+        console.error('Failed to load settings:', e);
+      }
+    };
+    void loadSettings();
+  }, []);
 
   // Smart URL ranking based on metrics + stream store
   const getRankedUrls = useCallback(() => {
@@ -549,9 +566,9 @@ function useMpvPlayer(
     setUsingMpv(true);
 
     try {
-      // Read settings
-      const volume = await getSetting('volume');
-      const hwAccelEnabled = await getSetting('hardwareAcceleration');
+      // Use cached settings from refs (loaded once at hook initialization)
+      const volume = volumeRef.current;
+      const hwAccelEnabled = hwAccelEnabledRef.current;
       const hwdecValue = hwAccelEnabled ? 'auto-safe' : 'no';
 
       const mpvConfig = {
@@ -830,11 +847,13 @@ function useMpvPlayer(
 interface UsePlayerControlsReturn {
   volume: number;
   isFullscreen: boolean;
+  isPip: boolean;
   showUi: boolean;
   handleMouseMove: () => void;
   handlePlayPause: () => Promise<void>;
   handleStop: (onClose: () => void) => Promise<void>;
   handleFullscreen: () => Promise<void>;
+  handlePip: () => Promise<void>;
   handleClose: (onClose: () => void) => Promise<void>;
   handleVolumeChange: (newVol: number) => Promise<void>;
   handleSeek: (seconds: number) => Promise<void>;
@@ -846,6 +865,7 @@ function usePlayerControls(): UsePlayerControlsReturn {
   const [volume, setVolume] = useState(80);
   const setFullscreen = useAppStore(state => state.setFullscreen);
   const isFullscreen = useAppStore(state => state.isFullscreen);
+  const [isPip, setIsPip] = useState(false);
   const [showUi, setShowUi] = useState(true);
   const uiHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
@@ -887,6 +907,33 @@ function usePlayerControls(): UsePlayerControlsReturn {
       setShowUi(!newState);
     } catch (e) { console.error('Fullscreen failed:', e); }
   }, [isFullscreen, setFullscreen]);
+
+  const handlePip = useCallback(async () => {
+    try {
+      const window = getCurrentWindow();
+      const newState = !isPip;
+
+      if (newState) {
+        // Enter PiP mode
+        await window.setAlwaysOnTop(true);
+        await window.setSize(new LogicalSize(640, 360));
+        await window.setPosition(new LogicalPosition(50, 50));
+        await window.setDecorations(true);
+        if (isFullscreen) {
+          await window.setFullscreen(false);
+          setFullscreen(false);
+        }
+      } else {
+        // Exit PiP mode
+        await window.setAlwaysOnTop(false);
+        await window.setSize(new LogicalSize(1280, 720));
+        await window.setPosition(new LogicalPosition(0, 0));
+        await window.setDecorations(false);
+      }
+
+      setIsPip(newState);
+    } catch (e) { console.error('PiP failed:', e); }
+  }, [isPip, isFullscreen, setFullscreen]);
 
   const exitFullscreen = useCallback(async () => {
     if (!isFullscreen) return;
@@ -943,11 +990,13 @@ function usePlayerControls(): UsePlayerControlsReturn {
   return {
     volume,
     isFullscreen,
+    isPip,
     showUi,
     handleMouseMove,
     handlePlayPause,
     handleStop,
     handleFullscreen,
+    handlePip,
     handleClose,
     handleVolumeChange,
     handleSeek,
@@ -1124,6 +1173,7 @@ interface PlayerControlsProps {
   isVod: boolean;
   streamState: StreamState;
   isFullscreen: boolean;
+  isPip: boolean;
   showUi: boolean;
   isPaused: boolean;
   volume: number;
@@ -1135,6 +1185,7 @@ interface PlayerControlsProps {
   onPlayPause: () => void;
   onStop: () => void;
   onFullscreen: () => void;
+  onPip: () => void;
   onClose: () => void;
   onVolumeChange: (v: number) => void;
   onProgressClick: (e: React.MouseEvent<HTMLDivElement>) => void;
@@ -1144,9 +1195,9 @@ interface PlayerControlsProps {
 }
 
 const PlayerControls = React.memo<PlayerControlsProps>(({
-  isVod, streamState, isFullscreen, showUi, isPaused, volume,
+  isVod, streamState, isFullscreen, isPip, showUi, isPaused, volume,
   currentTime, duration, tracks, currentAudioId, currentSubId,
-  onPlayPause, onStop, onFullscreen, onClose,
+  onPlayPause, onStop, onFullscreen, onPip, onClose,
   onVolumeChange, onProgressClick, onShowEPG, onSetAudioTrack, onSetSubTrack
 }) => {
   const { t } = useTranslation();
@@ -1306,7 +1357,7 @@ const PlayerControls = React.memo<PlayerControlsProps>(({
             style={{ accentColor: 'white' }} />
         </div>
 
-        {/* Right: Fullscreen & Close */}
+        {/* Right: Fullscreen, PiP & Close */}
         <div className="flex items-center gap-3">
           <button onClick={onFullscreen} data-tv-focusable tabIndex={0}
             className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
@@ -1320,6 +1371,13 @@ const PlayerControls = React.memo<PlayerControlsProps>(({
                 <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
               </svg>
             )}
+          </button>
+          <button onClick={onPip} data-tv-focusable tabIndex={0}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isPip ? 'bg-blue-500/80 hover:bg-blue-500' : 'bg-white/20 hover:bg-white/30'}`}
+            title={t('pip')}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+              <path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z"/>
+            </svg>
           </button>
           <button onClick={onClose} data-tv-focusable tabIndex={0}
             className="w-10 h-10 rounded-full bg-red-500/80 hover:bg-red-500 flex items-center justify-center transition-colors"
@@ -1524,7 +1582,7 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
 
   const [showEPGModal, setShowEPGModal] = useState(false);
   const hasResumedRef = useRef(false);
-  const requestIdRef = useRef(0);
+  const urlChangeIdRef = useRef(0);
 
   // Memoized cleanup handler for beforeunload event
   const handleBeforeUnload = useCallback(() => {
@@ -1538,19 +1596,19 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
       window.removeEventListener('beforeunload', handleBeforeUnload);
       void mpv.cleanup();
     };
-  }, [handleBeforeUnload]); // mpv.cleanup jest już w handleBeforeUnload deps
+  }, [handleBeforeUnload]);
 
   // Initial load on URL change
   useEffect(() => {
     const { cleanup, loadUrl, getRankedUrls, setStreamState, setStatusMsg } = mpv;
     hasResumedRef.current = false;
 
-    const requestId = ++requestIdRef.current;
+    const requestId = ++urlChangeIdRef.current;
 
     // Cleanup old MPV before loading new URL
     void cleanup().then(() => {
       // Guard: newer URL change may have started during cleanup
-      if (requestId !== requestIdRef.current) return;
+      if (requestId !== urlChangeIdRef.current) return;
 
       // Reset state for new stream
       setStreamState('connecting');
@@ -1562,7 +1620,7 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
 
     return () => {
       // Increment requestId to cancel pending load
-      requestIdRef.current++;
+      urlChangeIdRef.current++;
     };
   }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1640,6 +1698,7 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
   const handleSetAudioTrack = useCallback((id: string) => void mpv.setAudioTrack(id), [mpv.setAudioTrack]);
   const handleSetSubTrack = useCallback((id: string) => void mpv.setSubTrack(id), [mpv.setSubTrack]);
   const handleFullscreen = useCallback(() => void controls.handleFullscreen(), [controls.handleFullscreen]);
+  const handlePip = useCallback(() => void controls.handlePip(), [controls.handlePip]);
 
   return (
     <main
@@ -1694,6 +1753,7 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
           isVod={isVod}
           streamState={mpv.streamState}
           isFullscreen={controls.isFullscreen}
+          isPip={controls.isPip}
           showUi={controls.showUi}
           isPaused={mpv.isPaused}
           volume={controls.volume}
@@ -1705,6 +1765,7 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
           onPlayPause={handlePlayPause}
           onStop={handleStop}
           onFullscreen={handleFullscreen}
+          onPip={handlePip}
           onClose={handleClosePlayer}
           onVolumeChange={handleVolumeChange}
           onProgressClick={handleProgressClick}

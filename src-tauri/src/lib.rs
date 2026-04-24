@@ -161,165 +161,6 @@ async fn check_mpv_available() -> Result<bool, String> {
     Ok(true)
 }
 
-// ExoPlayer commands - on Android these invoke the native Kotlin plugin
-// On desktop these are stubs (desktop uses libmpv instead)
-// On Android, these should be handled by ExoPlayerPlugin Kotlin class
-#[tauri::command]
-async fn exoplayer_init() -> Result<serde_json::Value, String> {
-    println!("[Rust] exoplayer_init called");
-    #[cfg(target_os = "android")]
-    {
-        println!("[Rust] exoplayer_init: Android detected, should be handled by Kotlin plugin");
-        // Note: If Kotlin plugin doesn't intercept this, it will return this stub response
-        Ok(serde_json::json!({"success": true, "source": "rust_stub"}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        println!("[Rust] exoplayer_init: Desktop - returning stub");
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
-#[tauri::command]
-#[allow(unused_variables)]
-async fn exoplayer_play(url: String, resume_position: Option<i64>) -> Result<serde_json::Value, String> {
-    println!("[Rust] exoplayer_play called with url: {}", url);
-    #[cfg(target_os = "android")]
-    {
-        println!("[Rust] exoplayer_play: Android detected, should be handled by Kotlin plugin");
-        Ok(serde_json::json!({"success": true, "url": url, "source": "rust_stub"}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        println!("[Rust] exoplayer_play: Desktop - returning stub");
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
-#[tauri::command]
-async fn exoplayer_pause() -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "android")]
-    {
-        Ok(serde_json::json!({"success": true}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
-#[tauri::command]
-async fn exoplayer_resume() -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "android")]
-    {
-        Ok(serde_json::json!({"success": true}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
-#[tauri::command]
-async fn exoplayer_stop() -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "android")]
-    {
-        Ok(serde_json::json!({"success": true}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
-#[tauri::command]
-#[allow(unused_variables)]
-async fn exoplayer_seek(position: i64) -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "android")]
-    {
-        Ok(serde_json::json!({"success": true, "position": position}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
-#[tauri::command]
-#[allow(unused_variables)]
-async fn exoplayer_set_speed(speed: f32) -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "android")]
-    {
-        Ok(serde_json::json!({"success": true, "speed": speed}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
-#[tauri::command]
-#[allow(unused_variables)]
-async fn exoplayer_set_volume(volume: f32) -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "android")]
-    {
-        Ok(serde_json::json!({"success": true, "volume": volume}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
-#[tauri::command]
-#[allow(unused_variables)]
-async fn exoplayer_set_track(track_id: i32, track_type: String) -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "android")]
-    {
-        Ok(serde_json::json!({"success": true, "trackId": track_id, "trackType": track_type}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
-#[tauri::command]
-async fn exoplayer_get_position() -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "android")]
-    {
-        Ok(serde_json::json!({"position": 0, "duration": 0, "isPlaying": false, "bufferedPosition": 0}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
-#[tauri::command]
-async fn exoplayer_is_playing() -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "android")]
-    {
-        Ok(serde_json::json!({"isPlaying": false}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
-#[tauri::command]
-async fn exoplayer_get_tracks() -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "android")]
-    {
-        Ok(serde_json::json!({"tracks": []}))
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        Ok(serde_json::json!({"success": false, "error": "ExoPlayer is Android only"}))
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg_attr(target_os = "android", allow(unused_mut))]
@@ -343,32 +184,18 @@ pub fn run() {
             .plugin(tauri_plugin_libmpv::init());
     }
 
-    builder
+    let builder = builder
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_os::init())
-        // Android video player (uses ExoPlayer via Media3)
-        .plugin(tauri_plugin_videoplayer::init())
+        .plugin(tauri_plugin_os::init());
+
+    builder
         .invoke_handler(tauri::generate_handler![
-            // Note: exoplayer_* commands replaced by tauri-plugin-videoplayer
             stalker_request,
             fetch_image,
-            check_mpv_available,
-            // Android ExoPlayer commands
-            exoplayer_init,
-            exoplayer_play,
-            exoplayer_pause,
-            exoplayer_resume,
-            exoplayer_stop,
-            exoplayer_seek,
-            exoplayer_set_speed,
-            exoplayer_set_volume,
-            exoplayer_set_track,
-            exoplayer_get_position,
-            exoplayer_is_playing,
-            exoplayer_get_tracks
+            check_mpv_available
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

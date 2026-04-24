@@ -1,5 +1,7 @@
 package com.iptv.tauri
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -9,7 +11,10 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.ProgressBar
+import android.widget.SeekBar
 import android.widget.TextView
+import androidx.appcompat.widget.AppCompatSeekBar
+import com.google.android.material.button.MaterialButton
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.C
@@ -45,14 +50,17 @@ class NativePlayerActivity : AppCompatActivity() {
     private var player: ExoPlayer? = null
     private var playerView: PlayerView? = null
     private var channelNameTextView: TextView? = null
-    private var stateLabelTextView: TextView? = null
+    private var liveLabelTextView: TextView? = null
     private var epgTextView: TextView? = null
+    private var currentTimeTextView: TextView? = null
+    private var durationTimeTextView: TextView? = null
     private var statusIndicator: View? = null
     private var progressBar: ProgressBar? = null
-    private var playPauseButton: Button? = null
-    private var stopButton: Button? = null
-    private var seekForwardButton: Button? = null
-    private var seekBackwardButton: Button? = null
+    private var seekBar: AppCompatSeekBar? = null
+    private var isSeeking = false // Flag to prevent circular updates
+    private var playPauseButton: MaterialButton? = null
+    private var seekForwardButton: MaterialButton? = null
+    private var seekBackwardButton: MaterialButton? = null
     private var headerContainer: View? = null
     private var controlsContainer: View? = null
     private var showControls = true
@@ -69,6 +77,15 @@ class NativePlayerActivity : AppCompatActivity() {
     
     // Track if playback was playing before stop (to respect user pause)
     private var wasPlayingBeforeStop = false
+
+    // VOD flag - EPG should not be shown for movies/series
+    private var isVod = false
+
+    // Resume playback for VOD
+    private lateinit var sharedPreferences: SharedPreferences
+    private val PREFS_NAME = "VOD_RESUME"
+    private val RESUME_SAVE_INTERVAL_MS = 5000L // Save position every 5 seconds
+    private var resumeLoaded = false // Flag to prevent loading resume position multiple times
 
     // EPG data (native, no React hooks)
     @Volatile
@@ -89,6 +106,7 @@ class NativePlayerActivity : AppCompatActivity() {
     private val progressRunnable = object : Runnable {
         override fun run() {
             updateEpgProgress()
+            saveVodPosition() // Save position periodically
             progressHandler.postDelayed(this, 1000) // Update every second
         }
     }
@@ -99,6 +117,9 @@ class NativePlayerActivity : AppCompatActivity() {
         hideHandler.removeCallbacks(hideRunnable)
         epgHandler.removeCallbacks(epgRunnable)
         progressHandler.removeCallbacks(progressRunnable)
+        
+        // Save position when destroying activity
+        saveVodPosition()
         
         // Detach player from view first to prevent surface issues
         playerView?.player = null
@@ -145,15 +166,21 @@ class NativePlayerActivity : AppCompatActivity() {
 
         val url = intent.getStringExtra("url") ?: ""
         val channelName = intent.getStringExtra("channelName") ?: "Unknown Channel"
+        isVod = intent.getBooleanExtra("isVod", false)
+
+        // Initialize SharedPreferences for VOD resume
+        sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
         playerView = findViewById(R.id.player_view)
         channelNameTextView = findViewById(R.id.channel_name)
-        stateLabelTextView = findViewById(R.id.state_label)
+        liveLabelTextView = findViewById(R.id.live_label)
         statusIndicator = findViewById(R.id.status_indicator)
         epgTextView = findViewById(R.id.epg_text)
-        progressBar = findViewById(R.id.progress_bar)
+        currentTimeTextView = findViewById(R.id.current_time)
+        durationTimeTextView = findViewById(R.id.duration_time)
+        progressBar = findViewById(R.id.loading_spinner)
+        seekBar = findViewById(R.id.seek_bar)
         playPauseButton = findViewById(R.id.play_pause_button)
-        stopButton = findViewById(R.id.stop_button)
         seekForwardButton = findViewById(R.id.seek_forward_button)
         seekBackwardButton = findViewById(R.id.seek_backward_button)
         headerContainer = findViewById(R.id.header_container)
@@ -164,7 +191,6 @@ class NativePlayerActivity : AppCompatActivity() {
         playerView?.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
 
         playPauseButton?.isFocusable = true
-        stopButton?.isFocusable = true
         seekForwardButton?.isFocusable = true
         seekBackwardButton?.isFocusable = true
 
@@ -172,14 +198,43 @@ class NativePlayerActivity : AppCompatActivity() {
         playPauseButton?.nextFocusLeftId = R.id.seek_backward_button
         seekBackwardButton?.nextFocusRightId = R.id.play_pause_button
         seekForwardButton?.nextFocusLeftId = R.id.play_pause_button
-        seekForwardButton?.nextFocusRightId = R.id.stop_button
-        stopButton?.nextFocusLeftId = R.id.seek_forward_button
 
         channelNameTextView?.text = channelName
 
-        // Start EPG refresh handler
-        epgHandler.post(epgRunnable)
-        
+        // Setup SeekBar listener for VOD seeking
+        seekBar?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    val duration = player?.duration ?: 0
+                    if (duration > 0 && duration != C.TIME_UNSET) {
+                        val position = (duration * progress / 1000).toLong()
+                        val currentTime = formatTime(position)
+                        val totalTime = formatTime(duration)
+                        currentTimeTextView?.text = currentTime
+                        durationTimeTextView?.text = totalTime
+                    }
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                isSeeking = true
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                isSeeking = false
+                val duration = player?.duration ?: 0
+                if (duration > 0 && duration != C.TIME_UNSET) {
+                    val position = (duration * (seekBar?.progress ?: 0) / 1000).toLong()
+                    player?.seekTo(position)
+                }
+            }
+        })
+
+        // Start EPG refresh handler only for live TV (not VOD)
+        if (!isVod) {
+            epgHandler.post(epgRunnable)
+        }
+
         // Start progress update handler
         progressHandler.post(progressRunnable)
 
@@ -217,7 +272,7 @@ class NativePlayerActivity : AppCompatActivity() {
                         progressBar?.visibility = View.VISIBLE
                         updateStateLabel("Loading...")
                     }
-                    Player.STATE_READY, Player.STATE_ENDED -> {
+                    Player.STATE_READY -> {
                         progressBar?.visibility = View.GONE
                         if (player?.isCurrentMediaItemLive == true) {
                             updateStateLabel("Live")
@@ -225,6 +280,19 @@ class NativePlayerActivity : AppCompatActivity() {
                             updateStateLabel("Playing")
                         }
                         retryCount = 0 // Reset retry count on successful playback
+                        
+                        // Load saved position for VOD (only once)
+                        if (isVod && !resumeLoaded) {
+                            loadVodPosition(url)
+                            resumeLoaded = true
+                        }
+                    }
+                    Player.STATE_ENDED -> {
+                        progressBar?.visibility = View.GONE
+                        // Clear saved position when video ends
+                        if (isVod) {
+                            clearVodPosition(url)
+                        }
                     }
                 }
             }
@@ -273,8 +341,7 @@ class NativePlayerActivity : AppCompatActivity() {
         val buttons = listOf(
             playPauseButton,
             seekBackwardButton,
-            seekForwardButton,
-            stopButton
+            seekForwardButton
         )
 
         buttons.forEach { btn ->
@@ -293,11 +360,6 @@ class NativePlayerActivity : AppCompatActivity() {
                     v.alpha = 1f
                 }
             }
-        }
-
-        stopButton?.setOnClickListener {
-            player?.stop()
-            finish()
         }
 
         seekForwardButton?.setOnClickListener {
@@ -356,18 +418,22 @@ class NativePlayerActivity : AppCompatActivity() {
     }
 
     private fun updateStateLabel(state: String) {
-        stateLabelTextView?.text = state
+        liveLabelTextView?.text = state
     }
 
-    fun changeChannel(url: String, channelName: String) {
-        android.util.Log.d("NativePlayerActivity", "Changing channel to: $channelName")
+    fun changeChannel(url: String, channelName: String, isVod: Boolean = false) {
+        android.util.Log.d("NativePlayerActivity", "Changing channel to: $channelName, isVod=$isVod")
         channelNameTextView?.text = channelName
+        this.isVod = isVod
 
         // Reset EPG on channel change
         currentEpg = null
         runOnUiThread {
             epgTextView?.text = "Loading program..."
         }
+
+        // Reset resume flag for new content
+        resumeLoaded = false
 
         retryCount = 0 // Reset retry count for new channel
         
@@ -413,18 +479,37 @@ class NativePlayerActivity : AppCompatActivity() {
         // Always show playback progress for VOD (duration > 0 and not live)
         if (duration > 0 && duration != C.TIME_UNSET && player?.isCurrentMediaItemLive == false) {
             val progress = ((currentPosition.toFloat() / duration) * 100).coerceIn(0f, 100f)
-            val progressBar = "█".repeat((progress / 5).toInt()) + "░".repeat(20 - (progress / 5).toInt())
-            val progressText = String.format("%.0f%%", progress)
             val currentTime = formatTime(currentPosition)
             val totalTime = formatTime(duration)
 
-            val display = "$currentTime / $totalTime  $progressBar $progressText"
+            // Update SeekBar (if not being dragged by user)
+            if (!isSeeking) {
+                runOnUiThread {
+                    seekBar?.max = 1000
+                    seekBar?.progress = (progress * 10).toInt()
+                    seekBar?.visibility = View.VISIBLE
+                    currentTimeTextView?.text = currentTime
+                    durationTimeTextView?.text = totalTime
+                    currentTimeTextView?.visibility = View.VISIBLE
+                    durationTimeTextView?.visibility = View.VISIBLE
+                }
+            }
+
+            // Show text progress in EPG text view
+            val display = "${String.format("%.0f%%", progress)}"
 
             runOnUiThread {
                 epgTextView?.text = display
                 epgTextView?.visibility = View.VISIBLE
             }
             return
+        }
+
+        // Hide SeekBar and time labels for live TV
+        runOnUiThread {
+            seekBar?.visibility = View.GONE
+            currentTimeTextView?.visibility = View.GONE
+            durationTimeTextView?.visibility = View.GONE
         }
 
         // Show EPG progress for live TV
@@ -494,6 +579,9 @@ class NativePlayerActivity : AppCompatActivity() {
 
     // LOGIKA EPG (MOŻE BYĆ API ALBO CACHE)
     private fun refreshEpgFromNative() {
+        // Skip EPG refresh for VOD content (movies/series)
+        if (isVod) return
+
         val channel = channelNameTextView?.text?.toString() ?: return
 
         Thread {
@@ -562,7 +650,33 @@ class NativePlayerActivity : AppCompatActivity() {
 
         when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT,
-            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (!showControls) {
+                    showControls()
+                    return true
+                }
+                // 🔥 TV SEEKBAR NAVIGATION - gdy SeekBar ma focus, przesuwamy pozycję
+                if (seekBar?.hasFocus() == true && isVod) {
+                    val duration = player?.duration ?: 0
+                    if (duration > 0 && duration != C.TIME_UNSET) {
+                        val seekStep = (duration / 100).toLong() // ~1% of duration
+                        val currentPosition = player?.currentPosition ?: 0L
+                        val newPosition = when (event.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_LEFT -> (currentPosition - seekStep).coerceAtLeast(0L)
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> (currentPosition + seekStep).coerceAtMost(duration)
+                            else -> currentPosition
+                        }
+                        player?.seekTo(newPosition)
+                        // Aktualizuj SeekBar UI
+                        val progress = ((newPosition.toFloat() / duration) * 1000).toInt()
+                        seekBar?.progress = progress
+                        android.util.Log.d("NativePlayerActivity", "TV Seek: position=${formatTime(newPosition)}, progress=$progress")
+                        return true
+                    }
+                }
+                // pozwól Androidowi obsłużyć focus navigation
+                return super.dispatchKeyEvent(event)
+            }
             KeyEvent.KEYCODE_DPAD_UP,
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 if (!showControls) {
@@ -615,5 +729,82 @@ class NativePlayerActivity : AppCompatActivity() {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    // Save VOD playback position to SharedPreferences
+    private fun saveVodPosition() {
+        if (!isVod) return
+        
+        val url = intent.getStringExtra("url") ?: return
+        val position = player?.currentPosition ?: 0L
+        val duration = player?.duration ?: 0L
+        
+        // Only save if position is valid and not at the very beginning
+        if (position > 1000 && duration > 0 && position < duration - 1000) {
+            val key = url.hashCode().toString() // Use URL hash as key
+            sharedPreferences.edit()
+                .putLong(key, position)
+                .putLong("${key}_duration", duration)
+                .putLong("${key}_timestamp", System.currentTimeMillis())
+                .apply()
+        }
+    }
+
+    // Load VOD playback position from SharedPreferences
+    private fun loadVodPosition(url: String) {
+        if (!isVod) return
+        
+        val key = url.hashCode().toString()
+        val savedPosition = sharedPreferences.getLong(key, -1L)
+        val savedDuration = sharedPreferences.getLong("${key}_duration", -1L)
+        val savedTimestamp = sharedPreferences.getLong("${key}_timestamp", 0L)
+        
+        // Only resume if saved position exists and is recent (within 30 days)
+        val thirtyDaysMs = 30L * 24 * 60 * 60 * 1000
+        if (savedPosition > 1000 && savedDuration > 0 && 
+            (System.currentTimeMillis() - savedTimestamp) < thirtyDaysMs) {
+            
+            val duration = player?.duration ?: 0L
+            // Log dla debugowania
+            android.util.Log.d("NativePlayerActivity", "Resume check: savedPosition=$savedPosition, savedDuration=$savedDuration, currentDuration=$duration")
+            
+            // Resume if we have valid position - duration check is optional (may not be available yet)
+            // Sprawdź czy pozycja nie jest za długa (film mógł być krótszy niż zapamiętana pozycja)
+            val shouldResume = if (duration > 0 && duration != C.TIME_UNSET) {
+                savedPosition < duration - 1000 // Nie wznawiaj jeśli pozycja jest na końcu filmu
+            } else {
+                true // Jeśli długość nieznana, spróbuj wznowić
+            }
+            
+            if (shouldResume) {
+                android.util.Log.d("NativePlayerActivity", "Resuming VOD from position: ${formatTime(savedPosition)}")
+                player?.seekTo(savedPosition)
+                
+                // Show resume notification
+                runOnUiThread {
+                    epgTextView?.text = "Resuming from ${formatTime(savedPosition)}"
+                    epgTextView?.visibility = View.VISIBLE
+                    
+                    // Hide notification after 3 seconds
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        epgTextView?.visibility = View.GONE
+                    }, 3000)
+                }
+            } else {
+                android.util.Log.d("NativePlayerActivity", "Not resuming - position at end of video")
+            }
+        } else {
+            android.util.Log.d("NativePlayerActivity", "No valid resume position found")
+        }
+    }
+
+    // Clear VOD playback position from SharedPreferences
+    private fun clearVodPosition(url: String) {
+        val key = url.hashCode().toString()
+        sharedPreferences.edit()
+            .remove(key)
+            .remove("${key}_duration")
+            .remove("${key}_timestamp")
+            .apply()
     }
 }

@@ -1,9 +1,10 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { TitleBar } from '@/components/ui/TitleBar';
 import { Navigation } from '@/components/ui/Navigation';
 import { Settings } from '@/features/settings/Settings';
 import { Player } from '@/features/player/Player';
+import { platform } from '@tauri-apps/plugin-os';
 
 interface AppLayoutProps {
   activeView: string;
@@ -36,10 +37,28 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   setSearch,
   handleEpisodeEnded,
 }) => {
+  const [currentPlatform, setCurrentPlatform] = useState<string>('desktop');
+
+  // Detect platform using OS plugin
+  useEffect(() => {
+    const detectPlatform = () => {
+      try {
+        const osPlatform = platform(); // 'android' | 'ios' | 'windows' | 'macOS' | 'linux'
+        setCurrentPlatform(osPlatform);
+      } catch {
+        // Plugin not available - assume desktop
+        setCurrentPlatform('desktop');
+      }
+    };
+    detectPlatform();
+  }, []);
+
+  const isMobile = currentPlatform === 'android' || currentPlatform === 'ios';
+
   return (
     <div className={`flex flex-col h-full ${player.current ? 'bg-transparent' : 'dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 bg-gradient-to-br from-white via-gray-100 to-white'}`}>
-      {/* Custom TitleBar - hidden only when fullscreen */}
-      {!isFullscreen && <TitleBar />}
+      {/* Custom TitleBar - hidden on mobile (Android/iOS) and when fullscreen */}
+      {!isFullscreen && !isMobile && <TitleBar />}
 
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">

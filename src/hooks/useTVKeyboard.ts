@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react';
 
 interface TVKeyboardOptions {
   onBack?: () => void;
-  onEnter?: (element: HTMLElement) => void;
+  onEnter?: (element: HTMLElement) => void | boolean;
   onFocusNext?: (direction: 'up' | 'down' | 'left' | 'right') => void;
   getCurrentElement?: () => HTMLElement | null;
   getGlobalActiveContainer?: () => HTMLElement | null;
@@ -57,8 +57,13 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
       const handleEnter = () => {
         const current = getCurrentElement?.();
         if (current) {
-          onEnterRef.current?.(current);
-          current.click();
+          // Call onEnter callback - if it returns true, don't auto-click
+          // This allows the callback to handle the action itself (e.g., toggle UI)
+          const handled = onEnterRef.current?.(current);
+          // Only auto-click if onEnter didn't handle it (didn't return true)
+          if (handled !== true) {
+            current.click();
+          }
         }
       };
 

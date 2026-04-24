@@ -43,6 +43,9 @@ export const usePlaybackManager = ({
     player.setBuffering(true);
 
     try {
+      // Ensure authentication before getting stream URL
+      await client.ensureAuthenticated();
+
       // Invalidate stream cache to get fresh URL with correct MAC
       const accountId = client?.['account']?.id || 'default';
       const lastAccount = sessionStorage.getItem('playerLastAccountId');
@@ -58,13 +61,37 @@ export const usePlaybackManager = ({
         staleTime: 2 * 60 * 1000, // Use cache for 2 minutes (allows prefetch to work)
       });
 
+      console.log('[usePlaybackManager] client.token:', client.token, 'client.account.token:', client.getAccount()?.token);
+
+      // Clean portalUrl - extract valid URL and ignore trailing garbage
+      const rawPortalUrl = client.getAccount()?.portalUrl || '';
+      let cleanPortalUrl = rawPortalUrl;
+
+      // Extract valid URL by matching http:// or https:// followed by domain and first path segment, then remove trailing garbage
+      const urlMatch = cleanPortalUrl.match(/(https?:\/\/[^\/]+\/[^\/]+)/);
+      if (urlMatch) {
+        cleanPortalUrl = urlMatch[1] + '/';
+      } else {
+        // Fallback: remove any trailing characters that are not URL-safe
+        cleanPortalUrl = cleanPortalUrl.replace(/[^a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$/, '');
+        // Ensure it ends with /
+        if (!cleanPortalUrl.endsWith('/')) {
+          cleanPortalUrl += '/';
+        }
+      }
+
+      console.log('[usePlaybackManager] rawPortalUrl:', rawPortalUrl, 'cleanPortalUrl:', cleanPortalUrl);
+
       player.setMedia({
         url,
         name: channel.name,
         channelId: Number.parseInt(String(channel.id)),
         isVod: vodFlag,
         movieId,
-        resumePosition: resumePos
+        resumePosition: resumePos,
+        portalUrl: cleanPortalUrl,
+        mac: client.getAccount()?.mac || '',
+        token: client.token || ''
       });
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {

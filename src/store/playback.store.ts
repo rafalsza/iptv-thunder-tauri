@@ -13,6 +13,9 @@ interface PlayerMedia {
   isVod?: boolean;
   movieId?: string;
   resumePosition?: number;
+  portalUrl?: string;
+  mac?: string;
+  token?: string;
 }
 
 interface PlaybackState {
