@@ -6,6 +6,7 @@ import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
 import { useFavoriteCategories } from '@/hooks/useFavorites';
 import { useChannelCategories } from './tv.hooks';
+import { useTVKeyboard } from '@/hooks/useTVKeyboard';
 
 interface ChannelCategoriesListProps {
   client: StalkerClient;
@@ -21,6 +22,15 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
   const accountId = client?.getAccount?.()?.id || 'default';
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'live');
+
+  // TV keyboard with MENU key support
+  useTVKeyboard({
+    onMenu: () => {
+      if (selectedCategory) {
+        handleLongPress(selectedCategory);
+      }
+    },
+  });
 
   // Pobieranie kategorii kanałów
   const { 
@@ -46,6 +56,15 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
     e.stopPropagation();
     e.preventDefault();
     toggleCategory(categoryId, categoryName);
+  };
+
+  const handleLongPress = (category: StalkerGenre) => {
+    const categoryId = String(category.id);
+    toggleCategory(categoryId, category.title);
+    // Haptic feedback if supported
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
   };
 
   if (isLoading) {
@@ -125,6 +144,10 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
               data-tv-initial={categoryIndex === 0}
               tabIndex={0}
               onClick={() => handleCategoryClick(category)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                handleLongPress(category);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
                   e.preventDefault();

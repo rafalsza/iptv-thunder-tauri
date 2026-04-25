@@ -17,8 +17,8 @@ import { StalkerVOD, StalkerGenre } from '@/types';
 
 // Responsive row height based on screen size (calculated dynamically)
 const getRowHeight = () => {
-  if (typeof window === 'undefined') return 240;
-  const width = window.innerWidth;
+  if (globalThis.window === undefined) return 240;
+  const width = globalThis.window.innerWidth;
   if (width > 3000) return 280;
   if (width > 2000) return 240;
   return 200;
@@ -191,10 +191,17 @@ export const SeriesList: React.FC<SeriesListProps> = ({
   // ── Layout ────────────────────────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState(() => {
-    if (typeof window === 'undefined') return 5;
-    const availableWidth = window.innerWidth - 256 - 32;
+    if (globalThis.window === undefined) return 5;
+    const availableWidth = globalThis.window.innerWidth - 256 - 32;
     // Responsive card width: larger screens get larger cards
-    const cardWidth = availableWidth > 3000 ? 160 : availableWidth > 2000 ? 140 : 120;
+    let cardWidth: number;
+    if (availableWidth > 3000) {
+      cardWidth = 160;
+    } else if (availableWidth > 2000) {
+      cardWidth = 140;
+    } else {
+      cardWidth = 120;
+    }
     return Math.max(2, Math.floor(availableWidth / cardWidth));
   });
 
@@ -204,7 +211,14 @@ export const SeriesList: React.FC<SeriesListProps> = ({
       if (!parentRef.current) return;
       const availableWidth = parentRef.current.offsetWidth;
       // Responsive card width based on screen size
-      const cardWidth = availableWidth > 3000 ? 160 : availableWidth > 2000 ? 140 : 120;
+      let cardWidth: number;
+      if (availableWidth > 3000) {
+        cardWidth = 160;
+      } else if (availableWidth > 2000) {
+        cardWidth = 140;
+      } else {
+        cardWidth = 120;
+      }
       setColumnCount(Math.max(2, Math.floor(availableWidth / cardWidth)));
     };
     calc();

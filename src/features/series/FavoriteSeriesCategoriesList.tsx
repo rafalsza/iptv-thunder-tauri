@@ -7,6 +7,7 @@ import { StalkerGenre } from "@/types";
 import { useFavoriteCategories } from "@/hooks/useFavorites";
 import { useSeriesCategories } from "./series.hooks";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useTVKeyboard } from "@/hooks/useTVKeyboard";
 
 interface FavoriteSeriesCategoriesListProps {
   client: StalkerClient;
@@ -24,6 +25,15 @@ export const FavoriteSeriesCategoriesList: React.FC<
   const accountId = client?.getAccount?.()?.id || "default";
   const { categoryIds: favoriteCategories, toggleCategory } =
     useFavoriteCategories(accountId, "series");
+
+  // TV keyboard with MENU key support
+  useTVKeyboard({
+    onMenu: () => {
+      if (selectedCategory) {
+        handleLongPress(selectedCategory);
+      }
+    },
+  });
 
   // Pobieranie wszystkich kategorii seriali z cache
   const {
@@ -60,6 +70,15 @@ export const FavoriteSeriesCategoriesList: React.FC<
     e.stopPropagation();
     e.preventDefault();
     toggleCategory(categoryId);
+  };
+
+  const handleLongPress = (category: StalkerGenre) => {
+    const categoryId = String(category.id);
+    toggleCategory(categoryId, category.title);
+    // Haptic feedback if supported
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
   };
 
   if (isLoading) {
@@ -182,6 +201,10 @@ export const FavoriteSeriesCategoriesList: React.FC<
               data-tv-initial={categoryIndex === 0}
               tabIndex={0}
               onClick={() => handleCategoryClick(category)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                handleLongPress(category);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
                   e.preventDefault();

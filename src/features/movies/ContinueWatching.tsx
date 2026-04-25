@@ -83,10 +83,11 @@ const MovieCardWithProgress: React.FC<MovieCardWithProgressProps> = ({
   if (!progress) return null;
 
   return (
-    <div
+    <button
+      type="button"
       // For watched movies, resume from beginning (position 0); for in-progress, resume from saved position
-      onClick={() => onSelect(movie, isWatched ? 0 : progress!.position)}
-      className="cursor-pointer group flex-shrink-0 w-[180px]"
+      onClick={() => onSelect(movie, isWatched ? 0 : progress.position)}
+      className="cursor-pointer group flex-shrink-0 w-[180px] bg-transparent border-0 p-0 text-left"
     >
       <div className="relative overflow-hidden rounded-lg border border-slate-700 hover:border-green-700 hover:shadow-lg transition-all bg-slate-800">
         {/* Poster */}
@@ -152,7 +153,7 @@ const MovieCardWithProgress: React.FC<MovieCardWithProgressProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </button>
   );
 };
 

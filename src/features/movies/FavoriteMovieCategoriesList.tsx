@@ -7,6 +7,7 @@ import { StalkerGenre } from '@/types';
 import { useFavoriteCategories } from '@/hooks/useFavorites';
 import { useMovieCategories } from './movies.hooks';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTVKeyboard } from '@/hooks/useTVKeyboard';
 
 interface FavoriteMovieCategoriesListProps {
   client: StalkerClient;
@@ -23,6 +24,15 @@ export const FavoriteMovieCategoriesList: React.FC<FavoriteMovieCategoriesListPr
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
   const accountId = client?.getAccount?.()?.id || 'default';
   const { categoryIds: favoriteCategories, toggleCategory } = useFavoriteCategories(accountId, 'vod');
+
+  // TV keyboard with MENU key support
+  useTVKeyboard({
+    onMenu: () => {
+      if (selectedCategory) {
+        handleLongPress(selectedCategory);
+      }
+    },
+  });
 
   // Pobieranie wszystkich kategorii filmów z cache
   const { 
@@ -53,6 +63,15 @@ export const FavoriteMovieCategoriesList: React.FC<FavoriteMovieCategoriesListPr
     e.stopPropagation();
     e.preventDefault();
     toggleCategory(categoryId);
+  };
+
+  const handleLongPress = (category: StalkerGenre) => {
+    const categoryId = String(category.id);
+    toggleCategory(categoryId, category.title);
+    // Haptic feedback if supported
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
   };
 
   if (isLoading) {
@@ -161,6 +180,10 @@ export const FavoriteMovieCategoriesList: React.FC<FavoriteMovieCategoriesListPr
               data-tv-initial={categoryIndex === 0}
               tabIndex={0}
               onClick={() => handleCategoryClick(category)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                handleLongPress(category);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
                   e.preventDefault();
@@ -248,8 +271,7 @@ export const FavoriteMovieCategoriesList: React.FC<FavoriteMovieCategoriesListPr
                 onClick={() => onCategorySelect(selectedCategory)}
                 className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white rounded-lg transition-colors flex items-center gap-2"
               >
-                <span>🎬</span>
-                Pokaż filmy
+                <span>🎬</span> Pokaż filmy
               </button>
             </div>
           </div>

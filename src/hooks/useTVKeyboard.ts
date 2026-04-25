@@ -3,6 +3,7 @@ import { useRef, useEffect } from 'react';
 interface TVKeyboardOptions {
   onBack?: () => void;
   onEnter?: (element: HTMLElement) => void | boolean;
+  onMenu?: () => void;
   onFocusNext?: (direction: 'up' | 'down' | 'left' | 'right') => void;
   getCurrentElement?: () => HTMLElement | null;
   getGlobalActiveContainer?: () => HTMLElement | null;
@@ -13,6 +14,7 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
   const { 
     onBack, 
     onEnter, 
+    onMenu,
     onFocusNext,
     getCurrentElement,
     getGlobalActiveContainer,
@@ -21,10 +23,12 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
   
   const onBackRef = useRef(onBack);
   const onEnterRef = useRef(onEnter);
+  const onMenuRef = useRef(onMenu);
   const onFocusNextRef = useRef(onFocusNext);
   
   useEffect(() => { onBackRef.current = onBack; }, [onBack]);
   useEffect(() => { onEnterRef.current = onEnter; }, [onEnter]);
+  useEffect(() => { onMenuRef.current = onMenu; }, [onMenu]);
   useEffect(() => { onFocusNextRef.current = onFocusNext; }, [onFocusNext]);
 
   useEffect(() => {
@@ -81,6 +85,7 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
         Enter: handleEnter,
         OK: handleEnter,
         Select: handleEnter,
+        Menu: () => onMenuRef.current?.(),
         Backspace: () => {
           if (!isTyping) {
             onBackRef.current?.();
@@ -100,10 +105,10 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    globalThis.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      globalThis.removeEventListener('keydown', handleKeyDown);
     };
   }, [getCurrentElement, getGlobalActiveContainer, getLocalActiveContainer]);
 

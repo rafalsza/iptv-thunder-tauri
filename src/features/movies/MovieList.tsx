@@ -19,11 +19,18 @@ import { ContinueWatching } from './ContinueWatching';
 
 // Responsive row height based on screen size (calculated dynamically)
 const getRowHeight = () => {
-  if (typeof window === 'undefined') return 240;
-  const width = window.innerWidth;
+  if (globalThis.window === undefined) return 240;
+  const width = globalThis.window.innerWidth;
   if (width > 3000) return 280;
   if (width > 2000) return 240;
   return 200;
+};
+
+// Responsive card width based on available width
+const getCardWidth = (availableWidth: number) => {
+  if (availableWidth > 3000) return 160;
+  if (availableWidth > 2000) return 140;
+  return 120;
 };
 const IMAGE_CACHE_LIMIT = 500;
 
@@ -248,7 +255,7 @@ export const MovieList: React.FC<MovieListProps> = ({
     // Subtract sidebar (~256px) and padding (~32px)
     const availableWidth = window.innerWidth - 256 - 32;
     // Responsive card width: larger screens get larger cards
-    const cardWidth = availableWidth > 3000 ? 160 : availableWidth > 2000 ? 140 : 120;
+    const cardWidth = getCardWidth(availableWidth);
     return Math.max(2, Math.floor(availableWidth / cardWidth));
   });
 
@@ -258,7 +265,7 @@ export const MovieList: React.FC<MovieListProps> = ({
       if (!parentRef.current) return;
       const availableWidth = parentRef.current.offsetWidth;
       // Responsive card width based on screen size
-      const cardWidth = availableWidth > 3000 ? 160 : availableWidth > 2000 ? 140 : 120;
+      const cardWidth = getCardWidth(availableWidth);
       setCols(Math.max(2, Math.floor(availableWidth / cardWidth)));
     };
     calc();
