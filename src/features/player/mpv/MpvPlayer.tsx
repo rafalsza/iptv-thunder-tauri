@@ -102,6 +102,7 @@ function getResolutionLabel(width: number, height: number): string {
   if (height >= 1440) return 'QHD';
   if (height >= 1080) return 'FHD';
   if (height >= 720) return 'HD';
+  if (height >= 360) return 'SD';
   return `${width}x${height}`;
 }
 
@@ -1652,6 +1653,10 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
     if (e.key === 'f' || e.key === 'F') {
       void controls.handleFullscreen();
     }
+    if (e.key === ' ') {
+      e.preventDefault();
+      void controls.handlePlayPause();
+    }
     if (e.key === 'ArrowLeft' && isVod) {
       e.preventDefault();
       void controls.handleSeek(-10);
@@ -1660,12 +1665,12 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
       e.preventDefault();
       void controls.handleSeek(10);
     }
-  }, [controls.isFullscreen, controls.handleFullscreen, controls.handleClose, controls.handleSeek, isVod, onClose]);
+  }, [controls.isFullscreen, controls.handleFullscreen, controls.handleClose, controls.handlePlayPause, controls.handleSeek, isVod, onClose]);
 
   // Global keyboard handling
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    globalThis.window.addEventListener('keydown', handleKeyDown);
+    return () => globalThis.window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {

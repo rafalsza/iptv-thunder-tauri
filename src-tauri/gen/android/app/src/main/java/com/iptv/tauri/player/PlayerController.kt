@@ -8,6 +8,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -71,7 +74,21 @@ class PlayerController(
         val currentPosition: Long = 0L,
         val duration: Long = 0L,
         val isVod: Boolean = false,
-        val videoQuality: String = ""
+        val videoQuality: String = "",
+        val hasMultipleTracks: Boolean = false,
+        val audioTracks: List<TrackInfo> = emptyList(),
+        val subtitleTracks: List<TrackInfo> = emptyList(),
+        val currentAudioTrackId: String? = null,
+        val currentSubtitleTrackId: String? = null
+    )
+
+    data class TrackInfo(
+        val id: String,
+        val label: String,
+        val language: String?,
+        val isSelected: Boolean,
+        val groupIndex: Int,
+        val trackIndex: Int
     )
 
     fun initialize(url: String, isVod: Boolean = false) {
@@ -170,6 +187,9 @@ class PlayerController(
                         if (!isLive) {
                             startPeriodicUpdate()
                         }
+
+                        // Update track info when ready
+                        updateTrackInfoInUi()
                     }
                     Player.STATE_ENDED -> {
                         progressBar?.visibility = View.GONE
@@ -181,6 +201,11 @@ class PlayerController(
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 handleError(error)
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                android.util.Log.d("PlayerController", "Tracks changed, updating track info")
+                updateTrackInfoInUi()
             }
         })
     }
@@ -411,6 +436,110 @@ class PlayerController(
         return if (duration > 0 && duration != C.TIME_UNSET) {
             (position.toFloat() / duration) * 100
         } else 0f
+    }
+
+    fun getAvailableTracks(): Pair<List<TrackInfo>, List<TrackInfo>> {
+        val exoPlayer = player ?: return Pair(emptyList(), emptyList())
+        val tracks = exoPlayer.currentTracks
+
+        val audioTracks = mutableListOf<TrackInfo>()
+        val subtitleTracks = mutableListOf<TrackInfo>()
+
+        tracks.groups.forEachIndexed { groupIndex, group ->
+            val trackGroup = group.mediaTrackGroup
+            val type = trackGroup.type
+
+            for (trackIndex in 0 until trackGroup.length) {
+                val format = trackGroup.getFormat(trackIndex)
+                val trackId = "${groupIndex}_$trackIndex"
+                val isSelected = group.isSelected && exoPlayer.trackSelectionParameters.getSelectionOverride(trackGroup)?.contains(trackIndex) == true
+
+                val label = buildString {
+                    format.language?.let { append(it.uppercase()) }
+                    if (format.label != null) {
+                        if (isNotEmpty()) append(" - ")
+                        append(format.label)
+                    }
+                    if (isEmpty()) append("Track ${trackIndex + 1}")
+                }
+
+                when (type) {
+                    C.TRACK_TYPE_AUDIO -> {
+                        audioTracks.add(TrackInfo(
+                            id = trackId,
+                            label = label,
+                            language = format.language,
+                            isSelected = isSelected,
+                            groupIndex = groupIndex,
+                            trackIndex = trackIndex
+                        ))
+                    }
+                    C.TRACK_TYPE_TEXT -> {
+                        subtitleTracks.add(TrackInfo(
+                            id = trackId,
+                            label = label,
+                            language = format.language,
+                            isSelected = isSelected,
+                            groupIndex = groupIndex,
+                            trackIndex = trackIndex
+                        ))
+                    }
+                }
+            }
+        }
+
+        return Pair(audioTracks, subtitleTracks)
+    }
+
+    fun selectAudioTrack(trackId: String?) {
+        val exoPlayer = player ?: return
+        val (audioTracks, _) = getAvailableTracks()
+
+        val track = audioTracks.find { it.id == trackId } ?: audioTracks.firstOrNull() ?: return
+
+        val parametersBuilder = exoPlayer.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+
+        val trackGroup = exoPlayer.currentTracks.groups[track.groupIndex].mediaTrackGroup
+        parametersBuilder.addOverride(TrackSelectionOverride(trackGroup, listOf(track.trackIndex)))
+
+        exoPlayer.trackSelectionParameters = parametersBuilder.build()
+        updateTrackInfoInUi()
+    }
+
+    fun selectSubtitleTrack(trackId: String?) {
+        val exoPlayer = player ?: return
+        val (_, subtitleTracks) = getAvailableTracks()
+
+        val parametersBuilder = exoPlayer.trackSelectionParameters.buildUpon()
+
+        if (trackId == null || trackId == "disabled") {
+            parametersBuilder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+        } else {
+            val track = subtitleTracks.find { it.id == trackId } ?: return
+            val trackGroup = exoPlayer.currentTracks.groups[track.groupIndex].mediaTrackGroup
+            parametersBuilder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            parametersBuilder.addOverride(TrackSelectionOverride(trackGroup, listOf(track.trackIndex)))
+        }
+
+        exoPlayer.trackSelectionParameters = parametersBuilder.build()
+        updateTrackInfoInUi()
+    }
+
+    private fun updateTrackInfoInUi() {
+        val (audioTracks, subtitleTracks) = getAvailableTracks()
+        val hasMultipleTracks = audioTracks.size > 1 || subtitleTracks.isNotEmpty()
+        val currentAudio = audioTracks.find { it.isSelected }?.id ?: audioTracks.firstOrNull()?.id
+        val currentSubtitle = subtitleTracks.find { it.isSelected }?.id
+
+        currentUiState = currentUiState.copy(
+            hasMultipleTracks = hasMultipleTracks,
+            audioTracks = audioTracks,
+            subtitleTracks = subtitleTracks,
+            currentAudioTrackId = currentAudio,
+            currentSubtitleTrackId = currentSubtitle
+        )
+        onUiStateChange(currentUiState)
     }
 
     fun release() {

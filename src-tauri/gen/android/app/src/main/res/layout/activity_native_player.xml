@@ -175,6 +175,16 @@
                 android:layout_height="56dp"
                 app:icon="@drawable/ic_forward_10"
                 app:iconSize="28dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/track_select_button"
+                style="@style/PlayerControlButton"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginStart="24dp"
+                app:icon="@drawable/ic_audiotrack"
+                app:iconSize="28dp"
+                android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 

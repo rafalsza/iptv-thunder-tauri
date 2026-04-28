@@ -101,6 +101,7 @@ class NativePlayerActivity : AppCompatActivity() {
             playPauseButton = findViewById(R.id.play_pause_button),
             seekForwardButton = findViewById(R.id.seek_forward_button),
             seekBackwardButton = findViewById(R.id.seek_backward_button),
+            trackSelectButton = findViewById(R.id.track_select_button),
             statusIndicator = findViewById(R.id.status_indicator),
             getDuration = { playerController.player?.duration ?: 0L },
             onSeek = { position ->
@@ -110,7 +111,10 @@ class NativePlayerActivity : AppCompatActivity() {
             onPlayPause = { playerController.togglePlayPause() },
             onSeekForward = { playerController.seekRelative(10000) },
             onSeekBackward = { playerController.seekRelative(-10000) },
-            formatTime = ::formatTime
+            formatTime = ::formatTime,
+            getTrackInfo = { playerController.currentUiState },
+            onSelectAudioTrack = { trackId -> playerController.selectAudioTrack(trackId) },
+            onSelectSubtitleTrack = { trackId -> playerController.selectSubtitleTrack(trackId) }
         )
         uiController.setChannelName(channelName)
 
@@ -193,6 +197,7 @@ class NativePlayerActivity : AppCompatActivity() {
         uiController.updateStateLabel(state.stateLabel)
         uiController.updateQualityLabel(state.videoQuality)
         uiController.updateSeekBar(state.currentProgress, state.duration, state.currentPosition, state.isVod)
+        uiController.updateTrackInfo(state)
     }
 
     private fun loadResumePosition() {
