@@ -35,6 +35,20 @@ class NativePlayerActivity : AppCompatActivity() {
     private var currentUrl = ""
     private var portalIdentifier = ""
 
+    // Episode data for auto-play
+    private var episodes: List<EpisodeInfo> = emptyList()
+    private var currentEpisodeIndex = 0
+    private var autoPlayEpisodes = true
+
+    data class EpisodeInfo(
+        val id: String,
+        val url: String,
+        val name: String,
+        val season: String?,
+        val episode: String?,
+        val cmd: String?
+    )
+
     override fun onCreate(savedInstanceState: Bundle?) {
         android.util.Log.d("NativePlayerActivity", "=== onCreate START ===")
         super.onCreate(savedInstanceState)
@@ -47,6 +61,13 @@ class NativePlayerActivity : AppCompatActivity() {
         val channelName = intent.getStringExtra("channelName") ?: "Unknown Channel"
         isVod = intent.getBooleanExtra("isVod", false)
         portalIdentifier = intent.getStringExtra("mac") ?: ""
+
+        // Parse episode data for auto-play
+        currentEpisodeIndex = intent.getIntExtra("currentEpisodeIndex", 0)
+        autoPlayEpisodes = intent.getBooleanExtra("autoPlayEpisodes", true)
+        val episodesJson = intent.getStringExtra("episodesJson") ?: "[]"
+        episodes = parseEpisodesJson(episodesJson)
+        android.util.Log.d("NativePlayerActivity", "Episodes loaded: ${episodes.size}, currentIndex: $currentEpisodeIndex, autoPlay: $autoPlayEpisodes")
 
         initializeViews()
         initializeControllers(channelName)
@@ -182,6 +203,10 @@ class NativePlayerActivity : AppCompatActivity() {
             }
             is PlayerController.PlayerState.Ended -> {
                 if (isVod) resumeManager.clearPosition(currentUrl)
+                // Auto-play next episode if enabled
+                if (autoPlayEpisodes && episodes.isNotEmpty() && currentEpisodeIndex < episodes.size - 1) {
+                    playNextEpisode()
+                }
             }
             else -> {
                 // Other states are handled through renderUiState
@@ -282,5 +307,48 @@ class NativePlayerActivity : AppCompatActivity() {
         mediaSessionManager?.release()
 
         playerView?.player = null
+    }
+
+    private fun parseEpisodesJson(json: String): List<EpisodeInfo> {
+        return try {
+            val jsonArray = org.json.JSONArray(json)
+            val list = mutableListOf<EpisodeInfo>()
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                list.add(EpisodeInfo(
+                    id = obj.optString("id", ""),
+                    url = obj.optString("url", ""),
+                    name = obj.optString("name", ""),
+                    season = obj.optString("season", null),
+                    episode = obj.optString("episode", null),
+                    cmd = obj.optString("cmd", null)
+                ))
+            }
+            list
+        } catch (e: Exception) {
+            android.util.Log.e("NativePlayerActivity", "Failed to parse episodes JSON: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private fun playNextEpisode() {
+        val nextIndex = currentEpisodeIndex + 1
+        if (nextIndex >= episodes.size) {
+            android.util.Log.d("NativePlayerActivity", "No more episodes to play")
+            return
+        }
+
+        val nextEpisode = episodes[nextIndex]
+        currentEpisodeIndex = nextIndex
+
+        android.util.Log.d("NativePlayerActivity", "Auto-playing next episode: ${nextEpisode.name} (index: $currentEpisodeIndex)")
+
+        // Update channel name for UI
+        uiController.setChannelName(nextEpisode.name)
+
+        // For episodes with cmd, we need to fetch the stream URL from the server
+        // Since ExoPlayer expects a direct URL, we need to close the activity and let JS handle it
+        android.util.Log.w("NativePlayerActivity", "Episode requires URL fetching - closing activity to let JS handle it")
+        finish()
     }
 }

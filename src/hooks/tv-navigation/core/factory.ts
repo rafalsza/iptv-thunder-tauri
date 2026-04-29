@@ -10,7 +10,13 @@ export interface CreateNavigationOptions {
   plugins?: NavigationPlugin[];
 }
 
-export function createNavigation(options: CreateNavigationOptions) {
+export interface NavigationEngine {
+  plugins: NavigationPlugin[];
+  /** Add a plugin dynamically after engine creation */
+  addPlugin: (plugin: NavigationPlugin) => void;
+}
+
+export function createNavigation(options: CreateNavigationOptions): NavigationEngine {
   const { config, plugins = [] } = options;
 
   // Create rule engine from config

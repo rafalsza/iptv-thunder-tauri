@@ -52,14 +52,29 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
       const exoPlayer = (globalThis.window as any).ExoPlayer;
       if (exoPlayer && typeof exoPlayer.open_compose_player === 'function') {
 
-        // Get credentials from playback store (set by usePlaybackManager)
+        // Get credentials and episode data from playback store (set by usePlaybackManager)
         const player = usePlaybackStore.getState().current;
         const portalUrl = player?.portalUrl || '';
         const mac = player?.mac || '';
         const token = player?.token || '';
+        const episodes = player?.episodes || [];
+        const currentEpisodeIndex = player?.currentEpisodeIndex || 0;
+        const autoPlayEpisodes = player?.autoPlayEpisodes ?? true;
+
+        // Create PlayerParams object
+        const params = {
+          channelId: channelId?.toString() || '',
+          portalUrl,
+          mac,
+          token,
+          isVod: isVod || false,
+          episodesJson: JSON.stringify(episodes),
+          currentEpisodeIndex,
+          autoPlayEpisodes,
+        };
 
         try {
-          exoPlayer.open_compose_player(url, name, channelId?.toString() || '', portalUrl, mac, token, isVod || false);
+          exoPlayer.open_compose_player(url, name, params);
         } catch (error) {
           console.error('[ExoPlayer] Error calling open_compose_player:', error);
           logger.error(`Error calling open_compose_player: ${error}`);

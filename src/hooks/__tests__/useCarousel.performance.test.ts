@@ -11,7 +11,7 @@ const mockCancelAnimationFrame = jest.fn(clearTimeout);
 
 beforeAll(() => {
   // Mock ResizeObserver
-  global.ResizeObserver = mockResizeObserver.mockImplementation((callback) => ({
+  globalThis.ResizeObserver = mockResizeObserver.mockImplementation((callback) => ({
     observe: jest.fn((element) => {
       // Simulate resize callback
       setTimeout(() => callback([{ target: element, contentRect: element.getBoundingClientRect() }]), 0);
@@ -21,8 +21,8 @@ beforeAll(() => {
   })) as unknown as typeof ResizeObserver;
 
   // Mock requestAnimationFrame
-  global.requestAnimationFrame = mockRequestAnimationFrame as unknown as typeof requestAnimationFrame;
-  global.cancelAnimationFrame = mockCancelAnimationFrame as unknown as typeof cancelAnimationFrame;
+  globalThis.requestAnimationFrame = mockRequestAnimationFrame as unknown as typeof requestAnimationFrame;
+  globalThis.cancelAnimationFrame = mockCancelAnimationFrame as unknown as typeof cancelAnimationFrame;
 
   // Mock window methods
   Object.defineProperty(window, 'innerWidth', {

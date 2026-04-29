@@ -16,6 +16,10 @@ interface PlayerMedia {
   portalUrl?: string;
   mac?: string;
   token?: string;
+  // Episode data for auto-play
+  episodes?: any[];
+  currentEpisodeIndex?: number;
+  autoPlayEpisodes?: boolean;
 }
 
 interface PlaybackState {

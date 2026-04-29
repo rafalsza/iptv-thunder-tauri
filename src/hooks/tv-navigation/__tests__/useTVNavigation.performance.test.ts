@@ -2,13 +2,13 @@
 // These tests measure execution time and ensure TV navigation operations meet performance thresholds
 
 import { renderHook, act } from '@testing-library/react';
-import { useTVNavigation } from '../react/useTVNavigation';
+import { useTVNavigation } from '..';
 
 // Mock DOM environment
 beforeAll(() => {
   // Mock requestAnimationFrame
-  global.requestAnimationFrame = jest.fn((cb) => setTimeout(cb, 0)) as unknown as typeof requestAnimationFrame;
-  global.cancelAnimationFrame = jest.fn(clearTimeout) as unknown as typeof cancelAnimationFrame;
+  globalThis.requestAnimationFrame = jest.fn((cb) => setTimeout(cb, 0)) as unknown as typeof requestAnimationFrame;
+  globalThis.cancelAnimationFrame = jest.fn(clearTimeout) as unknown as typeof cancelAnimationFrame;
 
   // Mock DOM methods
   Element.prototype.getBoundingClientRect = jest.fn(() => ({

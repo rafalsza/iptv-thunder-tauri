@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { getSetting } from '@/hooks/useSettings';
 import { QueryClient } from '@tanstack/react-query';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel, StalkerVOD } from '@/types';
@@ -128,18 +129,6 @@ export const usePlaybackManager = ({
     }
   }, [client, queryClient, activePortal]);
 
-  const handleEpisodeEnded = useCallback(async () => {
-    const { getSetting } = await import('@/hooks/useSettings');
-    const autoPlayEpisodes = await getSetting('autoPlayEpisodes');
-
-    if (autoPlayEpisodes && selectedSeries && episodesList.length > 0 && currentEpisodeIndex < episodesList.length - 1) {
-      const nextIndex = currentEpisodeIndex + 1;
-      const nextEpisode = episodesList[nextIndex];
-      setCurrentEpisodeIndex(nextIndex);
-      await handleEpisodeSelect(nextEpisode, 0);
-    }
-  }, [episodesList, currentEpisodeIndex, selectedSeries]);
-
   const handleEpisodeSelect = useCallback(async (episode: StalkerVOD, resumePosition?: number) => {
     if (!client) return;
 
@@ -201,6 +190,19 @@ export const usePlaybackManager = ({
       const episodeName = `${t('season')} ${episode.season || 1} - ${t('episode')} ${episode.episode || 1}`;
       const fullName = seriesName ? `${seriesName} - ${episodeName}` : episodeName;
 
+      // Get autoPlayEpisodes setting for Android
+      const autoPlayEpisodes = await getSetting('autoPlayEpisodes');
+
+      // Prepare episodes data for Android auto-play
+      const episodesData = episodesList.map((ep) => ({
+        id: String(ep.id),
+        url: '', // Will be fetched when needed
+        name: `${t('season')} ${ep.season || 1} - ${t('episode')} ${ep.episode || 1}`,
+        season: String(ep.season || '1'),
+        episode: String(ep.episode || '1'),
+        cmd: ep.cmd,
+      }));
+
       player.setContentType('series');
       player.setMedia({
         url,
@@ -208,7 +210,11 @@ export const usePlaybackManager = ({
         channelId: Number.parseInt(String(episode.id)),
         isVod: true,
         movieId: String(episode.id),
-        resumePosition: resumePosition || 0
+        resumePosition: resumePosition || 0,
+        // Episode data for Android auto-play
+        episodes: episodesData,
+        currentEpisodeIndex: currentEpisodeIndex,
+        autoPlayEpisodes,
       });
 
       // Add series to recently viewed only when an episode is actually played
@@ -230,6 +236,18 @@ export const usePlaybackManager = ({
       // Toast notification handled in component
     }
   }, [client, queryClient, selectedSeries, activePortal, t]);
+
+  const handleEpisodeEnded = useCallback(async () => {
+    const { getSetting } = await import('@/hooks/useSettings');
+    const autoPlayEpisodes = await getSetting('autoPlayEpisodes');
+
+    if (autoPlayEpisodes && selectedSeries && episodesList.length > 0 && currentEpisodeIndex < episodesList.length - 1) {
+      const nextIndex = currentEpisodeIndex + 1;
+      const nextEpisode = episodesList[nextIndex];
+      setCurrentEpisodeIndex(nextIndex);
+      await handleEpisodeSelect(nextEpisode, 0);
+    }
+  }, [episodesList, currentEpisodeIndex, selectedSeries, handleEpisodeSelect]);
 
   const close = () => {
     if (abortRef.current) {

@@ -168,7 +168,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
   // Re-resolve poster URLs using the client
   const resolvedRecentItems = useMemo(() => recentItems.map(item => {
     // If the stored poster is already an absolute URL, keep it
-    if (item.poster && item.poster.startsWith('http')) {
+    if (item.poster?.startsWith('http')) {
       return item;
     }
     // For relative URLs or missing posters, try to resolve

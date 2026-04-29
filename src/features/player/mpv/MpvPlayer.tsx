@@ -184,11 +184,13 @@ function useMpvPlayer(
   const lastRetryRef = useRef(0);
   const lastManualRetryRef = useRef(0);
   const handleManualRetryRef = useRef<((preserveIndex?: boolean) => void) | null>(null);
+  const onEndedRef = useRef<(() => void) | undefined>(onEnded);
   const lastBufferingRef = useRef(0);
   const videoParamsReceivedRef = useRef(false);
   const firstTimePosRef = useRef(0);
   const currentCacheSecsRef = useRef(10);
   const isEndedRef = useRef(false);
+  const isPausedRef = useRef(false);
   const volumeRef = useRef(0.8);
   const hwAccelEnabledRef = useRef(true);
 
@@ -651,6 +653,7 @@ function useMpvPlayer(
           }
           if (name === 'pause' && typeof data === 'boolean') {
             setIsPaused(data);
+            isPausedRef.current = data;
           }
           if (name === 'track-list' && Array.isArray(data)) {
             const parsedTracks: Track[] = data.map((t: any) => ({
@@ -747,6 +750,11 @@ function useMpvPlayer(
     handleManualRetryRef.current = handleManualRetry;
   }, [handleManualRetry]);
 
+  // Keep onEndedRef updated to avoid stale closure
+  useEffect(() => {
+    onEndedRef.current = onEnded;
+  }, [onEnded]);
+
   const isLoading = streamState === 'connecting' || streamState === 'retrying' || streamState === 'stalled';
 
   // Stall detection watchdog + End detection for VOD
@@ -757,6 +765,7 @@ function useMpvPlayer(
       if (!mpvRunningRef.current) return; // MPV not initialized yet
       if (retryCountRef.current > 0) return; // don't retry during retry
       if (isEndedRef.current) return; // playback ended, don't trigger stall
+      if (isPausedRef.current) return; // paused, don't trigger stall
 
       const now = Date.now();
       const timeSinceLastUpdate = now - lastTimeUpdateRef.current;
@@ -764,7 +773,7 @@ function useMpvPlayer(
       // For VOD: detect end by checking if time stopped updating and we're near the end
       if (isVod) {
         const isNearEnd = durationRef.current > 0 && currentTimeRef.current > durationRef.current * 0.98;
-        if (isNearEnd && timeSinceLastUpdate > 5000 && !isEndedRef.current) {
+        if (isNearEnd && !isEndedRef.current) {
           isEndedRef.current = true;
           // Mark as watched when VOD ends
           if (movieId && markAsWatched && durationRef.current > 0) {

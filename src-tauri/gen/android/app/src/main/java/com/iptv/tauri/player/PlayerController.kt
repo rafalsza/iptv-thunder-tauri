@@ -47,7 +47,8 @@ class PlayerController(
     private var retryJob: Job? = null
     var wasPlayingBeforeStop = false
     private var updateJob: Job? = null
-    private var currentUiState = PlayerUiState(channelName = initialChannelName)
+    var currentUiState = PlayerUiState(channelName = initialChannelName)
+        private set
 
     // Watchdog for HLS freeze detection
     private var lastPosition: Long = 0L
@@ -452,7 +453,7 @@ class PlayerController(
             for (trackIndex in 0 until trackGroup.length) {
                 val format = trackGroup.getFormat(trackIndex)
                 val trackId = "${groupIndex}_$trackIndex"
-                val isSelected = group.isSelected && exoPlayer.trackSelectionParameters.getSelectionOverride(trackGroup)?.contains(trackIndex) == true
+                val isSelected = group.isSelected && exoPlayer.trackSelectionParameters.overrides.any { it.key == trackGroup && it.value.trackIndices.contains(trackIndex) }
 
                 val label = buildString {
                     format.language?.let { append(it.uppercase()) }

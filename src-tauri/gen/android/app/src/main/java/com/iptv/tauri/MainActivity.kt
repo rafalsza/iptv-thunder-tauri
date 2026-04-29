@@ -7,6 +7,17 @@ import android.webkit.WebView
 import android.view.KeyEvent
 import androidx.activity.enableEdgeToEdge
 
+data class PlayerParams(
+    val channelId: String,
+    val portalUrl: String,
+    val mac: String,
+    val token: String,
+    val isVod: Boolean,
+    val episodesJson: String,
+    val currentEpisodeIndex: Int,
+    val autoPlayEpisodes: Boolean
+)
+
 class MainActivity : TauriActivity() {
     companion object {
         // Weak reference to allow access from other activities
@@ -101,19 +112,26 @@ class MainActivity : TauriActivity() {
 
         webView.addJavascriptInterface(object {
             @JavascriptInterface
-            fun open_compose_player(url: String, channelName: String, channelId: String, portalUrl: String, mac: String, token: String, isVod: Boolean) {
+            fun open_compose_player(
+                url: String,
+                channelName: String,
+                params: PlayerParams
+            ) {
                 Log.e("MainActivity", "=== open_compose_player ENTRY POINT ===")
-                Log.d("MainActivity", "open_compose_player called with: channelId=$channelId, portalUrl=$portalUrl, mac=$mac, token=${if(token.isNotEmpty()) "SET" else "EMPTY"}, isVod=$isVod")
+                Log.d("MainActivity", "open_compose_player called with: channelId=${params.channelId}, portalUrl=${params.portalUrl}, mac=${params.mac}, token=${if(params.token.isNotEmpty()) "SET" else "EMPTY"}, isVod=${params.isVod}, currentEpisodeIndex=${params.currentEpisodeIndex}, autoPlayEpisodes=${params.autoPlayEpisodes}")
                 runOnUiThread {
                     Log.d("MainActivity", "Starting NativePlayerActivity intent")
                     val intent = android.content.Intent(this@MainActivity, NativePlayerActivity::class.java)
                     intent.putExtra("url", url)
                     intent.putExtra("channelName", channelName)
-                    intent.putExtra("channelId", channelId)
-                    intent.putExtra("portalUrl", portalUrl)
-                    intent.putExtra("mac", mac)
-                    intent.putExtra("token", token)
-                    intent.putExtra("isVod", isVod)
+                    intent.putExtra("channelId", params.channelId)
+                    intent.putExtra("portalUrl", params.portalUrl)
+                    intent.putExtra("mac", params.mac)
+                    intent.putExtra("token", params.token)
+                    intent.putExtra("isVod", params.isVod)
+                    intent.putExtra("episodesJson", params.episodesJson)
+                    intent.putExtra("currentEpisodeIndex", params.currentEpisodeIndex)
+                    intent.putExtra("autoPlayEpisodes", params.autoPlayEpisodes)
                     startActivity(intent)
                     Log.e("MainActivity", "NativePlayerActivity intent started")
                 }

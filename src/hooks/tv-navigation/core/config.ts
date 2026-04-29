@@ -12,11 +12,11 @@ export type NavigationTarget =
   | { group: string; first?: boolean };
 
 export type NavigationCondition =
-  | { container: string; group?: undefined; direction?: Direction; index?: number; last?: boolean }
+  | { container: string; group?: never; direction?: Direction; index?: number; last?: boolean }
   | { container: string; group: string; direction?: Direction; index?: number; last?: boolean }
-  | { group: string; container?: undefined; direction?: Direction; index?: number; last?: boolean }
+  | { group: string; container?: never; direction?: Direction; index?: number; last?: boolean }
   | { isSearch: true; direction?: Direction }
-  | { direction: Direction; container?: undefined; group?: undefined };
+  | { direction: Direction; container?: never; group?: never };
 
 export interface NavigationRule {
   when: NavigationCondition;
@@ -25,6 +25,17 @@ export interface NavigationRule {
 
 export interface NavigationConfig {
   rules: NavigationRule[];
+}
+
+function matchesOptionalFields(
+  condition: { direction?: Direction; index?: number; last?: boolean },
+  currentIndex: number | undefined,
+  direction: Direction,
+  isLast: boolean | undefined
+): boolean {
+  if (condition.direction !== undefined && condition.direction !== direction) return false;
+  if (condition.index !== undefined && currentIndex !== condition.index) return false;
+  return condition.last == isLast;
 }
 
 export function matchCondition(
@@ -38,35 +49,26 @@ export function matchCondition(
     return (
       cond.container === current.containerId &&
       cond.group === current.groupId &&
-      (!cond.direction || cond.direction === direction) &&
-      (cond.index === undefined || current.index === cond.index) &&
-      (cond.last === undefined || isLast === cond.last)
+      matchesOptionalFields(cond, current.index, direction, isLast)
     );
   }
 
   if ('container' in condition && typeof condition.container === 'string') {
     return (
       condition.container === current.containerId &&
-      (!condition.direction || condition.direction === direction) &&
-      (condition.index === undefined || current.index === condition.index) &&
-      (condition.last === undefined || isLast === condition.last)
+      matchesOptionalFields(condition, current.index, direction, isLast)
     );
   }
 
   if ('group' in condition && typeof condition.group === 'string') {
     return (
       condition.group === current.groupId &&
-      (!condition.direction || condition.direction === direction) &&
-      (condition.index === undefined || current.index === condition.index) &&
-      (condition.last === undefined || isLast === condition.last)
+      matchesOptionalFields(condition, current.index, direction, isLast)
     );
   }
 
   if ('isSearch' in condition) {
-    return (
-      current.isSearch === true &&
-      (!condition.direction || condition.direction === direction)
-    );
+    return current.isSearch === true && (!condition.direction || condition.direction === direction);
   }
 
   if ('direction' in condition) {
@@ -101,7 +103,7 @@ export function findTargetByConfig(
   }
 
   if ('last' in target && target.last) {
-    return elements[elements.length - 1]?.id ?? null;
+    return elements.at(-1)?.id ?? null;
   }
 
   if ('first' in target && target.first) {

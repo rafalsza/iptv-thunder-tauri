@@ -13,7 +13,7 @@ export interface RuleResult {
 // Re-export config types for public API
 export type { NavigationConfig, NavigationRule, NavigationCondition, NavigationTarget } from './config';
 export { matchCondition, findTargetByConfig } from './config';
-export type { CreateNavigationOptions } from './factory';
+export type { CreateNavigationOptions, NavigationEngine } from './factory';
 export { createNavigation } from './factory';
 
 export interface NavNode {
