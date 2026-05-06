@@ -11,6 +11,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { usePortalsStore } from '@/store/portals.store';
 import { useResumeStore, type WatchStatus } from '@/store/resume.store';
 import { getImageUrl } from '@/hooks/useImageCache';
+import { useLongPress } from '@/hooks/useLongPress';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerVOD, StalkerGenre } from '@/types';
 import { ContinueWatching } from './ContinueWatching';
@@ -28,9 +29,9 @@ const getRowHeight = () => {
 
 // Responsive card width based on available width
 const getCardWidth = (availableWidth: number) => {
-  if (availableWidth > 3000) return 160;
-  if (availableWidth > 2000) return 140;
-  return 120;
+  if (availableWidth > 3000) return 180;
+  if (availableWidth > 2000) return 160;
+  return 140;
 };
 const IMAGE_CACHE_LIMIT = 500;
 
@@ -76,13 +77,14 @@ interface MovieCardProps {
   onPrefetch: (movie: StalkerVOD) => void;
   favoriteIds: Set<string>;
   onToggleFavorite: (e: React.MouseEvent, movie: StalkerVOD) => void;
+  onLongPress: (movie: StalkerVOD) => void;
   watchStatus?: WatchStatus;
   progressPercentage?: number;
   moviesIndex?: number;
 }
 
 const MovieCard = React.memo<MovieCardProps>(({
-  movie, posterUrl, onSelect, onPrefetch, favoriteIds, onToggleFavorite,
+  movie, posterUrl, onSelect, onPrefetch, favoriteIds, onToggleFavorite, onLongPress,
   watchStatus, progressPercentage = 0, moviesIndex,
 }) => {
   const { t } = useTranslation();
@@ -91,6 +93,17 @@ const MovieCard = React.memo<MovieCardProps>(({
   const isFavorite = favoriteIds.has(String(movie.id));
   const isWatched = watchStatus === 'watched';
   const isInProgress = watchStatus === 'in_progress';
+
+  const { isLongPress, ...longPressHandlers } = useLongPress({
+    onLongPress: () => onLongPress(movie),
+    delay: 500,
+  });
+
+  const handleClick = () => {
+    if (!isLongPress) {
+      onSelect(movie);
+    }
+  };
 
   // Get progress data to recalculate percentage using movie.length for consistency
   const { getProgress } = useResumeStore();
@@ -137,7 +150,12 @@ const MovieCard = React.memo<MovieCardProps>(({
       tabIndex={0}
       onMouseEnter={() => onPrefetch(movie)}
       onFocus={() => onPrefetch(movie)}
-      onClick={() => onSelect(movie)}
+      onClick={handleClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onLongPress(movie);
+      }}
+      {...longPressHandlers}
       className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)]"
     >
       <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
@@ -336,6 +354,29 @@ export const MovieList: React.FC<MovieListProps> = ({
     });
   }, [toggleItemFavorite]);
 
+  const handleLongPress = useCallback((movie: StalkerVOD) => {
+    const posterUrl = movie.poster || movie.logo || '';
+    toggleItemFavorite('vod', String(movie.id), {
+      name: movie.name,
+      poster: posterUrl,
+      cmd: movie.cmd,
+      extra: {
+        description: movie.description,
+        year: movie.year,
+        genre: movie.genres_str,
+        actors: movie.actors,
+        director: movie.director,
+        country: movie.country,
+        length: movie.length,
+        rating_imdb: movie.rating_imdb,
+        rating_kinopoisk: movie.rating_kinopoisk,
+      },
+    });
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+  }, [toggleItemFavorite]);
+
   // ── Render ────────────────────────────────────────────────────────────────────
 
   // Show skeleton grid during initial load or refetch (prevents UI flash)
@@ -463,6 +504,7 @@ export const MovieList: React.FC<MovieListProps> = ({
                       onPrefetch={handlePrefetch}
                       favoriteIds={favoriteIds}
                       onToggleFavorite={handleToggleFavorite}
+                      onLongPress={handleLongPress}
                       watchStatus={progress?.status}
                       progressPercentage={progress?.percentage}
                       moviesIndex={moviesIndex}

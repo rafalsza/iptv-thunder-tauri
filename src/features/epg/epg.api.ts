@@ -107,10 +107,11 @@ export const getEPGTimeRange = (hours: number = 24): { from: number; to: number 
 };
 
 // Simple XML parser for external EPG (XMLTV format)
-// Maps channel IDs and caches results
-const epgCache = new Map<string, { data: StalkerEPG[]; timestamp: number }>();
+// Maps URLs to full XML data and caches results
+const epgCache = new Map<string, { data: string; timestamp: number }>();
+const epgParsedCache = new Map<string, { data: StalkerEPG[]; timestamp: number }>();
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-const MAX_EPG_CACHE = 200;
+const MAX_EPG_CACHE = 50;
 
 const cleanupEPGCache = () => {
   if (epgCache.size <= MAX_EPG_CACHE) return;
@@ -123,7 +124,8 @@ const cleanupEPGCache = () => {
   sorted.forEach(([k, v]) => epgCache.set(k, v));
 };
 
-const getCacheKey = (url: string, channelId: number): string => `${url}_${channelId}`;
+const getCacheKey = (url: string): string => url;
+const getParsedCacheKey = (url: string, channelId: number): string => `${url}_${channelId}`;
 
 // Helper to clean IPTV channel names for better matching
 const cleanChannelName = (name: string): string => {
@@ -146,16 +148,17 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
     const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
     
     // First, build a map of channel IDs to find matching channel
-    const channels = xmlDoc.querySelectorAll('channel');
+    const channels = xmlDoc.getElementsByTagName('channel');
     let targetChannelId: string | null = null;
     let bestMatchScore = 0;
     
     const cleanedIptvName = channelName ? cleanChannelName(channelName) : '';
     const iptvWords = new Set(cleanedIptvName.split(' ').filter(w => w.length > 2 && !GENERIC_TERMS.has(w)));
     
-    channels.forEach((ch) => {
+    
+    Array.from(channels).forEach((ch) => {
       const id = ch.getAttribute('id');
-      const displayName = ch.querySelector('display-name')?.textContent || '';
+      const displayName = ch.getElementsByTagName('display-name')[0]?.textContent || '';
       
       // Clean XMLTV name too
       const cleanedXmltvName = cleanChannelName(displayName);
@@ -198,10 +201,11 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
     // If no channel name match, try direct ID match
     targetChannelId ??= channelId.toString();
     
-    // Find programme elements for this channel only
-    const programmes = xmlDoc.querySelectorAll('programme');
     
-    programmes.forEach((prog) => {
+    // Find programme elements for this channel only
+    const programmes = xmlDoc.getElementsByTagName('programme');
+    
+    Array.from(programmes).forEach((prog) => {
       const progChannel = prog.getAttribute('channel');
       
       // Filter by channel
@@ -229,6 +233,7 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
       }
     });
     
+    
   } catch (error) {
     console.error('Failed to parse external EPG:', error);
   }
@@ -250,6 +255,83 @@ const parseXMLTVTime = (timeStr: string): number => {
   return Math.floor(new Date(year, month, day, hour, minute, second).getTime() / 1000);
 };
 
+// Check if URL ends with .gz
+const isGzippedUrl = (url: string): boolean => url.toLowerCase().endsWith('.gz');
+
+const checkParsedCache = (parsedCacheKey: string, from?: number, to?: number): StalkerEPG[] | null => {
+  const now = Date.now();
+  const parsedCached = epgParsedCache.get(parsedCacheKey);
+  
+  if (!parsedCached || (now - parsedCached.timestamp) >= CACHE_TTL_MS) {
+    return null;
+  }
+  
+  const programs = parsedCached.data;
+  
+  if (from && to) {
+    return programs.filter(prog => {
+      const start = Number.parseInt(prog.start_time);
+      const end = Number.parseInt(prog.end_time);
+      return (start >= from && start <= to) || (end >= from && end <= to);
+    });
+  }
+  
+  return programs;
+};
+
+const checkRawCache = (cacheKey: string): string | null => {
+  const now = Date.now();
+  const cached = epgCache.get(cacheKey);
+  
+  if (!cached || (now - cached.timestamp) >= CACHE_TTL_MS) {
+    return null;
+  }
+  
+  return cached.data;
+};
+
+const fetchXmlData = async (url: string): Promise<string | null> => {
+  try {
+    if (isGzippedUrl(url)) {
+      return await invoke('fetch_epg_gz', { url });
+    }
+    
+    const acceptHeader = 'Accept: application/xml';
+    const response = await invoke('stalker_request', {
+      url: url,
+      method: 'GET',
+      headers: [acceptHeader],
+      body: null,
+    });
+
+    const responseBody = typeof response === 'string' ? response : (response as any)?.body;
+
+    if (!responseBody || (typeof responseBody === 'string' && responseBody.trim() === '')) {
+      return null;
+    }
+
+    if (typeof responseBody !== 'string') {
+      return null;
+    }
+    
+    return responseBody;
+  } catch (error) {
+    return null;
+  }
+};
+
+const filterByTimeRange = (programs: StalkerEPG[], from?: number, to?: number): StalkerEPG[] => {
+  if (!from || !to) {
+    return programs;
+  }
+  
+  return programs.filter(prog => {
+    const start = Number.parseInt(prog.start_time);
+    const end = Number.parseInt(prog.end_time);
+    return (start >= from && start <= to) || (end >= from && end <= to);
+  });
+};
+
 export const fetchExternalEPG = async (
   url: string,
   channelId: number,
@@ -258,49 +340,37 @@ export const fetchExternalEPG = async (
   channelName?: string
 ): Promise<StalkerEPG[]> => {
   try {
-    const cacheKey = getCacheKey(url, channelId);
-    const now = Date.now();
+    const cacheKey = getCacheKey(url);
+    const parsedCacheKey = getParsedCacheKey(url, channelId);
+
+    // Check parsed cache first
+    const cachedPrograms = checkParsedCache(parsedCacheKey, from, to);
+    if (cachedPrograms) {
+      return cachedPrograms;
+    }
+
+    // Check raw cache or fetch new data
+    let xmlData = checkRawCache(cacheKey);
     
-    // Check cache first
-    const cached = epgCache.get(cacheKey);
-    let programs: StalkerEPG[];
-    
-    if (cached && (now - cached.timestamp) < CACHE_TTL_MS) {
-      programs = cached.data;
-    } else {
-      // Use Tauri HTTP to bypass CORS
-      const response = await invoke<string>('stalker_request', {
-        url: url,
-        method: 'GET',
-        headers: ['Accept: application/xml'],
-        body: null,
-      });
-      
-      if (!response || response.trim() === '') {
-        console.warn('Empty response from external EPG');
+    if (!xmlData) {
+      xmlData = await fetchXmlData(url);
+      if (!xmlData) {
         return [];
       }
       
-      // Parse and filter by channel
-      programs = parseXMLTV(response, channelId, channelName);
-      
-      // Cache the results
-      epgCache.set(cacheKey, { data: programs, timestamp: now });
+      // Cache the raw XML data
+      epgCache.set(cacheKey, { data: xmlData, timestamp: Date.now() });
       cleanupEPGCache();
     }
+
+    // Parse and filter by channel
+    const programs = parseXMLTV(xmlData, channelId, channelName);
     
-    // Filter by time range if provided
-    if (from && to) {
-      return programs.filter(prog => {
-        const start = Number.parseInt(prog.start_time);
-        const end = Number.parseInt(prog.end_time);
-        return (start >= from && start <= to) || (end >= from && end <= to);
-      });
-    }
-    
-    return programs;
+    // Cache the parsed results for this channel
+    epgParsedCache.set(parsedCacheKey, { data: programs, timestamp: Date.now() });
+
+    return filterByTimeRange(programs, from, to);
   } catch (error) {
-    console.error('Failed to fetch external EPG:', error);
     return [];
   }
 };

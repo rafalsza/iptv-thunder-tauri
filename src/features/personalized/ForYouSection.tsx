@@ -6,10 +6,10 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { usePortalsStore } from '@/store/portals.store';
 import { useRecentViewed, type RecentItem } from '@/hooks/useRecentItems';
 import { useResumeStore } from '@/store/resume.store';
-import { useCarousel } from '@/hooks/useCarousel';
 import { motion } from 'framer-motion';
 import { Star, Tv, Film, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { MediaCard } from '@/components/ui/MediaCard';
+import { useCarousel } from '@/hooks/useCarousel';
 import { StalkerChannel, StalkerVOD } from '@/types';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 
@@ -58,7 +58,7 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
   if (items.length === 0) return null;
 
   return (
-    <div className="mb-8">
+    <div className="mb-4">
       {/* Title */}
       <div className="flex items-center gap-2 mb-4 px-6">
         {icon}
@@ -66,7 +66,7 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
       </div>
 
       {/* Carousel Container */}
-      <div className="relative group">
+      <div className="relative group -mt-4">
         {/* Left Arrow */}
         {canScrollLeft && (
           <button
@@ -80,7 +80,7 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
         {/* Scrollable Content */}
         <div
           ref={scrollRef}
-          className="flex gap-0 overflow-x-auto px-6 pb-2 scroll-smooth snap-x snap-mandatory"
+          className="flex gap-0 overflow-x-auto px-6 pt-6 pb-2 scroll-smooth snap-x snap-mandatory"
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
@@ -308,7 +308,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="p-6 min-w-0 overflow-x-hidden"
+      className="p-6 pt-8 min-w-0 overflow-x-hidden"
     >
       {/* Header with title and actions */}
       <div className="flex items-center justify-between mb-6 px-6">
@@ -328,7 +328,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
             <Star className="w-6 h-6 text-green-500" />
           </motion.div>
           <div>
-            <h2 className="text-2xl font-bold dark:text-white text-slate-900">{t('forYou') || 'Dla Ciebie'}</h2>
+            <h2 className="text-xl font-bold dark:text-white text-slate-900">{t('forYou') || 'Dla Ciebie'}</h2>
             <p className="text-sm dark:text-slate-400 text-slate-600">
               {resolvedRecentItems.length} {t('recentlyViewed') || 'ostatnio oglądanych'}
             </p>
@@ -337,7 +337,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
       </div>
 
       {/* Netflix-style horizontal carousels */}
-      <div className="space-y-6">
+      <div className="space-y-3 mt-1">
         {/* Live Channels Row */}
         <CarouselRow
           title={t('recentChannels')}

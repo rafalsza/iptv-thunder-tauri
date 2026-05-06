@@ -102,10 +102,10 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       data-tv-initial={tvInitial || undefined}
       data-media-card
       tabIndex={0}
-      className="relative group/card cursor-pointer flex-shrink-0 w-[150px] sm:w-[170px] md:w-[190px] rounded-lg m-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)] snap-start"
+      className="relative group/card cursor-pointer flex-shrink-0 w-[140px] min-[2000px]:w-[160px] min-[3000px]:w-[180px] rounded-lg mr-4 last:mr-0 snap-start focus:outline-none focus:ring-4 focus:ring-green-500/50 focus:ring-offset-6"
     >
       {/* Card container */}
-      <div className="dark:bg-slate-800/50 bg-gray-100/50 rounded-lg overflow-hidden backdrop-blur-sm border dark:border-slate-700/50 border-gray-200/50 hover:shadow-glow transition-all">
+      <div className="dark:bg-slate-800/50 bg-gray-100/50 rounded-lg backdrop-blur-sm border dark:border-slate-700/50 border-gray-200/50 hover:shadow-glow transition-all">
         {/* Poster area - different aspect ratio for live channels */}
         <div className={`relative bg-slate-700 overflow-hidden ${type === 'live' ? 'aspect-video' : 'aspect-[3/4]'}`}>
           {poster ? (

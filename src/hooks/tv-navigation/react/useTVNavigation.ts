@@ -96,13 +96,9 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       return elements;
     }
 
-    // Use more specific selector to limit elements processed
-    const specificSelector = activeContainer 
-      ? `${selector} [data-tv-container="${activeContainer.dataset.tvContainer}"], ${selector}[data-tv-container="${activeContainer.dataset.tvContainer}"]`
-      : selector;
-    
-    const elements = Array.from(document.querySelectorAll(specificSelector)) as HTMLElement[];
-    
+    // Query all focusable elements, then filter by container if needed
+    const elements = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+
     // Filter out disabled elements
     const enabledElements = elements.filter(el =>
       !el.hasAttribute('disabled') &&
@@ -182,12 +178,8 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   }, [getFocusableElements]);
 
   const focusElement = useCallback((el: HTMLElement | null) => {
-    console.log('[useTVNavigation] focusElement called:', el?.dataset?.tvId ?? el?.id, 'currentElementRef:', currentElementRef.current?.dataset?.tvId ?? currentElementRef.current?.id, 'document.activeElement:', (document.activeElement as HTMLElement | null)?.dataset?.tvId ?? document.activeElement?.id);
     if (!el) return;
-    if (currentElementRef.current === el) {
-      console.log('[useTVNavigation] focusElement: same element, skipping');
-      return;
-    }
+    if (currentElementRef.current === el) return;
 
     // Remove .tv-focused from previous element
     if (currentElementRef.current) {
@@ -196,7 +188,6 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
     el.focus({ preventScroll: true });
     el.classList.add('tv-focused');
-    console.log('[useTVNavigation] focusElement: el.focus() called, new activeElement:', (document.activeElement as HTMLElement | null)?.dataset?.tvId ?? document.activeElement?.id);
 
     // Special case: reset scroll to top when focusing first element of for-you-live
     const isFirstForYouLive = el.dataset.tvGroup === 'for-you-live' && el.dataset.tvIndex === '0';
@@ -251,7 +242,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     if (!stateRef.current) return;
 
     const result = findNextNode(stateRef.current, direction, allPlugins, pluginContext);
-    if (!result) return;
+    if (!result || (!result.targetId && !result.action)) return;
 
     // Handle action intents (e.g., BACK)
     if (result.action === 'BACK') {
@@ -496,10 +487,17 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
   // Track last focused element before Radix dropdown opened
   const lastFocusBeforeDropdownRef = useRef<HTMLElement | null>(null);
+  // Flag to prevent TV navigation interference during focus restoration
+  const isRestoringFocusRef = useRef(false);
 
   useEffect(() => {
     handleFocusRef.current = (e: FocusEvent) => {
       const target = e.target as HTMLElement;
+
+      // Skip focus handling during restoration
+      if (isRestoringFocusRef.current) {
+        return;
+      }
 
       // Check if Radix dropdown is currently open
       const isRadixOpen = document.querySelector('[data-radix-select-viewport]') !== null ||
@@ -517,6 +515,8 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         const savedElement = lastFocusBeforeDropdownRef.current;
         lastFocusBeforeDropdownRef.current = null;
         
+        isRestoringFocusRef.current = true;
+        
         // Use multiple attempts to restore focus - Radix may move focus multiple times
         let attempts = 0;
         const maxAttempts = 5;
@@ -525,18 +525,19 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
           const currentTvId = currentActive?.dataset?.tvId;
           const savedTvId = savedElement?.dataset?.tvId;
           
-          // Restore if: body, no tv-id, or different element than saved
-          // No tv-id means sidebar or other untracked element
-          if (currentActive === document.body || 
-              !currentTvId ||
-              currentTvId !== savedTvId) {
+          // Always restore if not already on the saved element
+          if (currentTvId !== savedTvId) {
             savedElement?.focus();
             
             // Try again if focus didn't stick
             attempts++;
             if (attempts < maxAttempts) {
               setTimeout(tryRestore, 50);
+            } else {
+              isRestoringFocusRef.current = false;
             }
+          } else {
+            isRestoringFocusRef.current = false;
           }
         };
         

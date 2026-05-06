@@ -5,6 +5,7 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { usePortalsStore } from '@/store/portals.store';
 import { useAppStore } from '@/store/app.store';
@@ -50,7 +51,6 @@ function AppInner({ }: AppProps) {
   useEffect(() => {
     const hideDecorations = async () => {
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
         const window = getCurrentWindow();
         await window.setDecorations(false);
       } catch (err) {

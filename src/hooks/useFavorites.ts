@@ -138,7 +138,6 @@ export async function addFavorite(
   itemId: string,
   metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }
 ): Promise<void> {
-  logger.info('Upserting:', { accountId, type, itemId, metadata });
   try {
     const db = await getDB();
     const now = Date.now();
@@ -157,7 +156,6 @@ export async function addFavorite(
          extra=excluded.extra`,
       [accountId, type, itemId, metadata?.parent_id || null, metadata?.name || 'Unknown', metadata?.poster || null, metadata?.cmd || null, metadata?.season || null, metadata?.episode || null, extraJson, now]
     );
-    logger.info('Upserted successfully');
   } catch (error) {
     logger.error('Error upserting favorite:', error);
     throw error;
@@ -186,7 +184,26 @@ export async function removeFavorite(
   }
 }
 
-// Toggle favorite item status
+// Add item to favorites
+export async function addToFavorites(
+  accountId: string,
+  type: 'live' | 'vod' | 'series',
+  itemId: string,
+  metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }
+): Promise<void> {
+  await addFavorite(accountId, type, itemId, metadata);
+}
+
+// Remove item from favorites
+export async function removeFromFavorites(
+  accountId: string,
+  type: 'live' | 'vod' | 'series',
+  itemId: string
+): Promise<void> {
+  await removeFavorite(accountId, type, itemId);
+}
+
+// Toggle favorite item status (deprecated - use addToFavorites/removeFromFavorites instead)
 export async function toggleFavorite(
   accountId: string,
   type: 'live' | 'vod' | 'series',
@@ -195,9 +212,9 @@ export async function toggleFavorite(
   metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }
 ): Promise<void> {
   if (isFavorite) {
-    await addFavorite(accountId, type, itemId, metadata);
+    await addToFavorites(accountId, type, itemId, metadata);
   } else {
-    await removeFavorite(accountId, type, itemId);
+    await removeFromFavorites(accountId, type, itemId);
   }
 }
 
@@ -374,7 +391,11 @@ export function useFavorites(accountId: string) {
       metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any };
     }) => {
       // Pass itemId as-is to database (it may have .0 suffix stored)
-      await toggleFavorite(accountId, type, itemId, isFavorite, metadata);
+      if (isFavorite) {
+        await addToFavorites(accountId, type, itemId, metadata);
+      } else {
+        await removeFromFavorites(accountId, type, itemId);
+      }
     },
     // Optimistic update
     onMutate: async (vars) => {
@@ -436,6 +457,12 @@ export function useFavorites(accountId: string) {
     isLoading,
     isItemFavorite,
     toggleItemFavorite,
+    addToFavorites: (type: 'live' | 'vod' | 'series', itemId: string, metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }) => {
+      toggleMutation.mutate({ type, itemId, isFavorite: true, metadata });
+    },
+    removeFromFavorites: (type: 'live' | 'vod' | 'series', itemId: string) => {
+      toggleMutation.mutate({ type, itemId, isFavorite: false });
+    },
     isPending: toggleMutation.isPending,
   };
 }

@@ -2546,9 +2546,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
 
 [[package]]
-name = "iptv-thunder-tauri"
+name = "iptv-thunder"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -2564,6 +2565,7 @@ dependencies = [
  "tauri-plugin-sql",
  "tauri-plugin-store",
  "tauri-plugin-stronghold",
+ "tokio",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 import Database from '@tauri-apps/plugin-sql';
 import { clearTauriStore } from '@/lib/tauriStorage';
-import { getDB, withTransaction } from './db';
+import { getDB, withTransaction, resetDatabase as resetDbInternal } from './db';
 
 const BATCH_SIZE = 100;
 const STORAGE_PREFIX = 'iptv-thunder';
@@ -500,9 +500,8 @@ export async function searchVod(query: string, portalId: string, limit: number =
 }
 
 export async function resetDatabase(): Promise<void> {
-  // Delegate to unified reset in db.ts
-  const { resetDatabase: unifiedReset } = await import('./db');
-  await unifiedReset();
+  // Delegate to unified reset in db.ts (already statically imported)
+  await resetDbInternal();
 }
 
 export async function dropAllTables(): Promise<void> {

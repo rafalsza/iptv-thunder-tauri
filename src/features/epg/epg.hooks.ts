@@ -1,11 +1,14 @@
 // =========================
 // 🪝 EPG HOOKS
 // =========================
+import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel, StalkerEPG } from '@/types';
-import { usePortalsStore } from '@/store/portals.store';
+import { usePortalsStore, PREDEFINED_EPG_SERVICES, EpgService } from '@/store/portals.store';
 import { usePortalCacheStore } from '@/store/portalCache.store';
+import { useTranslation } from '@/hooks/useTranslation';
+import { TranslationKey } from '@/lib/translations';
 import {
   getChannelEPG,
   getChannelsEPG,
@@ -16,18 +19,54 @@ import {
   fetchExternalEPG
 } from './epg.api';
 
+const EPG_SERVICE_NAME_KEYS: Record<string, TranslationKey> = {
+  auto: 'epgServiceAuto',
+  epg_ovh_pl: 'epgServiceOvhPl',
+  epg_share: 'epgServiceShare',
+  github_epg: 'epgServiceGithub',
+  custom: 'epgServiceCustom',
+};
+
+const EPG_SERVICE_DESC_KEYS: Record<string, TranslationKey> = {
+  auto: 'epgServiceAutoDesc',
+  epg_ovh_pl: 'epgServiceOvhPlDesc',
+  epg_share: 'epgServiceShareDesc',
+  github_epg: 'epgServiceGithubDesc',
+  custom: 'epgServiceCustomDesc',
+};
+
+/** Hook that returns EPG services with translated names and descriptions */
+export const useEpgServices = (): EpgService[] => {
+  const { t } = useTranslation();
+  return PREDEFINED_EPG_SERVICES.map((service) => ({
+    ...service,
+    name: t(EPG_SERVICE_NAME_KEYS[service.id]),
+    description: service.description
+      ? t(EPG_SERVICE_DESC_KEYS[service.id])
+      : undefined,
+  }));
+};
+
 export const useChannelEPG = (client: StalkerClient | undefined, channelId: number, channelName?: string, hours: number = 24, enabled: boolean = true) => {
   const { from, to } = getEPGTimeRange(hours);
   const effectiveEpgUrl = usePortalsStore((state) => state.getEffectiveEpgUrl());
   const portalId = usePortalsStore((state) => state.activePortalId);
   const getCachedEPG = usePortalCacheStore((state) => state.getChannelEPG);
   const setCachedEPG = usePortalCacheStore((state) => state.setChannelEPG);
+  const clearAllEPG = usePortalCacheStore((state) => state.clearAllEPG);
 
+  // Clear all EPG cache when switching between external EPG and API
+  React.useEffect(() => {
+    if (portalId) {
+      clearAllEPG(portalId);
+    }
+  }, [effectiveEpgUrl, portalId, clearAllEPG]);
+    
   // Get cached data immediately if available
   const cachedData = portalId ? getCachedEPG(portalId, channelId) : null;
 
   return useQuery({
-    queryKey: ['epg', 'channel', channelId, channelName, from, to, effectiveEpgUrl],
+    queryKey: ['epg', 'channel', channelId, channelName, hours, effectiveEpgUrl],
     queryFn: async () => {
       if (!client) throw new Error('StalkerClient is required');
 
@@ -41,6 +80,7 @@ export const useChannelEPG = (client: StalkerClient | undefined, channelId: numb
         result = await getChannelEPG(client, channelId, from, to);
       }
 
+
       // Save to persistent cache
       if (portalId) {
         setCachedEPG(portalId, channelId, result);
@@ -51,6 +91,8 @@ export const useChannelEPG = (client: StalkerClient | undefined, channelId: numb
     enabled: !!channelId && enabled,
     staleTime: 30 * 60 * 1000, // 30 minutes - matches EPG cache TTL
     placeholderData: cachedData ?? undefined, // Show cached data immediately while fetching
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    networkMode: 'online', // Only fetch when online
   });
 };
 

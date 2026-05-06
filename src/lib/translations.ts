@@ -182,6 +182,16 @@ export const translations = {
     yourFavoriteSeriesCategories: 'Twoje ulubione kategorie seriali',
 
     // EPG
+    epgServiceAuto: 'Automatyczny (z serwera IPTV)',
+    epgServiceOvhPl: 'EPG OVH (Polska)',
+    epgServiceShare: 'EPG Share (epg-share.com)',
+    epgServiceGithub: 'IPTV Org EPG',
+    epgServiceCustom: 'Własny URL',
+    epgServiceAutoDesc: 'Używa EPG dostarczonego przez Twój serwer IPTV',
+    epgServiceOvhPlDesc: 'EPG dla polskich kanałów TV',
+    epgServiceShareDesc: 'Darmowy EPG głównie dla kanałów USA',
+    epgServiceGithubDesc: 'EPG z iptv-org.github.io - globalne kanały',
+    epgServiceCustomDesc: 'Wprowadź własny adres URL do pliku XMLTV',
     programGuide: 'Program TV',
     now: 'Teraz',
     today: 'Dziś',
@@ -386,6 +396,16 @@ export const translations = {
     yourFavoriteSeriesCategories: 'Your favorite series categories',
 
     // EPG
+    epgServiceAuto: 'Automatic (from IPTV server)',
+    epgServiceOvhPl: 'EPG OVH (Poland)',
+    epgServiceShare: 'EPG Share (epg-share.com)',
+    epgServiceGithub: 'IPTV Org EPG',
+    epgServiceCustom: 'Custom URL',
+    epgServiceAutoDesc: 'Uses EPG provided by your IPTV server',
+    epgServiceOvhPlDesc: 'EPG for Polish TV channels',
+    epgServiceShareDesc: 'Free EPG mainly for USA channels',
+    epgServiceGithubDesc: 'EPG from iptv-org.github.io - global channels',
+    epgServiceCustomDesc: 'Enter your own XMLTV file URL',
     programGuide: 'TV Guide',
     now: 'Now',
     today: 'Today',

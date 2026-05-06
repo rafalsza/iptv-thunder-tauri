@@ -291,11 +291,69 @@ const SeasonSelector: React.FC<SeasonSelectorProps> = ({
   getEpisodeCountText,
   onSeasonChange,
 }) => {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const wasFocusedRef = useRef(false);
+
+  useEffect(() => {
+    const handleFocus = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (target === triggerRef.current) {
+        wasFocusedRef.current = true;
+      }
+    };
+
+    const handleBlur = (e: FocusEvent) => {
+      if (e.target === triggerRef.current) {
+        wasFocusedRef.current = true;
+      }
+    };
+
+    const handleFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      const isDropdownOpen = document.querySelector('[data-radix-select-viewport]') !== null;
+      
+      // Only intercept if we were previously focused on season-select
+      if (!isDropdownOpen && triggerRef.current && wasFocusedRef.current) {
+        const isTrigger = target === triggerRef.current;
+        const isDropdown = target.closest('[data-radix-select-viewport]');
+        const isBody = target === document.body;
+        const isSidebar = target.closest('[data-tv-container="navigation"]');
+        
+        if (!isTrigger && !isDropdown && (isBody || isSidebar)) {
+          e.preventDefault();
+          e.stopPropagation();
+          wasFocusedRef.current = false;
+          triggerRef.current.focus();
+        } else if (isTrigger) {
+          wasFocusedRef.current = false;
+        }
+      }
+    };
+
+    triggerRef.current?.addEventListener('focus', handleFocus);
+    triggerRef.current?.addEventListener('blur', handleBlur);
+    document.addEventListener('focusin', handleFocusIn, true);
+    
+    return () => {
+      triggerRef.current?.removeEventListener('focus', handleFocus);
+      triggerRef.current?.removeEventListener('blur', handleBlur);
+      document.removeEventListener('focusin', handleFocusIn, true);
+    };
+  }, []);
+
   if (seasons.length <= 1) return null;
 
+  const handleSeasonChange = (season: string) => {
+    onSeasonChange(season);
+  };
+
   return (
-    <Select value={selectedSeason} onValueChange={onSeasonChange}>
+    <Select 
+      value={selectedSeason} 
+      onValueChange={handleSeasonChange}
+    >
       <SelectTrigger
+        ref={triggerRef}
         data-tv-focusable
         data-tv-id="series-season-select"
         data-tv-group="series-controls"
@@ -453,7 +511,9 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
   const handleEpisodePlay = (episode: StalkerVOD) => {
     const savedPos = getPosition(String(episode.id));
-    if (savedPos > 30) {
+    const watchStatus = getWatchStatus(String(episode.id));
+    
+    if (savedPos > 30 || (watchStatus === 'in_progress' && savedPos > 0)) {
       setSelectedEpisode(episode);
       setResumePosition(savedPos);
       setShowResumeDialog(true);
@@ -482,11 +542,53 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   };
 
   const handlePlayFirstEpisode = () => {
-    const firstSeason = seasons.length > 0 ? seasons[0] : '1';
-    const firstSeasonEpisodes = episodesBySeason[firstSeason] || [];
-    if (firstSeasonEpisodes.length > 0) {
-      handleEpisodePlay(firstSeasonEpisodes[0]);
+    console.log('🎬 === PLAY NEWEST EPISODE DEBUG ===');
+
+    // Collect all episodes from all seasons
+    const allEpisodes: StalkerVOD[] = [];
+    Object.keys(episodesBySeason).forEach((season) => {
+      allEpisodes.push(...episodesBySeason[season]);
+    });
+
+    console.log('🎬 Total episodes collected:', allEpisodes.length);
+
+    if (allEpisodes.length === 0) {
+      console.log('🎬 No episodes found');
+      console.log('🎬 === END PLAY NEWEST EPISODE DEBUG ===');
+      return;
     }
+
+    // Sort by season (descending) and episode number (descending) to find the newest
+    const sortedEpisodes = [...allEpisodes].sort((a, b) => {
+      const seasonA = Number.parseInt(String(a.season) || '0');
+      const seasonB = Number.parseInt(String(b.season) || '0');
+      const episodeA = Number.parseInt(String(a.episode) || '0');
+      const episodeB = Number.parseInt(String(b.episode) || '0');
+
+      if (seasonA !== seasonB) {
+        return seasonB - seasonA; // Higher season first
+      }
+      return episodeB - episodeA; // Higher episode first within the same season
+    });
+
+    const newestEpisode = sortedEpisodes[0];
+
+    console.log('🎬 Newest episode to play:', {
+      id: newestEpisode.id,
+      season: newestEpisode.season,
+      episode: newestEpisode.episode,
+      name: newestEpisode.name
+    });
+
+    // Update selected season to match the episode's season
+    const episodeSeason = String(newestEpisode.season || '1');
+    if (seasons.includes(episodeSeason)) {
+      setSelectedSeason(episodeSeason);
+    }
+
+    console.log('🎬 Calling handleEpisodePlay');
+    handleEpisodePlay(newestEpisode);
+    console.log('🎬 === END PLAY NEWEST EPISODE DEBUG ===');
   };
 
   const handleToggleFavorite = () => {

@@ -8,6 +8,7 @@ import { useFavoriteCategories } from '@/hooks/useFavorites';
 import { useSeriesCategories } from './series.hooks';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTVKeyboard } from '@/hooks/useTVKeyboard';
+import { useLongPress } from '@/hooks/useLongPress';
 
 interface SeriesCategoriesListProps {
   client: StalkerClient;
@@ -15,31 +16,137 @@ interface SeriesCategoriesListProps {
   search?: string;
 }
 
-export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({ 
-  client, 
-  onCategorySelect, 
-  search = '' 
+interface SeriesCategoryCardProps {
+  category: StalkerGenre;
+  categoryIndex: number;
+  selectedCategory: StalkerGenre | null;
+  isCategoryFavorite: (id: string) => boolean;
+  onSelect: (category: StalkerGenre) => void;
+  onToggleFavorite: (e: React.MouseEvent, categoryId: string, categoryName?: string) => void;
+  onLongPress: (category: StalkerGenre) => void;
+}
+
+const SeriesCategoryCard: React.FC<SeriesCategoryCardProps> = ({
+  category,
+  categoryIndex,
+  selectedCategory,
+  isCategoryFavorite,
+  onSelect,
+  onToggleFavorite,
+  onLongPress,
+}) => {
+  const { isLongPress, ...longPressHandlers } = useLongPress({
+    onLongPress: () => onLongPress(category),
+    delay: 500,
+  });
+
+  const handleClick = () => {
+    if (!isLongPress) {
+      onSelect(category);
+    }
+  };
+
+  return (
+    <div
+      key={category.id}
+      data-tv-focusable
+      data-tv-group="series-categories"
+      data-tv-index={categoryIndex}
+      data-tv-initial={categoryIndex === 0}
+      tabIndex={0}
+      onClick={handleClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onLongPress(category);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+          e.preventDefault();
+          onSelect(category);
+        }
+      }}
+      {...longPressHandlers}
+      className={`
+        relative dark:bg-slate-800 dark:bg-opacity-50 bg-white bg-opacity-50 backdrop-blur-sm dark:border border-slate-600 border-gray-300 rounded-lg p-4
+        cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl
+        ${selectedCategory?.id === category.id
+          ? 'border-green-700 bg-green-700 bg-opacity-10 shadow-lg shadow-green-700/25'
+          : 'dark:border-slate-600 border-gray-300 hover:border-green-700'
+        }
+      `}
+    >
+      {/* Category Icon/Number */}
+      <div className="flex items-center justify-between mb-3">
+        <div className={`
+          w-10 h-10 rounded-lg flex items-center justify-center text-xl font-bold
+          ${selectedCategory?.id === category.id
+            ? 'bg-green-700 text-white'
+            : 'dark:bg-slate-700 bg-gray-200 dark:text-slate-300 text-slate-600'
+          }
+        `}>
+          {category.id === '*' ? '📺' : '🎭'}
+        </div>
+        <div className="flex items-center gap-2">
+          {selectedCategory?.id === category.id && (
+            <div className="w-2 h-2 bg-green-700 rounded-full animate-pulse"></div>
+          )}
+          {/* Favorite Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              const categoryId = String(category.id);
+              onToggleFavorite(e, categoryId, category.title);
+            }}
+            className="text-xl hover:scale-110 transition-transform bg-transparent border-0 p-0"
+            title={isCategoryFavorite(String(category.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+          >
+            {isCategoryFavorite(String(category.id)) ? '❤️' : '🤍'}
+          </button>
+        </div>
+      </div>
+
+      {/* Category Title */}
+      <h3 className={`
+        font-semibold text-base mb-1 line-clamp-2
+        ${selectedCategory?.id === category.id ? 'text-green-700' : 'dark:text-white text-slate-900'}
+      `}>
+        {category.title}
+      </h3>
+
+      {/* Selection Indicator */}
+      {selectedCategory?.id === category.id && (
+        <div className="absolute top-2 right-2">
+          <div className="w-6 h-6 bg-green-700 rounded-full flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        </div>
+      )}
+
+      {/* Hover Effect Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-700 to-transparent opacity-0 hover:opacity-5 transition-opacity duration-200 rounded-xl pointer-events-none" />
+    </div>
+  );
+};
+
+export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
+  client,
+  onCategorySelect,
+  search = ''
 }) => {
   const { t } = useTranslation();
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
   const accountId = client?.getAccount?.()?.id || 'default';
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'series');
 
-  // TV keyboard with MENU key support
-  useTVKeyboard({
-    onMenu: () => {
-      if (selectedCategory) {
-        handleLongPress(selectedCategory);
-      }
-    },
-  });
-
   // Pobieranie kategorii seriali z cache
-  const { 
-    data: categories = [], 
-    isLoading, 
-    error, 
-    refetch 
+  const {
+    data: categories = [],
+    isLoading,
+    error,
+    refetch
   } = useSeriesCategories(client);
 
   // Filtrowanie kategorii na podstawie wyszukiwania
@@ -53,10 +160,10 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
   // logger.debug('Categories total:', categories.length, 'filtered:', filteredCategories.length, 'search:', search);
 
   const handleCategoryClick = (category: StalkerGenre) => {
-    
+
     setSelectedCategory(category);
     onCategorySelect(category);
-    
+
   };
 
   const handleToggleFavorite = (e: React.MouseEvent, categoryId: string, categoryName?: string) => {
@@ -73,6 +180,15 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
       navigator.vibrate(50);
     }
   };
+
+  // TV keyboard with MENU key support
+  useTVKeyboard({
+    onMenu: () => {
+      if (selectedCategory) {
+        handleLongPress(selectedCategory);
+      }
+    },
+  });
 
   if (isLoading) {
     return (
@@ -160,86 +276,16 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
       <div className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
           {filteredCategories.map((category, categoryIndex) => (
-            <div
+            <SeriesCategoryCard
               key={category.id}
-              data-tv-focusable
-              data-tv-group="series-categories"
-              data-tv-index={categoryIndex}
-              data-tv-initial={categoryIndex === 0}
-              tabIndex={0}
-              onClick={() => handleCategoryClick(category)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                handleLongPress(category);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-                  e.preventDefault();
-                  handleCategoryClick(category);
-                }
-              }}
-              className={`
-                relative dark:bg-slate-800 dark:bg-opacity-50 bg-white bg-opacity-50 backdrop-blur-sm dark:border border-slate-600 border-gray-300 rounded-lg p-4
-                cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl
-                ${selectedCategory?.id === category.id 
-                  ? 'border-green-700 bg-green-700 bg-opacity-10 shadow-lg shadow-green-700/25' 
-                  : 'dark:border-slate-600 border-gray-300 hover:border-green-700'
-                }
-              `}
-            >
-              {/* Category Icon/Number */}
-              <div className="flex items-center justify-between mb-3">
-                <div className={`
-                  w-10 h-10 rounded-lg flex items-center justify-center text-xl font-bold
-                  ${selectedCategory?.id === category.id 
-                    ? 'bg-green-700 text-white' 
-                    : 'dark:bg-slate-700 bg-gray-200 dark:text-slate-300 text-slate-600'
-                  }
-                `}>
-                  {category.id === '*' ? '📺' : '🎭'}
-                </div>
-                <div className="flex items-center gap-2">
-                  {selectedCategory?.id === category.id && (
-                    <div className="w-2 h-2 bg-green-700 rounded-full animate-pulse"></div>
-                  )}
-                  {/* Favorite Button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      const categoryId = String(category.id);
-                      handleToggleFavorite(e, categoryId, category.title);
-                    }}
-                    className="text-xl hover:scale-110 transition-transform bg-transparent border-0 p-0"
-                    title={isCategoryFavorite(String(category.id)) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
-                  >
-                    {isCategoryFavorite(String(category.id)) ? '❤️' : '🤍'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Category Title */}
-              <h3 className={`
-                font-semibold text-base mb-1 line-clamp-2
-                ${selectedCategory?.id === category.id ? 'text-green-700' : 'dark:text-white text-slate-900'}
-              `}>
-                {category.title}
-              </h3>
-
-              {/* Selection Indicator */}
-              {selectedCategory?.id === category.id && (
-                <div className="absolute top-2 right-2">
-                  <div className="w-6 h-6 bg-green-700 rounded-full flex items-center justify-center">
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                </div>
-              )}
-
-              {/* Hover Effect Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-700 to-transparent opacity-0 hover:opacity-5 transition-opacity duration-200 rounded-xl pointer-events-none" />
-            </div>
+              category={category}
+              categoryIndex={categoryIndex}
+              selectedCategory={selectedCategory}
+              isCategoryFavorite={isCategoryFavorite}
+              onSelect={handleCategoryClick}
+              onToggleFavorite={handleToggleFavorite}
+              onLongPress={handleLongPress}
+            />
           ))}
         </div>
 

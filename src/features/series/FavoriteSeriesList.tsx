@@ -9,6 +9,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { getImageUrl } from '@/hooks/useImageCache';
 import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerVOD } from '@/types';
+import { useLongPress } from '@/hooks/useLongPress';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -32,11 +33,12 @@ interface SeriesCardProps {
   series: StalkerVOD;
   onSelect: (series: StalkerVOD) => void;
   onToggleFavorite: (e: React.MouseEvent, series: StalkerVOD) => void;
+  onLongPress: (series: StalkerVOD) => void;
   seriesIndex: number;
 }
 
 const SeriesCard = React.memo<SeriesCardProps>(({
-  series, onSelect, onToggleFavorite, seriesIndex,
+  series, onSelect, onToggleFavorite, onLongPress, seriesIndex,
 }) => {
   const posterUrl = useMemo(
     () => series.poster || series.logo || '',
@@ -45,6 +47,17 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   const [imgSrc, setImgSrc] = useState<string | null>(() => imageCache.get(posterUrl) ?? null);
   const [imgError, setImgError] = useState(false);
   const seriesName = String(series.series || series.name || '');
+
+  const { isLongPress, ...longPressHandlers } = useLongPress({
+    onLongPress: () => onLongPress(series),
+    delay: 500,
+  });
+
+  const handleClick = () => {
+    if (!isLongPress) {
+      onSelect(series);
+    }
+  };
 
   useEffect(() => {
     if (!posterUrl || imageCache.has(posterUrl)) {
@@ -74,13 +87,18 @@ const SeriesCard = React.memo<SeriesCardProps>(({
       data-tv-index={seriesIndex}
       data-tv-initial={seriesIndex === 0}
       tabIndex={0}
-      onClick={() => onSelect(series)}
+      onClick={handleClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onLongPress(series);
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
           e.preventDefault();
           onSelect(series);
         }
       }}
+      {...longPressHandlers}
       className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)]"
     >
       <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
@@ -189,16 +207,33 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
   // ── Layout ────────────────────────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState(() => {
-    if (typeof globalThis.window === 'undefined') return 5;
+    if (globalThis.window === undefined) return 5;
     const availableWidth = window.innerWidth - 256 - 32;
-    return Math.max(2, Math.floor(availableWidth / 180));
+    let cardWidth: number;
+    if (availableWidth > 3000) {
+      cardWidth = 220;
+    } else if (availableWidth > 2000) {
+      cardWidth = 200;
+    } else {
+      cardWidth = 180;
+    }
+    return Math.max(2, Math.floor(availableWidth / cardWidth));
   });
 
   // Responsive column count
   useEffect(() => {
     const calc = () => {
       if (!parentRef.current) return;
-      setColumnCount(Math.max(2, Math.floor(parentRef.current.offsetWidth / 180)));
+      const availableWidth = parentRef.current.offsetWidth;
+      let cardWidth: number;
+      if (availableWidth > 3000) {
+        cardWidth = 220;
+      } else if (availableWidth > 2000) {
+        cardWidth = 200;
+      } else {
+        cardWidth = 180;
+      }
+      setColumnCount(Math.max(2, Math.floor(availableWidth / cardWidth)));
     };
     calc();
     const ro = new ResizeObserver(calc);
@@ -236,6 +271,30 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
         country: series.country,
       },
     });
+  }, [toggleItemFavorite]);
+
+  const handleLongPress = useCallback((series: StalkerVOD) => {
+    const posterUrl = series.poster || series.logo || '';
+    const name = series.name || series.series || '';
+    const itemId = (series as any).item_id || String(series.id);
+    toggleItemFavorite('series', itemId, {
+      name: name as string,
+      poster: posterUrl,
+      cmd: series.cmd,
+      extra: {
+        description: series.description,
+        rating_imdb: series.rating_imdb,
+        rating_kinopoisk: series.rating_kinopoisk,
+        director: series.director,
+        actors: series.actors,
+        year: series.year,
+        genres_str: series.genres_str,
+        country: series.country,
+      },
+    });
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
   }, [toggleItemFavorite]);
 
   if (isLoading) {
@@ -278,7 +337,7 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
       </div>
 
       {/* Virtualized grid */}
-      <div ref={parentRef} className="flex-1 overflow-y-auto p-4">
+      <div ref={parentRef} className="flex-1 overflow-y-auto p-2 overflow-x-visible pb-4">
         <div
           style={{
             height: rowVirtualizer.getTotalSize(),
@@ -315,6 +374,7 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
                         series={series}
                         onSelect={onSeriesSelect}
                         onToggleFavorite={handleToggleFavorite}
+                        onLongPress={handleLongPress}
                         seriesIndex={seriesIndex}
                       />
                     );

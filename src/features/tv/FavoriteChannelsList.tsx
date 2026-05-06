@@ -5,6 +5,7 @@ import React, { useMemo } from 'react';
 import { useFavorites } from '@/hooks/useFavorites';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel } from '@/types';
+import { useLongPress } from '@/hooks/useLongPress';
 
 interface FavoriteChannelsListProps {
   client?: StalkerClient;
@@ -12,6 +13,84 @@ interface FavoriteChannelsListProps {
   search: string;
   onChannelSelect: (channel: StalkerChannel) => void;
 }
+
+interface FavoriteChannelCardProps {
+  channel: StalkerChannel;
+  index: number;
+  onSelect: (channel: StalkerChannel) => void;
+  onToggleFavorite: (e: React.MouseEvent, channel: StalkerChannel) => void;
+  onLongPress: (channel: StalkerChannel) => void;
+}
+
+const FavoriteChannelCard: React.FC<FavoriteChannelCardProps> = ({
+  channel,
+  index,
+  onSelect,
+  onToggleFavorite,
+  onLongPress,
+}) => {
+  const { isLongPress, ...longPressHandlers } = useLongPress({
+    onLongPress: () => onLongPress(channel),
+    delay: 500,
+  });
+
+  const handleClick = () => {
+    if (!isLongPress) {
+      onSelect(channel);
+    }
+  };
+
+  return (
+    <div
+      key={channel.id}
+      data-tv-focusable
+      data-tv-group="favorite-channels"
+      data-tv-index={index}
+      data-tv-initial={index === 0}
+      tabIndex={0}
+      onClick={handleClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onLongPress(channel);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+          e.preventDefault();
+          onSelect(channel);
+        }
+      }}
+      {...longPressHandlers}
+      className="p-3 dark:border border-slate-700 border-gray-300 rounded-lg cursor-pointer dark:hover:bg-slate-700 hover:bg-gray-200 hover:border-green-700 transition-all dark:bg-slate-800 bg-white dark:focus:bg-slate-700 focus:bg-gray-200 dark:focus:border-green-700 focus:border-green-700"
+    >
+      <div className="flex justify-between items-start">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium text-sm dark:text-white text-slate-900 truncate">
+            {channel.name}
+          </h3>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite(e, channel);
+          }}
+          className="ml-2 text-lg hover:scale-110 transition-transform"
+        >
+          ❤️
+        </button>
+      </div>
+      {channel.logo && (
+        <img
+          src={channel.logo}
+          alt={channel.name}
+          className="w-full h-16 object-contain mt-2"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      )}
+    </div>
+  );
+};
 
 export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
   accountId,
@@ -44,6 +123,26 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
       return c.name.toLowerCase().includes(search.toLowerCase());
     }),
   [favoriteChannels, search]);
+
+  const handleLongPress = (channel: StalkerChannel) => {
+    toggleItemFavorite('live', String(channel.id), {
+      name: channel.name,
+      poster: channel.logo,
+      cmd: channel.cmd,
+    });
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+  };
+
+  const handleToggleFavorite = (e: React.MouseEvent, channel: StalkerChannel) => {
+    e.stopPropagation();
+    toggleItemFavorite('live', String(channel.id), {
+      name: channel.name,
+      poster: channel.logo,
+      cmd: channel.cmd,
+    });
+  };
 
   if (isLoading) {
     return (
@@ -104,53 +203,14 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
       <div className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {filtered.map((channel: StalkerChannel, index: number) => (
-            <div
+            <FavoriteChannelCard
               key={channel.id}
-              data-tv-focusable
-              data-tv-group="favorite-channels"
-              data-tv-index={index}
-              data-tv-initial={index === 0}
-              tabIndex={0}
-              onClick={() => onChannelSelect(channel)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-                  e.preventDefault();
-                  onChannelSelect(channel);
-                }
-              }}
-              className="p-3 dark:border border-slate-700 border-gray-300 rounded-lg cursor-pointer dark:hover:bg-slate-700 hover:bg-gray-200 hover:border-green-700 transition-all dark:bg-slate-800 bg-white dark:focus:bg-slate-700 focus:bg-gray-200 dark:focus:border-green-700 focus:border-green-700"
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-sm dark:text-white text-slate-900 truncate">
-                    {channel.name}
-                  </h3>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleItemFavorite('live', String(channel.id), {
-                      name: channel.name,
-                      poster: channel.logo,
-                      cmd: channel.cmd,
-                    });
-                  }}
-                  className="ml-2 text-lg hover:scale-110 transition-transform"
-                >
-                  ❤️
-                </button>
-              </div>
-              {channel.logo && (
-                <img
-                  src={channel.logo}
-                  alt={channel.name}
-                  className="w-full h-16 object-contain mt-2"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              )}
-            </div>
+              channel={channel}
+              index={index}
+              onSelect={onChannelSelect}
+              onToggleFavorite={handleToggleFavorite}
+              onLongPress={handleLongPress}
+            />
           ))}
         </div>
       </div>

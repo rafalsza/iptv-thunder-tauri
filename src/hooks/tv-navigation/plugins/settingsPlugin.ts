@@ -61,23 +61,29 @@ function handleSettingsTabsNavigation(state: NavigationState, current: Navigatio
   return null;
 }
 
-// Custom logic for settings footer (checks if there are elements below before jumping to footer)
-function handleSettingsFooterSpecial(state: NavigationState, current: NavigationState['nodes'][0], direction: Direction): string | null {
-  if (direction !== 'down' || current.groupId !== 'settings-content') return null;
+// Custom logic for settings content (index-based vertical navigation)
+function handleSettingsContentNavigation(state: NavigationState, current: NavigationState['nodes'][0], direction: Direction): string | null {
+  if (current.groupId !== 'settings-content') return null;
+  if (direction !== 'down' && direction !== 'up') return null;
 
-  const contentElements = state.nodes.filter(n => n.groupId === 'settings-content' && !n.disabled);
-  const currentNode = state.nodes.find(n => n.id === current.id);
+  const contentElements = state.nodes.filter(n => n.groupId === 'settings-content' && !n.disabled)
+    .sort((a, b) => (a.index || 0) - (b.index || 0));
+  const currentIndex = contentElements.findIndex(n => n.id === current.id);
 
-  if (currentNode) {
-    const elementsBelow = contentElements.filter(n =>
-      n.id !== current.id && n.rect.top > currentNode.rect.bottom
-    );
+  if (currentIndex === -1) return null;
 
-    if (elementsBelow.length > 0) {
-      console.log('[SettingsPlugin] elements below in content, skipping footer jump');
-      // Return a special marker to skip rule engine entirely
-      return 'SKIP_RULE_ENGINE';
+  if (direction === 'down') {
+    if (currentIndex < contentElements.length - 1) {
+      return contentElements[currentIndex + 1]?.id || null;
     }
+    // Last element - let rule engine handle jump to footer
+    return null;
+  } else if (direction === 'up') {
+    if (currentIndex > 0) {
+      return contentElements[currentIndex - 1]?.id || null;
+    }
+    // First element - let rule engine handle jump to tabs
+    return null;
   }
 
   return null;
@@ -93,18 +99,9 @@ export const settingsPlugin: NavigationPlugin = {
     const tabsResult = handleSettingsTabsNavigation(state, current, direction);
     if (tabsResult) return tabsResult;
 
-    // Handle special case for settings footer
-    const specialResult = handleSettingsFooterSpecial(state, current, direction);
-    if (specialResult === 'SKIP_RULE_ENGINE') {
-      // Skip rule engine entirely, let spatial navigation handle
-      return null;
-    }
-    if (specialResult === null) {
-      // Special case says skip, let rule engine handle
-      const ruleEngine = createRuleEnginePlugin(settingsConfig);
-      return ruleEngine.findNext(state, direction);
-    }
-    if (specialResult) return specialResult;
+    // Handle settings content navigation (index-based, not spatial)
+    const contentResult = handleSettingsContentNavigation(state, current, direction);
+    if (contentResult) return contentResult;
 
     // Default to rule engine
     const ruleEngine = createRuleEnginePlugin(settingsConfig);

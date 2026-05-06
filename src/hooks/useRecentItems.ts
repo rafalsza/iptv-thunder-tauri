@@ -148,8 +148,7 @@ export async function addRecentViewed(
        )`,
       [accountId, accountId]
     );
-    
-    logger.info('Added recent viewed successfully');
+
   } catch (error) {
     logger.error('Error adding recent viewed:', error);
     throw error;

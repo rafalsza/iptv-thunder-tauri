@@ -24,7 +24,6 @@ export function createRuleEnginePlugin(config: NavigationConfig): NavigationPlug
         if (matchCondition(rule.when, current, direction, isLast)) {
           const targetId = findTargetByConfig(state, rule.goTo);
           if (targetId) {
-            console.log('[RuleEngine]', rule.when, '->', rule.goTo, '=', targetId);
             return targetId;
           }
         }

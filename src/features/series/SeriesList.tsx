@@ -10,6 +10,7 @@ import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { usePortalsStore } from '@/store/portals.store';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getImageUrl } from '@/hooks/useImageCache';
+import { useLongPress } from '@/hooks/useLongPress';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerVOD, StalkerGenre } from '@/types';
 
@@ -44,11 +45,12 @@ interface SeriesCardProps {
   onPrefetch: (series: StalkerVOD) => void;
   favoriteIds: Set<string>;
   onToggleFavorite: (e: React.MouseEvent, series: StalkerVOD) => void;
+  onLongPress: (series: StalkerVOD) => void;
   seriesIndex: number;
 }
 
 const SeriesCard = React.memo<SeriesCardProps>(({
-  series, onSelect, onPrefetch, favoriteIds, onToggleFavorite, seriesIndex,
+  series, onSelect, onPrefetch, favoriteIds, onToggleFavorite, onLongPress, seriesIndex,
 }) => {
   const posterUrl = useMemo(
     () => series.poster || series.logo || '',
@@ -58,6 +60,17 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   const [imgError, setImgError] = useState(false);
   const isFavorite = favoriteIds.has(String(series.id));
   const seriesName = String(series.series || series.name || '');
+
+  const { isLongPress, ...longPressHandlers } = useLongPress({
+    onLongPress: () => onLongPress(series),
+    delay: 500,
+  });
+
+  const handleClick = () => {
+    if (!isLongPress) {
+      onSelect(String(series.id));
+    }
+  };
 
   // Reset state when posterUrl changes (fix for virtualization reuse)
   useEffect(() => {
@@ -95,13 +108,18 @@ const SeriesCard = React.memo<SeriesCardProps>(({
       tabIndex={0}
       onMouseEnter={() => onPrefetch(series)}
       onFocus={() => onPrefetch(series)}
-      onClick={() => onSelect(String(series.id))}
+      onClick={handleClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onLongPress(series);
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
           e.preventDefault();
           onSelect(String(series.id));
         }
       }}
+      {...longPressHandlers}
       className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)]"
     >
       <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
@@ -196,11 +214,11 @@ export const SeriesList: React.FC<SeriesListProps> = ({
     // Responsive card width: larger screens get larger cards
     let cardWidth: number;
     if (availableWidth > 3000) {
-      cardWidth = 160;
+      cardWidth = 180;
     } else if (availableWidth > 2000) {
-      cardWidth = 140;
+      cardWidth = 160;
     } else {
-      cardWidth = 120;
+      cardWidth = 140;
     }
     return Math.max(2, Math.floor(availableWidth / cardWidth));
   });
@@ -213,11 +231,11 @@ export const SeriesList: React.FC<SeriesListProps> = ({
       // Responsive card width based on screen size
       let cardWidth: number;
       if (availableWidth > 3000) {
-        cardWidth = 160;
+        cardWidth = 180;
       } else if (availableWidth > 2000) {
-        cardWidth = 140;
+        cardWidth = 160;
       } else {
-        cardWidth = 120;
+        cardWidth = 140;
       }
       setColumnCount(Math.max(2, Math.floor(availableWidth / cardWidth)));
     };
@@ -273,6 +291,29 @@ export const SeriesList: React.FC<SeriesListProps> = ({
         country: series.country,
       },
     });
+  }, [toggleItemFavorite]);
+
+  const handleLongPress = useCallback((series: StalkerVOD) => {
+    const posterUrl = series.poster || series.logo || '';
+    const name = series.name || series.series || '';
+    toggleItemFavorite('series', String(series.id), {
+      name: name as string,
+      poster: posterUrl,
+      cmd: series.cmd,
+      extra: {
+        description: series.description,
+        rating_imdb: series.rating_imdb,
+        rating_kinopoisk: series.rating_kinopoisk,
+        director: series.director,
+        actors: series.actors,
+        year: series.year,
+        genres_str: series.genres_str,
+        country: series.country,
+      },
+    });
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
   }, [toggleItemFavorite]);
 
 
@@ -389,6 +430,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
                           onPrefetch={handlePrefetch}
                           favoriteIds={favoriteIds}
                           onToggleFavorite={handleToggleFavorite}
+                          onLongPress={handleLongPress}
                           seriesIndex={seriesIndex}
                         />
                       );

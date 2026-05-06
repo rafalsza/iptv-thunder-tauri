@@ -1,16 +1,33 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::sync::{LazyLock, Mutex};
+use std::collections::HashMap;
+use tokio::sync::oneshot;
+
+static CANCEL_MAP: LazyLock<Mutex<HashMap<String, oneshot::Sender<()>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
 #[tauri::command]
 async fn stalker_request(
     url: String,
     method: String,
     headers: Option<Vec<String>>,
     body: Option<String>,
-) -> Result<String, String> {
+    timeout_ms: Option<u64>,
+    request_id: Option<String>,
+) -> Result<serde_json::Value, String> {
     use reqwest;
+    use serde_json::json;
 
-    let client = reqwest::Client::new();
+    let client_builder = reqwest::Client::builder();
+    let client = if let Some(timeout) = timeout_ms {
+        client_builder.timeout(std::time::Duration::from_millis(timeout))
+    } else {
+        client_builder
+    }
+    .build()
+    .map_err(|e| e.to_string())?;
 
     let http_method = match method.as_str() {
         "GET" => reqwest::Method::GET,
@@ -100,10 +117,59 @@ async fn stalker_request(
         request = request.body(request_body);
     }
 
-    let response = request.send().await.map_err(|e| e.to_string())?;
-    let response_text = response.text().await.map_err(|e| e.to_string())?;
+    // Register cancellation channel if request_id provided
+    let cancel_rx = if let Some(ref rid) = request_id {
+        let (tx, rx) = oneshot::channel();
+        CANCEL_MAP.lock().unwrap().insert(rid.clone(), tx);
+        Some(rx)
+    } else {
+        None
+    };
 
-    Ok(response_text)
+    let do_request = async {
+        let response = request.send().await.map_err(|e| e.to_string())?;
+        let status = response.status().as_u16();
+        let response_headers: std::collections::HashMap<String, String> = response
+            .headers()
+            .iter()
+            .filter_map(|(k, v)| {
+                v.to_str().ok().map(|s| (k.to_string(), s.to_string()))
+            })
+            .collect();
+        let response_text = response.text().await.map_err(|e| e.to_string())?;
+        Ok(json!({
+            "status": status,
+            "headers": response_headers,
+            "body": response_text
+        }))
+    };
+
+    let result = if let Some(rx) = cancel_rx {
+        tokio::select! {
+            r = do_request => r,
+            _ = rx => Err("Request cancelled".to_string()),
+        }
+    } else {
+        do_request.await
+    };
+
+    // Always cleanup cancellation entry
+    if let Some(ref rid) = request_id {
+        CANCEL_MAP.lock().unwrap().remove(rid);
+    }
+
+    result
+}
+
+#[tauri::command]
+async fn cancel_request(request_id: String) -> Result<bool, String> {
+    let tx = CANCEL_MAP.lock().unwrap().remove(&request_id);
+    if let Some(sender) = tx {
+        let _ = sender.send(());
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 #[tauri::command]
@@ -161,6 +227,49 @@ async fn check_mpv_available() -> Result<bool, String> {
     Ok(true)
 }
 
+#[tauri::command]
+async fn fetch_epg_gz(url: String) -> Result<String, String> {
+    use reqwest;
+    use flate2::read::GzDecoder;
+    use std::io::Read;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let response = client
+        .get(&url)
+        .header("Accept", "application/gzip, */*")
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP error: {}", response.status()));
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Check if data is gzipped by magic bytes
+    if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
+        // Decompress gzip
+        let mut decoder = GzDecoder::new(&bytes[..]);
+        let mut decompressed = Vec::new();
+        decoder
+            .read_to_end(&mut decompressed)
+            .map_err(|e| e.to_string())?;
+        String::from_utf8(decompressed).map_err(|e| e.to_string())
+    } else {
+        // Not gzipped, return as string
+        String::from_utf8(bytes.to_vec()).map_err(|e| e.to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg_attr(target_os = "android", allow(unused_mut))]
@@ -194,8 +303,10 @@ pub fn run() {
     builder
         .invoke_handler(tauri::generate_handler![
             stalker_request,
+            cancel_request,
             fetch_image,
-            check_mpv_available
+            check_mpv_available,
+            fetch_epg_gz
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

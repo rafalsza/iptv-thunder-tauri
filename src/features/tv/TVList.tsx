@@ -5,6 +5,7 @@ import React, { useMemo, useRef, useCallback, useEffect } from 'react';
 import { useLazyChannels, usePrefetchStream } from './tv.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useLongPress } from '@/hooks/useLongPress';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel, StalkerGenre } from '@/types';
 import { ChannelLogo } from './ChannelLogo';
@@ -17,6 +18,106 @@ interface TVListProps {
   onChannelSelect: (channel: StalkerChannel) => void;
   selectedCategory?: StalkerGenre | null;
 }
+
+interface ChannelCardProps {
+  channel: StalkerChannel;
+  index: number;
+  isItemFavorite: (type: 'live' | 'vod' | 'series', itemId: string) => boolean;
+  onSelect: (channel: StalkerChannel) => void;
+  onToggleFavorite: (e: React.MouseEvent, channel: StalkerChannel) => void;
+  onLongPress: (channel: StalkerChannel) => void;
+  onPrefetch: (channel: StalkerChannel) => void;
+  isLastItem: boolean;
+  observerRef: React.RefObject<IntersectionObserver | null>;
+  hasMore: boolean;
+}
+
+const ChannelCard: React.FC<ChannelCardProps> = ({
+  channel,
+  index,
+  isItemFavorite,
+  onSelect,
+  onToggleFavorite,
+  onLongPress,
+  onPrefetch,
+  isLastItem,
+  observerRef,
+  hasMore,
+}) => {
+  const { isLongPress, ...longPressHandlers } = useLongPress({
+    onLongPress: () => onLongPress(channel),
+    delay: 500,
+  });
+
+  const handleClick = () => {
+    if (!isLongPress) {
+      onSelect(channel);
+    }
+  };
+
+  return (
+    <motion.div
+      key={channel.id}
+      data-tv-focusable
+      data-tv-group="tv-channels"
+      data-tv-index={index}
+      data-tv-initial={index === 0}
+      tabIndex={0}
+      ref={isLastItem && hasMore ? (el) => {
+        if (el && observerRef.current) observerRef.current.observe(el);
+      } : undefined}
+      onMouseEnter={() => onPrefetch(channel)}
+      onFocus={() => onPrefetch(channel)}
+      onClick={handleClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onLongPress(channel);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+          e.preventDefault();
+          onSelect(channel);
+        }
+      }}
+      {...longPressHandlers}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, delay: index * 0.03 }}
+      whileHover={{ scale: 1.05, y: -4, boxShadow: '0 10px 40px rgba(34, 197, 94, 0.2)' }}
+      whileTap={{ scale: 0.98 }}
+      className="p-3 dark:border border-slate-700/50 border-gray-300/50 rounded-xl cursor-pointer dark:bg-slate-800/30 bg-gray-100/30 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 dark:hover:border-green-700 hover:border-green-700 transition-all dark:focus:bg-slate-700/50 focus:bg-gray-200/50 dark:focus:border-green-700 focus:border-green-700 backdrop-blur-sm"
+    >
+      <div className="flex justify-between items-start">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium text-sm dark:text-white text-slate-900 truncate">
+            {channel.name}
+          </h3>
+          {!!channel.number && (
+            <p className="text-xs dark:text-slate-400 text-slate-600">#{channel.number}</p>
+          )}
+        </div>
+        <motion.button
+          tabIndex={-1}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite(e, channel);
+          }}
+          whileHover={{ scale: 1.2 }}
+          whileTap={{ scale: 0.9 }}
+          className="ml-2 text-lg"
+        >
+          <motion.span
+            animate={isItemFavorite('live', String(channel.id)) ? { scale: [1, 1.3, 1] } : {}}
+            transition={{ duration: 0.3 }}
+          >
+            {isItemFavorite('live', String(channel.id)) ? '❤️' : '🤍'}
+          </motion.span>
+        </motion.button>
+      </div>
+      {!!channel.logo && <ChannelLogo logo={channel.logo} name={channel.name} />}
+    </motion.div>
+  );
+};
 
 export const TVList: React.FC<TVListProps> = ({
   client,
@@ -113,6 +214,26 @@ export const TVList: React.FC<TVListProps> = ({
     }),
   [allChannels, search]);
 
+  const handleLongPress = useCallback((channel: StalkerChannel) => {
+    toggleItemFavorite('live', String(channel.id), {
+      name: channel.name,
+      poster: channel.logo,
+      cmd: channel.cmd,
+    });
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+  }, [toggleItemFavorite]);
+
+  const handleToggleFavorite = useCallback((e: React.MouseEvent, channel: StalkerChannel) => {
+    e.stopPropagation();
+    toggleItemFavorite('live', String(channel.id), {
+      name: channel.name,
+      poster: channel.logo,
+      cmd: channel.cmd,
+    });
+  }, [toggleItemFavorite]);
+
   if (isLoading && allChannels.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -191,60 +312,20 @@ export const TVList: React.FC<TVListProps> = ({
           transition={{ duration: 0.3 }}
         >
           {filtered.map((channel: StalkerChannel, index: number) => (
-          <motion.div
-            key={channel.id}
-            data-tv-focusable
-            data-tv-group="tv-channels"
-            data-tv-index={index}
-            data-tv-initial={index === 0}
-            tabIndex={0}
-            ref={index === filtered.length - 1 && hasMore ? (el) => {
-              if (el && observerRef.current) observerRef.current.observe(el);
-            } : undefined}
-            onMouseEnter={() => debouncedPreload(channel)}
-            onFocus={() => debouncedPreload(channel)}
-            onClick={() => onChannelSelect(channel)}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: index * 0.03 }}
-            whileHover={{ scale: 1.05, y: -4, boxShadow: '0 10px 40px rgba(34, 197, 94, 0.2)' }}
-            whileTap={{ scale: 0.98 }}
-            className="p-3 dark:border border-slate-700/50 border-gray-300/50 rounded-xl cursor-pointer dark:bg-slate-800/30 bg-gray-100/30 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 dark:hover:border-green-700 hover:border-green-700 transition-all dark:focus:bg-slate-700/50 focus:bg-gray-200/50 dark:focus:border-green-700 focus:border-green-700 backdrop-blur-sm"
-          >
-            <div className="flex justify-between items-start">
-              <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-sm dark:text-white text-slate-900 truncate">
-                  {channel.name}
-                </h3>
-                {!!channel.number && (
-                  <p className="text-xs dark:text-slate-400 text-slate-600">#{channel.number}</p>
-                )}
-              </div>
-              <motion.button
-                tabIndex={-1}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleItemFavorite('live', String(channel.id), {
-                    name: channel.name,
-                    poster: channel.logo,
-                    cmd: channel.cmd,
-                  });
-                }}
-                whileHover={{ scale: 1.2 }}
-                whileTap={{ scale: 0.9 }}
-                className="ml-2 text-lg"
-              >
-                <motion.span
-                  animate={isItemFavorite('live', String(channel.id)) ? { scale: [1, 1.3, 1] } : {}}
-                  transition={{ duration: 0.3 }}
-                >
-                  {isItemFavorite('live', String(channel.id)) ? '❤️' : '🤍'}
-                </motion.span>
-              </motion.button>
-            </div>
-            {!!channel.logo && <ChannelLogo logo={channel.logo} name={channel.name} />}
-          </motion.div>
-        ))}
+            <ChannelCard
+              key={channel.id}
+              channel={channel}
+              index={index}
+              isItemFavorite={isItemFavorite}
+              onSelect={onChannelSelect}
+              onToggleFavorite={handleToggleFavorite}
+              onLongPress={handleLongPress}
+              onPrefetch={debouncedPreload}
+              isLastItem={index === filtered.length - 1}
+              observerRef={observerRef}
+              hasMore={hasMore}
+            />
+          ))}
         </motion.div>
         
         {/* Infinite scroll trigger and loading state */}

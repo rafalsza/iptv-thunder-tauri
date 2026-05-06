@@ -5,7 +5,7 @@ import { createLogger, createDebugRequestContext, logDebugRequest, logDebugSucce
 import { platform } from '@tauri-apps/plugin-os';
 
 // Re-export types for consumers
-export type { StalkerAccount, StalkerProfile, StalkerChannel, StalkerGenre, StalkerVOD, StalkerEPG };
+export type { StalkerAccount, StalkerProfile, StalkerChannel, StalkerGenre, StalkerVOD, StalkerEPG } from '@/types';
 
 // Import Tauri API to ensure it's available
 import '@tauri-apps/api';
@@ -32,7 +32,7 @@ export class StalkerClient {
     this.account = account;
     
     // Detect Tauri environment using OS plugin (most reliable)
-    let osPlatform: string | null = null;
+    let osPlatform: string | null;
     try {
       osPlatform = platform(); // Returns 'android' | 'ios' | 'windows' | 'macos' | 'linux' | etc.
     } catch {
@@ -430,6 +430,10 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
 
     const response = await this._makeRequest(params);
     const rawEpg = this.useTauri ? (response?.js || []) : (response.data?.js || []);
+
+    if (!Array.isArray(rawEpg)) {
+      return [];
+    }
     
     // Map API fields to StalkerEPG interface
     // API returns: start_timestamp, stop_timestamp, descr, ch_id
@@ -452,23 +456,6 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     }));
   }
 
-
-  /**
-   * Test połączenia (quick handshake check)
-   */
-  async testConnection(): Promise<boolean> {
-    try {
-      await this.handshake();
-      return true;
-    } catch (error) {
-      console.error('❌ Connection test failed:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Pobranie aktualnego konta z danymi
-   */
   getAccount(): StalkerAccount {
     return this.account;
   }
@@ -620,7 +607,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
   /**
    * Pobieranie linku do odtwarzania (cmd → pełny URL strumienia)
    */
-  async getStreamUrl(cmd: string): Promise<string> {
+  async getStreamUrl(cmd: string, options?: { signal?: AbortSignal }): Promise<string> {
     await this.ensureAuthenticated();
 
     // Replace MAC in cmd with current account MAC
@@ -640,13 +627,40 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     };
     if (streamId) params.stream = streamId;
 
-    const response = await this._makeRequest(params);
+    const response = await this._makeRequest(params, options?.signal);
     const streamUrl = this.useTauri ? response?.js?.cmd : response.data?.js?.cmd;
 
     if (!streamUrl) {
       throw new Error('Portal returned empty stream URL');
     }
 
+    return streamUrl.replace(/^ffmpeg\s+/, '');
+  }
+
+  /**
+   * Get episode stream URL with proper authentication and error handling
+   */
+  async getEpisodeStream(cmd: string, episode: string | number, options?: { signal?: AbortSignal }): Promise<string> {
+    await this.ensureAuthenticated();
+
+    const params: any = {
+      action: 'create_link',
+      cmd: cmd,
+      type: 'vod',
+      series: String(episode || '1'),
+      disable_ad: '0',
+      download: '0',
+      mac: this.account.mac,
+      JsHttpRequest: '1-xml',
+    };
+
+    const response = await this._makeRequest(params, options?.signal);
+    const streamUrl = this.useTauri ? response?.js?.cmd : response.data?.js?.cmd;
+    
+    if (!streamUrl) {
+      throw new Error('No stream URL in response for episode');
+    }
+    
     return streamUrl.replace(/^ffmpeg\s+/, '');
   }
 

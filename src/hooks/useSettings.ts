@@ -49,7 +49,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   channelViewMode: 'grid',
   autoPlay: true,
   autoPlayEpisodes: true,
-  volume: 1.0,
+  volume: 1,
   muted: false,
   videoQuality: 'auto',
   epgEnabled: true,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { usePortalsStore, PREDEFINED_EPG_SERVICES } from '@/store/portals.store';
+import { usePortalsStore } from '@/store/portals.store';
+import { useEpgServices } from '@/features/epg/epg.hooks';
 import { getSettings, setSetting, AppSettings } from '@/hooks/useSettings';
 import { getVersion } from '@tauri-apps/api/app';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   const { setTheme } = useTheme();
   const queryClient = useQueryClient();
   const TABS = useTabs(t);
+  const epgServices = useEpgServices();
 
   const {
     externalEpgUrl,
@@ -108,7 +110,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     setSelectedEpgService(serviceId);
     // For predefined services (not custom), clear custom URL
     if (serviceId !== 'custom') {
-      const service = PREDEFINED_EPG_SERVICES.find(s => s.id === serviceId);
+      const service = epgServices.find(s => s.id === serviceId);
       if (service?.url) {
         setExternalEpgUrl(service.url);
       } else if (serviceId === 'auto') {
@@ -162,6 +164,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
               </div>
               <button
                 data-tv-focusable
+                data-tv-id="settings-close-btn"
                 data-tv-group="settings-header"
                 data-tv-index={0}
                 tabIndex={0}
@@ -180,6 +183,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     <button
                       key={tab.id}
                       data-tv-focusable
+                      data-tv-id={`settings-tab-${tab.id}`}
                       data-tv-group="settings-tabs"
                       data-tv-index={tabIndex + 1}
                       data-tv-initial={tabIndex === 0}
@@ -206,6 +210,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('theme')}</label>
                       <select
                         data-tv-focusable
+                        data-tv-id="settings-theme-select"
                         data-tv-group="settings-content"
                         data-tv-initial
                         data-tv-index="10"
@@ -242,6 +247,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('language')}</label>
                       <select
                         data-tv-focusable
+                        data-tv-id="settings-lang-select"
                         data-tv-group="settings-content"
                         data-tv-index="11"
                         tabIndex={0}
@@ -283,6 +289,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       </div>
                       <Switch
                         data-tv-focusable="true"
+                        data-tv-id="settings-autoplay"
                         data-tv-group="settings-content"
                         data-tv-initial="true"
                         data-tv-index="30"
@@ -299,6 +306,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       </div>
                       <Switch
                         data-tv-focusable="true"
+                        data-tv-id="settings-autoplay-episodes"
                         data-tv-group="settings-content"
                         data-tv-index="31"
                         tabIndex={0}
@@ -313,6 +321,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       </label>
                       <select
                         data-tv-focusable
+                        data-tv-id="settings-quality-select"
                         data-tv-group="settings-content"
                         data-tv-index="32"
                         tabIndex={0}
@@ -333,6 +342,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       </label>
                       <input
                         data-tv-focusable
+                        data-tv-id="settings-volume"
                         data-tv-group="settings-content"
                         data-tv-index="33"
                         tabIndex={0}
@@ -354,6 +364,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       </div>
                       <Switch
                         data-tv-focusable="true"
+                        data-tv-id="settings-hw-accel"
                         data-tv-group="settings-content"
                         data-tv-index="34"
                         tabIndex={0}
@@ -370,6 +381,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('epgSource')}</label>
                       <select
                         data-tv-focusable
+                        data-tv-id="settings-epg-service"
                         data-tv-group="settings-content"
                         data-tv-initial
                         data-tv-index="20"
@@ -393,7 +405,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         }}
                         className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
                       >
-                        {PREDEFINED_EPG_SERVICES.map(service => (
+                        {epgServices.map(service => (
                           <option key={service.id} value={service.id}>
                             {service.name}
                           </option>
@@ -445,6 +457,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       </div>
                       <Switch
                         data-tv-focusable="true"
+                        data-tv-id="settings-debug"
                         data-tv-group="settings-content"
                         data-tv-initial="true"
                         data-tv-index="40"
@@ -461,6 +474,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       </p>
                       <Button
                         data-tv-focusable
+                        data-tv-id="settings-clear-history"
                         data-tv-group="settings-content"
                         data-tv-index="41"
                         tabIndex={0}
@@ -496,6 +510,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             <div data-tv-group="settings-footer" className="dark:border-t border-slate-700 border-t-gray-300 px-8 py-5 flex justify-end gap-3">
               <Button
                 data-tv-focusable
+                data-tv-id="settings-cancel-btn"
                 data-tv-index={100}
                 tabIndex={0}
                 variant="outline"
@@ -505,6 +520,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
               </Button>
               <Button
                 data-tv-focusable
+                data-tv-id="settings-save-btn"
                 data-tv-index={101}
                 tabIndex={0}
                 onClick={handleSave}

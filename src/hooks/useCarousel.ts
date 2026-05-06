@@ -5,10 +5,10 @@ import React, { useCallback, useMemo, useState, useRef, useEffect } from 'react'
 
 // Virtualization constants - tune for TV performance
 const BUFFER_CARDS = 3; // Extra cards to render outside viewport
-const CARD_WIDTH_MD = 182; // 170px + 12px gap
+const CARD_WIDTH_MD = 140; // 140px default width (matches Movies/Series)
 
 // Scroll constants
-const GAP = 12; // Gap between cards
+const GAP = 16; // Gap between cards (mr-4 = 16px)
 const VISIBLE_CARDS = 3; // Number of cards to scroll at once
 
 // =========================
@@ -27,7 +27,7 @@ const useTVMode = (): boolean => {
     const isTVUserAgent = /smart-tv|smarttv|googletv|appletv|hbbtv|pov_tv|netcast.tv|webos|tizen|android.*tv|rim.tv|playstation|xbox/.test(userAgent);
     
     // Check for coarse pointer (TV remotes, gamepads)
-    const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const hasCoarsePointer = globalThis.matchMedia('(pointer: coarse)').matches;
     
     // Check for keyboard navigation active (Tab key pressed recently)
     let keyboardNavActive = false;
@@ -40,14 +40,14 @@ const useTVMode = (): boolean => {
       keyboardNavActive = false;
     };
     
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('pointerdown', handlePointerDown);
+    globalThis.addEventListener('keydown', handleKeyDown);
+    globalThis.addEventListener('pointerdown', handlePointerDown);
     
     setIsTV(isTVUserAgent || hasCoarsePointer || keyboardNavActive);
     
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('pointerdown', handlePointerDown);
+      globalThis.removeEventListener('keydown', handleKeyDown);
+      globalThis.removeEventListener('pointerdown', handlePointerDown);
     };
   }, []);
 
@@ -218,10 +218,30 @@ export const useCarouselCore = ({
     return () => cleanup?.();
   }, [setupObservers]);
 
-  // Separate effect to update visible range when items length changes
+  // Separate effect to update visible range when items change
   useEffect(() => {
     updateVisibleRange();
-  }, [items.length]);
+  }, [items]);
+
+  // Reset scroll position on items change (important for TV focus UX)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const reset = () => {
+      el.scrollTo({ left: 0, behavior: 'auto' });
+    };
+
+    requestAnimationFrame(reset);
+
+    const ro = new ResizeObserver(() => {
+      reset();
+    });
+
+    ro.observe(el);
+
+    return () => ro.disconnect();
+  }, [items]);
 
   // Cleanup scroll lock timer and RAF requests on unmount
   useEffect(() => {
@@ -274,9 +294,17 @@ export const useCarouselCore = ({
   }, []);
 
   const scrollToIndex = useCallback((index: number) => {
-    const scrollLeft = index * cardWidthRef.current;
-    scrollRef.current?.scrollTo({
-      left: scrollLeft,
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const effectiveWidth = cardWidthRef.current + GAP;
+    const target = index * effectiveWidth;
+
+    const centered =
+      target - el.clientWidth / 2 + effectiveWidth / 2;
+
+    el.scrollTo({
+      left: centered,
       behavior: isTV ? 'auto' : 'smooth',
     });
   }, [isTV]);
@@ -290,41 +318,6 @@ export const useCarouselCore = ({
     getCardWidth: getCardWidthFn,
     scrollToIndex,
   }), [canScrollLeft, canScrollRight, visibleRange, scroll, getCardWidthFn, scrollToIndex]);
-};
-
-// =========================
-// TV CAROUSEL HOOK - TV-specific behavior (no virtualization, page behavior)
-// =========================
-interface UseTVCarouselOptions {
-  /** Items array (used for length calculation) */
-  items: unknown[];
-}
-
-interface UseTVCarouselReturn {
-  /** Scroll container ref */
-  scrollRef: React.RefObject<HTMLDivElement | null>;
-  /** Can scroll left */
-  canScrollLeft: boolean;
-  /** Can scroll right */
-  canScrollRight: boolean;
-  /** Visible range for virtualization */
-  visibleRange: { start: number; end: number };
-  /** Scroll function */
-  scroll: (direction: 'left' | 'right') => void;
-  /** Get card width helper */
-  getCardWidth: () => number;
-  /** Scroll to specific index and center it */
-  scrollToIndex: (index: number) => void;
-}
-
-export const useTVCarousel = ({
-  items,
-}: UseTVCarouselOptions): UseTVCarouselReturn => {
-  return useCarouselCore({
-    items,
-    virtualization: false, // TV: no virtualization to prevent focus loss
-    isTV: true, // TV: auto scroll behavior
-  });
 };
 
 // =========================

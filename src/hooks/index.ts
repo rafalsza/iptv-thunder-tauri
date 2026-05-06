@@ -86,6 +86,9 @@ export {
   initFavoritesTable,
 } from './useFavorites';
 
+// 👆 LONG PRESS: Touch-based long press for mobile/Android
+export { useLongPress } from './useLongPress';
+
 /**
  * STORAGE ARCHITECTURE GUIDE
  * ==========================

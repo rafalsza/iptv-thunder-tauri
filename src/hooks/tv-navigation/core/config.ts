@@ -35,7 +35,8 @@ function matchesOptionalFields(
 ): boolean {
   if (condition.direction !== undefined && condition.direction !== direction) return false;
   if (condition.index !== undefined && currentIndex !== condition.index) return false;
-  return condition.last == isLast;
+  if (condition.last !== undefined && condition.last !== isLast) return false;
+  return true;
 }
 
 export function matchCondition(

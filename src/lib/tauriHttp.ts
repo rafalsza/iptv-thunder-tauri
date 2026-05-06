@@ -3,86 +3,339 @@ import { createLogger } from './logger';
 
 const logger = createLogger('TauriHttp');
 
+export interface HttpRequestOptions {
+  timeoutMs?: number;
+  retries?: number;
+  signal?: AbortSignal;
+}
+
+export type AuthResult =
+  | { ok: true }
+  | { ok: false; reason: 'expired' | 'invalid' | 'network' };
+
+type RetryDecision = 'retry' | 'auth-retry' | 'fail';
+
 export class TauriHttpClient {
   private readonly baseURL: string;
-  private readonly defaultHeaders: Record<string, string>;
+  private defaultHeaders: Record<string, string>;
+  private readonly defaultOptions: HttpRequestOptions;
+  private readonly onAuthError?: () => Promise<AuthResult>;
+  private refreshPromise: Promise<AuthResult> | null = null;
+  private readonly inFlight = new Map<string, Promise<unknown>>();
 
-  constructor(baseURL: string, defaultHeaders: Record<string, string> = {}) {
+  constructor(
+    baseURL: string,
+    defaultHeaders: Record<string, string> = {},
+    defaultOptions: HttpRequestOptions = {},
+    onAuthError?: () => Promise<AuthResult>
+  ) {
     this.baseURL = baseURL;
     this.defaultHeaders = defaultHeaders;
+    this.defaultOptions = {
+      timeoutMs: 30000,
+      retries: 2,
+      ...defaultOptions,
+    };
+    this.onAuthError = onAuthError;
+  }
+
+  private serializeHeaders(): string {
+    return Object.entries(this.defaultHeaders)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}:${v}`)
+      .join('|');
   }
 
   setHeader(key: string, value: string) {
-    this.defaultHeaders[key] = value;
+    this.defaultHeaders = { ...this.defaultHeaders, [key]: value };
   }
 
-  async get(url: string, params?: Record<string, string>): Promise<any> {
-    const fullUrl = new URL(url, this.baseURL);
-    
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        fullUrl.searchParams.append(key, value);
-      });
+  async get<T = unknown>(
+    url: string,
+    params?: Record<string, string>,
+    options?: HttpRequestOptions
+  ): Promise<T> {
+    const fullUrl = this.buildUrl(url, params);
+    const cacheKey = `${fullUrl.toString()}::${this.serializeHeaders()}`;
+
+    // Deduplicate in-flight requests only when no AbortSignal (signals are per-request)
+    if (!options?.signal) {
+      const inFlight = this.inFlight.get(cacheKey);
+      if (inFlight) {
+        return inFlight as Promise<T>;
+      }
     }
 
-    const headers = Object.entries(this.defaultHeaders).map(
-      ([key, value]) => `${key}: ${value}`
-    );
+    const promise = this.executeGet<T>(fullUrl, url, options).finally(() => {
+      if (!options?.signal) {
+        this.inFlight.delete(cacheKey);
+      }
+    });
 
-    try {
-      const response = await invoke<string>('stalker_request', {
-        url: fullUrl.toString(),
-        method: 'GET',
-        headers,
-        body: null,
-      });
+    if (!options?.signal) {
+      this.inFlight.set(cacheKey, promise);
+    }
+    return promise;
+  }
 
-      if (!response || response.trim() === '') {
-        return {};
+  private async executeGet<T>(
+    fullUrl: URL,
+    url: string,
+    options?: HttpRequestOptions
+  ): Promise<T> {
+    const timeoutMs = options?.timeoutMs ?? this.defaultOptions.timeoutMs!;
+    const retries = options?.retries ?? this.defaultOptions.retries!;
+    const signal = options?.signal;
+
+    let lastError: Error | undefined;
+    let lastResponse: { status: number; headers: Record<string, string>; body: string } | undefined;
+    let attempt = 0;
+    let authRetryCount = 0;
+    const MAX_AUTH_RETRIES = 1;
+
+    while (attempt <= retries) {
+      // Check for abort before each attempt
+      if (signal?.aborted) {
+        throw new Error('Request aborted');
       }
 
-      if (response.trim().startsWith('<')) {
-        throw new Error('Access denied (403) - token may be expired');
-      }
+      await this.handleRetryDelay(attempt, retries, url);
+
+      // Build headers per attempt to get fresh auth token after refresh
+      const headers = this.buildHeaders();
 
       try {
-        const parsed = JSON.parse(response);
-        return parsed;
-      } catch (parseError) {
-        logger.error('JSON parse error:', parseError);
-        logger.debug('Response that failed to parse:', response.substring(0, 500));
-        throw new Error(`JSON parse error: ${(parseError as Error).message}`);
+        const response = await this.executeRequest(fullUrl, headers, timeoutMs, signal);
+        lastResponse = response;
+        return this.parseResponse<T>(response);
+      } catch (error) {
+        lastError = error as Error;
+        const parsed = this.tryParse(lastResponse?.body ?? '');
+        const isAuth = this.isAuthError(lastResponse?.status ?? 0, lastResponse?.body ?? '', parsed);
+        if (isAuth && authRetryCount >= MAX_AUTH_RETRIES) {
+          throw error;
+        }
+        const decision = await this.handleRequestError(
+          error as Error,
+          lastResponse,
+          parsed,
+          attempt,
+          retries
+        );
+        
+        if (decision === 'fail') throw error;
+        if (decision === 'auth-retry') {
+          authRetryCount++;
+          continue;
+        }
+        
+        attempt++;
       }
-    } catch (error) {
-      logger.error('Tauri HTTP request failed:', error);
-      throw error;
+    }
+
+    throw lastError;
+  }
+
+  private buildUrl(url: string, params?: Record<string, string>): URL {
+    const fullUrl = new URL(url, this.baseURL);
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        fullUrl.searchParams.set(key, value);
+      });
+    }
+    return fullUrl;
+  }
+
+  private buildHeaders(): string[] {
+    return Object.entries(this.defaultHeaders).map(
+      ([key, value]) => `${key}: ${value}`
+    );
+  }
+
+  private async handleRetryDelay(attempt: number, retries: number, url: string): Promise<void> {
+    if (attempt > 0) {
+      logger.info(`Retry attempt ${attempt}/${retries} for ${url}`);
+      const baseDelay = 500;
+      const jitter = Math.random() * 300;
+      const exponentialDelay = baseDelay * 2 ** attempt;
+      await this.delay(Math.min(exponentialDelay + jitter, 5000));
     }
   }
 
-  async post(url: string, data?: any): Promise<any> {
-    const fullUrl = new URL(url, this.baseURL);
-    
-    const headers = Object.entries(this.defaultHeaders).map(
-      ([key, value]) => `${key}: ${value}`
-    );
+  private async executeRequest(
+    url: URL,
+    headers: string[],
+    timeoutMs: number,
+    signal?: AbortSignal
+  ): Promise<{ status: number; headers: Record<string, string>; body: string }> {
+    if (signal?.aborted) {
+      throw new Error('Request aborted');
+    }
 
-    if (data) {
-      headers.push('Content-Type: application/json');
+    const requestId = signal ? crypto.randomUUID() : undefined;
+
+    const onAbort = () => {
+      if (requestId) {
+        invoke('cancel_request', { requestId }).catch((err) => {
+          logger.debug('cancel_request not available or failed', err);
+        });
+      }
+    };
+
+    signal?.addEventListener('abort', onAbort);
+
+    try {
+      return await this.withTimeout(
+        invoke<{ status: number; headers: Record<string, string>; body: string }>('stalker_request', {
+          url: url.toString(),
+          method: 'GET',
+          headers,
+          body: null,
+          timeoutMs,
+          requestId,
+        }),
+        timeoutMs + 1000
+      );
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+
+  private parseResponse<T>(response: { status: number; headers: Record<string, string>; body: string }): T {
+    if (response.status >= 400) {
+      throw new Error(`HTTP ${response.status} - request failed`);
+    }
+
+    if (!response.body || response.body.trim() === '') {
+      return {} as T;
+    }
+
+    this.validateResponseBody(response.body);
+    return this.parseJsonBody<T>(response.body);
+  }
+
+  private validateResponseBody(body: string): void {
+    const trimmed = body.trimStart().toLowerCase();
+    if (
+      trimmed.startsWith('<!doctype') ||
+      trimmed.startsWith('<html') ||
+      trimmed.startsWith('<body')
+    ) {
+      throw new Error('Access denied (403) - token may be expired');
+    }
+  }
+
+  private parseJsonBody<T>(body: string): T {
+    let parsed: T;
+    try {
+      parsed = JSON.parse(body) as T;
+    } catch (parseError) {
+      logger.error('JSON parse error:', parseError);
+      logger.debug('Response length:', body.length);
+      throw new Error(`JSON parse error: ${(parseError as Error).message}`);
+    }
+
+    if (this.isStalkerAuthError(parsed)) {
+      throw new Error('Stalker auth error - token may be expired');
+    }
+
+    return parsed;
+  }
+
+  private tryParse<T>(body: string): T | null {
+    try {
+      return JSON.parse(body) as T;
+    } catch {
+      return null;
+    }
+  }
+
+  private async handleRequestError(
+    error: Error,
+    lastResponse: { status: number; headers: Record<string, string>; body: string } | undefined,
+    parsed: any,
+    attempt: number,
+    retries: number
+  ): Promise<RetryDecision> {
+    const isAuth = this.isAuthError(lastResponse?.status ?? 0, lastResponse?.body ?? '', parsed);
+    if (isAuth && this.onAuthError) {
+      const shouldContinue = await this.handleAuthError();
+      if (shouldContinue) {
+        return 'auth-retry';
+      }
+      return 'fail';
+    }
+
+    const isRetryable = this.isRetryableError(error, lastResponse?.status);
+    if (!isRetryable || attempt >= retries) {
+      return 'fail';
+    }
+    logger.warn(`Request failed, will retry: ${error.message}`);
+    return 'retry';
+  }
+
+  private async handleAuthError(): Promise<boolean> {
+    if (this.refreshPromise === null) {
+      logger.info('Auth error detected, initiating token refresh...');
+      this.refreshPromise = this.onAuthError!().finally(() => {
+        this.refreshPromise = null;
+      });
+    } else {
+      logger.info('Token refresh already in progress, waiting...');
+    }
+
+    const result = await this.refreshPromise;
+    if (result.ok) {
+      return true;
+    }
+    logger.warn(`Auth refresh failed: ${result.reason}`);
+    return false;
+  }
+
+  private isRetryableError(error: Error, status?: number): boolean {
+    // Status code based: 5xx are retryable
+    if (status && status >= 500) {
+      return true;
+    }
+
+    // Fallback: string-based for network errors (no response)
+    const msg = error.message.toLowerCase();
+    return msg.includes('timeout') || msg.includes('connection') || msg.includes('network') || msg.includes('econnrefused');
+  }
+
+  private isAuthError(status: number, body: string, parsed?: any): boolean {
+    if (status === 401 || status === 403) return true;
+
+    if (parsed !== undefined) {
+      return this.isStalkerAuthError(parsed);
     }
 
     try {
-      const response = await invoke<string>('stalker_request', {
-        url: fullUrl.toString(),
-        method: 'POST',
-        headers,
-        body: data ? JSON.stringify(data) : null,
-      });
-
-      const parsed = JSON.parse(response);
-      return parsed;
-    } catch (error) {
-      logger.error('Tauri HTTP request failed:', error);
-      throw error;
+      const json = JSON.parse(body);
+      return this.isStalkerAuthError(json);
+    } catch {
+      return false;
     }
   }
+
+  private isStalkerAuthError(json: any): boolean {
+    return json?.js?.error === 'Not authorized' ||
+           json?.js?.error === 'Authorization required' ||
+           json?.js?.error === 'Token expired' ||
+           json?.error === 'Not authorized';
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout exceeded')), ms)
+      ),
+    ]);
+  }
+
 }

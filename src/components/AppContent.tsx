@@ -27,7 +27,7 @@ interface AppContentProps {
   client: StalkerClient | null;
   search: string;
   selectedCategory: StalkerGenre | null;
-  handleChannelSelect: (channel: StalkerChannel) => void;
+  handleChannelSelect: (channel: StalkerChannel) => void | Promise<void>;
   navigateToMovie: (movie: StalkerVOD) => void;
   navigateToSeries: (series: StalkerVOD) => void;
   navigateToCategory: (category: StalkerGenre) => void;

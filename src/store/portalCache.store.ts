@@ -6,13 +6,13 @@ import { immer } from 'zustand/middleware/immer';
 import { StalkerChannel, StalkerVOD, StalkerGenre, StalkerEPG } from '@/types';
 
 interface PortalData {
-  channelsByGenre: Record<string, StalkerChannel[]>; // kanały per kategoria
-  allChannels: StalkerChannel[]; // wszystkie kanałe
+  channelsByGenre: Record<string, StalkerChannel[]>;
+  allChannels: StalkerChannel[];
   channelCategories: StalkerGenre[];
   vod: StalkerVOD[];
-  vodByCategory: Record<string, StalkerVOD[]>; // VOD per kategoria
+  vodByCategory: Record<string, StalkerVOD[]>;
   vodCategories: StalkerGenre[];
-  epgCache: Record<number, { programs: StalkerEPG[]; timestamp: number }>; // EPG per channel
+  epgCache: Record<number, { programs: StalkerEPG[]; timestamp: number }>;
   lastUpdated: number;
 }
 
@@ -32,6 +32,8 @@ interface PortalCacheState {
   setChannelEPG: (portalId: string, channelId: number, programs: StalkerEPG[]) => void;
   getChannelEPG: (portalId: string, channelId: number) => StalkerEPG[] | null;
   hasValidEPG: (portalId: string, channelId: number, maxAgeMs?: number) => boolean;
+  clearChannelEPG: (portalId: string, channelId: number) => void;
+  clearAllEPG: (portalId: string) => void;
   getPortalData: (portalId: string) => PortalData | null;
   hasPortalData: (portalId: string) => boolean;
   clearPortalData: (portalId: string) => void;
@@ -191,17 +193,30 @@ export const usePortalCacheStore = create<PortalCacheState>()(
       },
 
       getChannelEPG: (portalId, channelId) => {
-        const data = get().portalsData[portalId];
-        if (!data || !data.epgCache) return null;
-        return data.epgCache[channelId]?.programs || null;
+        return get().portalsData[portalId]?.epgCache?.[channelId]?.programs || null;
       },
 
       hasValidEPG: (portalId, channelId, maxAgeMs = 30 * 60 * 1000) => {
-        const data = get().portalsData[portalId];
-        if (!data || !data.epgCache) return false;
-        const cached = data.epgCache[channelId];
+        const cached = get().portalsData[portalId]?.epgCache?.[channelId];
         if (!cached) return false;
         return Date.now() - cached.timestamp < maxAgeMs;
+      },
+
+      clearChannelEPG: (portalId, channelId) => {
+        set((state) => {
+          if (state.portalsData[portalId]?.epgCache?.[channelId]) {
+            delete state.portalsData[portalId].epgCache[channelId];
+            console.log('[PortalCache] Cleared EPG cache for channel:', channelId);
+          }
+        });
+      },
+
+      clearAllEPG: (portalId) => {
+        set((state) => {
+          if (state.portalsData[portalId]?.epgCache) {
+            state.portalsData[portalId].epgCache = {};
+          }
+        });
       },
 
       getPortalData: (portalId) => {
@@ -234,7 +249,7 @@ export const usePortalCacheStore = create<PortalCacheState>()(
 );
 
 // Clear old localStorage cache on load (migration cleanup)
-if (typeof window !== 'undefined') {
+if (globalThis.window !== undefined) {
   try {
     localStorage.removeItem('portal-data-cache');
     console.log('[PortalCache] Cleared old localStorage cache');

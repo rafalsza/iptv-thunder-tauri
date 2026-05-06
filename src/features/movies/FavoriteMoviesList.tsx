@@ -10,6 +10,7 @@ import { getImageUrl } from '@/hooks/useImageCache';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResumeStore, type WatchStatus } from '@/store/resume.store';
 import { StalkerVOD } from '@/types';
+import { useLongPress } from '@/hooks/useLongPress';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -35,18 +36,30 @@ interface MovieCardProps {
   posterUrl: string;
   onSelect: (movie: StalkerVOD) => void;
   onToggleFavorite: (e: React.MouseEvent, movie: StalkerVOD) => void;
+  onLongPress: (movie: StalkerVOD) => void;
   watchStatus?: WatchStatus;
   progressPercentage?: number;
 }
 
 const MovieCard = React.memo<MovieCardProps>(({
-  movie, index, posterUrl, onSelect, onToggleFavorite, watchStatus, progressPercentage = 0,
+  movie, index, posterUrl, onSelect, onToggleFavorite, onLongPress, watchStatus, progressPercentage = 0,
 }) => {
   const { t } = useTranslation();
   const [imgSrc, setImgSrc] = useState<string | null>(() => imageCache.get(posterUrl) ?? null);
   const [imgError, setImgError] = useState(false);
   const isWatched = watchStatus === 'watched';
   const isInProgress = watchStatus === 'in_progress';
+
+  const { isLongPress, ...longPressHandlers } = useLongPress({
+    onLongPress: () => onLongPress(movie),
+    delay: 500,
+  });
+
+  const handleClick = () => {
+    if (!isLongPress) {
+      onSelect(movie);
+    }
+  };
 
   // Get progress data to recalculate percentage using movie.length for consistency
   const { getProgress } = useResumeStore();
@@ -90,13 +103,18 @@ const MovieCard = React.memo<MovieCardProps>(({
       data-tv-index={index}
       data-tv-initial={index === 0}
       tabIndex={0}
-      onClick={() => onSelect(movie)}
+      onClick={handleClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onLongPress(movie);
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
           e.preventDefault();
           onSelect(movie);
         }
       }}
+      {...longPressHandlers}
       className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)]"
     >
       <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
@@ -228,14 +246,17 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
   const [cols, setCols] = useState(() => {
     if (globalThis.window === undefined) return 5;
     const availableWidth = window.innerWidth - 256 - 32;
-    return Math.max(2, Math.floor(availableWidth / 180));
+    const cardWidth = availableWidth > 3000 ? 220 : availableWidth > 2000 ? 200 : 180;
+    return Math.max(2, Math.floor(availableWidth / cardWidth));
   });
 
   // Responsive column count
   useEffect(() => {
     const calc = () => {
       if (!parentRef.current) return;
-      setCols(Math.max(2, Math.floor(parentRef.current.offsetWidth / 180)));
+      const availableWidth = parentRef.current.offsetWidth;
+      const cardWidth = availableWidth > 3000 ? 220 : availableWidth > 2000 ? 200 : 180;
+      setCols(Math.max(2, Math.floor(availableWidth / cardWidth)));
     };
     calc();
     const ro = new ResizeObserver(calc);
@@ -268,6 +289,19 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
       poster: posterUrl,
       cmd: movie.cmd,
     });
+  }, [toggleItemFavorite]);
+
+  const handleLongPress = useCallback((movie: StalkerVOD) => {
+    const posterUrl = movie.poster || movie.logo || '';
+    const itemId = (movie as any).item_id || String(movie.id);
+    toggleItemFavorite('vod', itemId, {
+      name: movie.name,
+      poster: posterUrl,
+      cmd: movie.cmd,
+    });
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
   }, [toggleItemFavorite]);
 
   if (isLoading) {
@@ -347,6 +381,7 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
                       posterUrl={movie.poster || movie.logo || ''}
                       onSelect={onMovieSelect}
                       onToggleFavorite={handleToggleFavorite}
+                      onLongPress={handleLongPress}
                       watchStatus={progress?.status}
                       progressPercentage={progress?.percentage}
                     />

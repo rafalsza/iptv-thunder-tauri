@@ -772,8 +772,13 @@ function useMpvPlayer(
 
       // For VOD: detect end by checking if time stopped updating and we're near the end
       if (isVod) {
-        const isNearEnd = durationRef.current > 0 && currentTimeRef.current > durationRef.current * 0.98;
-        if (isNearEnd && !isEndedRef.current) {
+        // Use 99.9% threshold - only trigger when less than 0.1% remaining (e.g., 3s for 45min episode)
+        const isNearEnd = durationRef.current > 0 && currentTimeRef.current > durationRef.current * 0.999;
+        // Also check: within 10 seconds of actual end (safety threshold)
+        const secondsFromEnd = durationRef.current - currentTimeRef.current;
+        const isActuallyEnding = isNearEnd || (durationRef.current > 0 && secondsFromEnd < 10);
+
+        if (isActuallyEnding && !isEndedRef.current) {
           isEndedRef.current = true;
           // Mark as watched when VOD ends
           if (movieId && markAsWatched && durationRef.current > 0) {
@@ -1638,7 +1643,6 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
   const { seekTo } = controls;
   useEffect(() => {
     if (isVod && resumePosition > 0 && mpv.streamState === 'playing' && mpv.duration > 0 && !hasResumedRef.current) {
-      console.log('▶️ Resume seeking to:', resumePosition, 'duration:', mpv.duration);
       hasResumedRef.current = true;
       // Small delay to ensure MPV is fully ready
       const timer = setTimeout(() => {

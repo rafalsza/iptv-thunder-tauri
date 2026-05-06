@@ -42,7 +42,7 @@ export interface SecureAuthData {
 }
 
 export class SecureStorage {
-  private password: string;
+  private readonly password: string;
   private stronghold: Stronghold | null = null;
   private client: Client | null = null;
 

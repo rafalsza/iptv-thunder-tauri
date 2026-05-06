@@ -10,7 +10,6 @@ import { clearAllDataForPortal } from '@/hooks/useDatabase';
 import { clearAllCategoriesCache } from '@/hooks/useCategories';
 import { tauriStorage } from '@/lib/tauriStorage';
 import { createLogger } from '@/lib/logger';
-
 const logger = createLogger('Portals');
 
 // Predefined EPG services
