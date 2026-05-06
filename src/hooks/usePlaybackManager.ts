@@ -25,6 +25,8 @@ export const usePlaybackManager = ({
   const [episodesList, setEpisodesList] = useState<StalkerVOD[]>([]);
   const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
   const currentEpisodeIndexRef = useRef(currentEpisodeIndex);
+  const autoplayEpisodeIndexRef = useRef(0);
+  const seriesCacheRef = useRef<Record<string, any>>({});
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -42,7 +44,8 @@ export const usePlaybackManager = ({
     if (abortRef.current) {
       abortRef.current.abort();
     }
-    abortRef.current = new AbortController();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     player.setBuffering(true);
 
@@ -61,7 +64,7 @@ export const usePlaybackManager = ({
 
       const url = await queryClient.fetchQuery({
         queryKey: ['stream', channel.id, accountId],
-        queryFn: () => client.getStreamUrl(channel.cmd),
+        queryFn: () => client.getStreamUrl(channel.cmd, { signal: controller.signal }),
         staleTime: 2 * 60 * 1000, // Use cache for 2 minutes (allows prefetch to work)
       });
 
@@ -136,9 +139,11 @@ export const usePlaybackManager = ({
   }, [client, queryClient, activePortal]);
 
   const deduplicateEpisodes = (episodes: StalkerVOD[]): StalkerVOD[] => {
-    return episodes.filter((ep: StalkerVOD, index: number, self: StalkerVOD[]) =>
-      index === self.findIndex((e: StalkerVOD) => String(e.id) === String(ep.id))
-    );
+    const map = new Map<string, StalkerVOD>();
+    for (const ep of episodes) {
+      map.set(String(ep.id), ep);
+    }
+    return Array.from(map.values());
   };
 
   const findEpisodeIndex = (episodes: StalkerVOD[], episode: StalkerVOD): number => {
@@ -146,15 +151,24 @@ export const usePlaybackManager = ({
   };
 
   const fetchSeriesData = async (seriesId: string): Promise<any> => {
-    return await queryClient.fetchQuery({
+    // Check cache first
+    if (seriesCacheRef.current[seriesId]) {
+      return seriesCacheRef.current[seriesId];
+    }
+
+    // Fetch and cache the data
+    const data = await queryClient.fetchQuery({
       queryKey: ['series', seriesId, 'info'],
       queryFn: async () => {
         return await getSeriesInfo(client!, seriesId);
       },
     });
+
+    seriesCacheRef.current[seriesId] = data;
+    return data;
   };
 
-  const fetchStreamUrl = async (episode: StalkerVOD): Promise<string> => {
+  const fetchStreamUrl = async (episode: StalkerVOD, signal?: AbortSignal): Promise<string> => {
     const response = await client!._makeRequest({
       action: 'create_link',
       cmd: episode.cmd,
@@ -164,6 +178,7 @@ export const usePlaybackManager = ({
       download: '0',
       mac: client!.getAccount().mac,
       JsHttpRequest: '1-xml',
+      signal,
     });
     
     const streamUrl = response?.js?.cmd || response.data?.js?.cmd;
@@ -194,12 +209,12 @@ export const usePlaybackManager = ({
     }));
   };
 
-  const updateEpisodesList = async (episode: StalkerVOD, explicitIndex?: number): Promise<void> => {
-    if (!selectedSeries?.id) return;
+  const updateEpisodesList = async (episode: StalkerVOD, explicitIndex?: number): Promise<{ episodes: StalkerVOD[], index: number } | null> => {
+    if (!selectedSeries?.id) return null;
 
     try {
       const seriesData = await fetchSeriesData(String(selectedSeries.id));
-      if (!seriesData?.episodes) return;
+      if (!seriesData?.episodes) return null;
 
       const uniqueEpisodes = deduplicateEpisodes(seriesData.episodes);
       const episodeIndex = explicitIndex ?? findEpisodeIndex(uniqueEpisodes, episode);
@@ -208,27 +223,44 @@ export const usePlaybackManager = ({
         setEpisodesList(uniqueEpisodes);
         setCurrentEpisodeIndex(episodeIndex);
         currentEpisodeIndexRef.current = episodeIndex;
+        return { episodes: uniqueEpisodes, index: episodeIndex };
       }
+      return null;
     } catch (e) {
       console.error('Failed to fetch series episodes for auto-play:', e);
+      return null;
     }
   };
 
   const handleEpisodeSelect = useCallback(async (episode: StalkerVOD, resumePosition?: number, explicitIndex?: number) => {
     if (!client) return;
 
-    await updateEpisodesList(episode, explicitIndex);
+    // Cancel any previous request
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const result = await updateEpisodesList(episode, explicitIndex);
+    
+    // Reset autoplay index when manually selecting an episode
+    autoplayEpisodeIndexRef.current = explicitIndex ?? currentEpisodeIndexRef.current;
 
     try {
       const url = await queryClient.fetchQuery({
         queryKey: ['series', episode.cmd, episode.episode],
-        queryFn: () => fetchStreamUrl(episode),
+        queryFn: () => fetchStreamUrl(episode, controller.signal),
         staleTime: 0,
       });
       
       const fullName = buildEpisodeName(episode);
       const autoPlayEpisodes = await getSetting('autoPlayEpisodes');
-      const episodesData = prepareEpisodesData(episodesList);
+      
+      // Use returned data instead of stale state
+      const localEpisodes = result?.episodes ?? [];
+      const localIndex = result?.index ?? 0;
+      const episodesData = prepareEpisodesData(localEpisodes);
 
       player.setContentType('series');
       player.setMedia({
@@ -239,7 +271,7 @@ export const usePlaybackManager = ({
         movieId: String(episode.id),
         resumePosition: resumePosition || 0,
         episodes: episodesData,
-        currentEpisodeIndex: explicitIndex ?? currentEpisodeIndexRef.current,
+        currentEpisodeIndex: explicitIndex ?? localIndex,
         autoPlayEpisodes,
       });
 
@@ -268,30 +300,43 @@ export const usePlaybackManager = ({
       return;
     }
 
-    // Use ref to get latest index (avoids stale closure)
-    const currentIdx = currentEpisodeIndexRef.current;
-    const nextIndex = currentIdx + 1;
-
-    if (nextIndex >= episodesList.length) {
+    // Use autoplayEpisodeIndexRef for consistent autoplay tracking
+    const autoplayEpisodeIndex = autoplayEpisodeIndexRef.current;
+    const originalCurrentIndex = currentEpisodeIndexRef.current;
+    
+    if (autoplayEpisodeIndex >= episodesList.length - 1) {
       return;
     }
 
-    const nextEpisode = episodesList[nextIndex];
+    const nextEpisode = episodesList[autoplayEpisodeIndex + 1];
     if (!nextEpisode) {
-      console.error('Next episode not found at index', nextIndex);
+      console.error('Next episode not found at autoplay index', autoplayEpisodeIndex + 1);
       return;
     }
 
-    // Update ref immediately to ensure consistency
-    currentEpisodeIndexRef.current = nextIndex;
+    // Update autoplay index BEFORE calling next episode
+    autoplayEpisodeIndexRef.current = autoplayEpisodeIndex + 1;
+
+    // Find the episode in the episodesList to get the correct index
+    const nextIndex = episodesList.findIndex(ep => 
+      ep.id === nextEpisode.id || 
+      (ep.season === nextEpisode.season && ep.episode === nextEpisode.episode)
+    );
+
+    if (nextIndex === -1) {
+      console.error('Next episode not found in episodesList');
+      return;
+    }
 
     try {
       setCurrentEpisodeIndex(nextIndex);
-      await handleEpisodeSelect(nextEpisode, 0, nextIndex); // Pass explicit index
+      currentEpisodeIndexRef.current = nextIndex;
+      await handleEpisodeSelect(nextEpisode, 0, nextIndex);
     } catch (error) {
       console.error('Failed to autoplay next episode:', error);
-      // Revert ref on error
-      currentEpisodeIndexRef.current = currentIdx;
+      // Revert refs on error
+      autoplayEpisodeIndexRef.current = autoplayEpisodeIndex;
+      currentEpisodeIndexRef.current = originalCurrentIndex;
     }
   }, [episodesList, selectedSeries, handleEpisodeSelect]);
 
