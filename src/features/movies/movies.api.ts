@@ -48,7 +48,7 @@ export async function fetchVODPages(
       onProgress(first.items, 1, totalPages);
     }
 
-    // Fetch pages progressively
+    // Fetch pages progressively with delay to avoid server throttling
     for (let i = 0; i < pageNums.length; i++) {
       const page = pageNums[i];
       if (signal?.aborted) {
@@ -61,6 +61,8 @@ export async function fetchVODPages(
         if (onProgress) {
           onProgress(allItems, i + 2, totalPages);
         }
+        // Small delay between requests to avoid server throttling
+        await new Promise(r => setTimeout(r, 100));
       } catch (e) {
         // Continue on error for individual pages
         console.error(`Failed to fetch page ${page}:`, e);

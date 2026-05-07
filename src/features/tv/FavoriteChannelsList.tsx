@@ -3,6 +3,7 @@
 // =========================
 import React, { useMemo } from 'react';
 import { useFavorites } from '@/hooks/useFavorites';
+import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel } from '@/types';
 import { useLongPress } from '@/hooks/useLongPress';
@@ -48,6 +49,7 @@ const FavoriteChannelCard: React.FC<FavoriteChannelCardProps> = ({
       data-tv-index={index}
       data-tv-initial={index === 0}
       tabIndex={0}
+      {...longPressHandlers}
       onClick={handleClick}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -59,12 +61,11 @@ const FavoriteChannelCard: React.FC<FavoriteChannelCardProps> = ({
           onSelect(channel);
         }
       }}
-      {...longPressHandlers}
-      className="p-3 dark:border border-slate-700 border-gray-300 rounded-lg cursor-pointer dark:hover:bg-slate-700 hover:bg-gray-200 hover:border-green-700 transition-all dark:bg-slate-800 bg-white dark:focus:bg-slate-700 focus:bg-gray-200 dark:focus:border-green-700 focus:border-green-700"
+      className="p-2 rounded-lg cursor-pointer dark:hover:bg-slate-700 hover:bg-gray-200 hover:border-green-700 transition-all dark:bg-slate-800 bg-white dark:focus:bg-slate-700 focus:bg-gray-200 dark:focus:border-green-700 focus:border-green-700"
     >
       <div className="flex justify-between items-start">
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-sm dark:text-white text-slate-900 truncate">
+          <h3 className="font-medium text-sm dark:text-white text-slate-900">
             {channel.name}
           </h3>
         </div>
@@ -99,6 +100,7 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
 }) => {
   // Use SQLite for favorites - contains all metadata (name, poster/logo, cmd)
   const { favorites: dbFavorites, isLoading, toggleItemFavorite } = useFavorites(accountId);
+  const { t } = useTranslation();
 
   // Convert favorites to StalkerChannel format using stored metadata
   const favoriteChannels = useMemo((): StalkerChannel[] => {
@@ -148,15 +150,15 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Skeleton Header */}
-        <div className="border-b dark:border-slate-700 border-gray-300 p-4">
+        <div className="p-4">
           <div className="h-6 w-48 dark:bg-slate-700 bg-gray-200 rounded animate-pulse mb-2"></div>
           <div className="h-4 w-32 dark:bg-slate-700 bg-gray-200 rounded animate-pulse"></div>
         </div>
         {/* Skeleton Grid */}
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg p-3">
+              <div key={i} className="dark:bg-slate-800 bg-white rounded-lg p-3">
                 <div className="flex justify-between items-start mb-2">
                   <div className="h-4 w-20 dark:bg-slate-700 bg-gray-200 rounded animate-pulse"></div>
                   <div className="w-5 h-5 dark:bg-slate-700 bg-gray-200 rounded-full animate-pulse"></div>
@@ -175,12 +177,12 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
       <div className="flex-1 flex items-center justify-center dark:text-white text-slate-900">
         <div className="text-center">
           <div className="text-6xl mb-4">❤️</div>
-          <h2 className="text-2xl font-bold mb-2">Brak ulubionych kanałów</h2>
+          <h2 className="text-2xl font-bold mb-2">{t('noFavoriteChannels')}</h2>
           <p className="dark:text-slate-400 text-slate-600 mb-4">
-            Dodaj kanały do ulubionych klikając ❤️ przy kanale
+            {t('addFavoriteChannelsHint')}
           </p>
           <p className="text-sm dark:text-slate-500 text-slate-500">
-            Kanały pojawią się tutaj po ich dodaniu
+            {t('favoriteChannelsAppear')}
           </p>
         </div>
       </div>
@@ -190,18 +192,18 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b dark:border-slate-700 border-gray-300 p-4">
+      <div className="p-4">
         <div>
-          <h2 className="text-lg font-bold dark:text-white text-slate-900">Ulubione kanały</h2>
+          <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{t('favoriteChannels')}</h2>
           <p className="text-sm dark:text-slate-400 text-slate-600">
-            {filtered.length} z {favoriteChannels.length} kanałów
+            {t('favoriteChannelsCount', { current: filtered.length, total: favoriteChannels.length })}
           </p>
         </div>
       </div>
 
       {/* Channels Grid - same layout as TVList */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
           {filtered.map((channel: StalkerChannel, index: number) => (
             <FavoriteChannelCard
               key={channel.id}

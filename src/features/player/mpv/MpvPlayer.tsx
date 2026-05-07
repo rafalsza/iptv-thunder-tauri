@@ -192,6 +192,7 @@ function useMpvPlayer(
   const isEndedRef = useRef(false);
   const isPausedRef = useRef(false);
   const volumeRef = useRef(0.8);
+  const failedSeekRecoveryRef = useRef(0);
   const hwAccelEnabledRef = useRef(true);
 
   // Smart retry metrics per URL
@@ -773,10 +774,10 @@ function useMpvPlayer(
       // For VOD: detect end by checking if time stopped updating and we're near the end
       if (isVod) {
         // Use 99.9% threshold - only trigger when less than 0.1% remaining (e.g., 3s for 45min episode)
-        const isNearEnd = durationRef.current > 0 && currentTimeRef.current > durationRef.current * 0.999;
+        const isNearEnd = durationRef.current > 0 && currentTimeRef.current > durationRef.current * 0.998;
         // Also check: within 10 seconds of actual end (safety threshold)
         const secondsFromEnd = durationRef.current - currentTimeRef.current;
-        const isActuallyEnding = isNearEnd || (durationRef.current > 0 && secondsFromEnd < 10);
+        const isActuallyEnding = isNearEnd || (durationRef.current > 0 && secondsFromEnd < 11);
 
         if (isActuallyEnding && !isEndedRef.current) {
           isEndedRef.current = true;
@@ -805,19 +806,41 @@ function useMpvPlayer(
         console.warn(`⚠️ Stream stalled - no time update for ${stallTimeout / 1000}s`);
         setStreamState('stalled');
 
+        // After 2 failed seek recoveries, do full retry
+        if (failedSeekRecoveryRef.current >= 2) {
+          console.warn('🔄 Multiple seek recoveries failed, doing full retry');
+          failedSeekRecoveryRef.current = 0;
+          handleManualRetryRef.current?.(true); // soft retry - preserve current URL index
+          return;
+        }
+
         // Smart stall recovery: try seek first to unblock without reconnect
-        void command('seek', [0, 'relative']).then(() => {
+        void command('seek', [0, 'relative']).then(async () => {
           console.log('✅ Seek recovery successful');
           setStreamState('playing');
+          // Reinitialize audio track after seek recovery to prevent audio loss
+          if (currentAudioId) {
+            try {
+              await setProperty('aid', currentAudioId);
+              console.log('🔊 Audio track reinitialized after stall recovery');
+              failedSeekRecoveryRef.current = 0; // Reset counter on success
+            } catch (e) {
+              console.warn('⚠️ Audio track reinit failed:', e);
+              failedSeekRecoveryRef.current++;
+            }
+          } else {
+            failedSeekRecoveryRef.current = 0;
+          }
         }).catch(() => {
           console.warn('⏱ Seek recovery failed, falling back to retry');
+          failedSeekRecoveryRef.current++;
           handleManualRetryRef.current?.(true); // soft retry - preserve current URL index
         });
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [isVod]);
+  }, [isVod, currentAudioId]);
 
   const setAudioTrack = useCallback(async (id: string) => {
     try {

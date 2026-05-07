@@ -203,21 +203,6 @@ export async function removeFromFavorites(
   await removeFavorite(accountId, type, itemId);
 }
 
-// Toggle favorite item status (deprecated - use addToFavorites/removeFromFavorites instead)
-export async function toggleFavorite(
-  accountId: string,
-  type: 'live' | 'vod' | 'series',
-  itemId: string,
-  isFavorite: boolean,
-  metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }
-): Promise<void> {
-  if (isFavorite) {
-    await addToFavorites(accountId, type, itemId, metadata);
-  } else {
-    await removeFromFavorites(accountId, type, itemId);
-  }
-}
-
 // Check if item is favorite
 export async function isFavorite(
   accountId: string,
@@ -295,7 +280,6 @@ export async function addFavoriteCategory(
        DO UPDATE SET name=excluded.name`,
       [accountId, type, categoryId, name || 'Unknown', now]
     );
-    logger.info('Added favorite category:', { accountId, type, categoryId });
   } catch (error) {
     logger.error('Error adding favorite category:', error);
     throw error;
@@ -314,7 +298,6 @@ export async function removeFavoriteCategory(
       "DELETE FROM favorites WHERE account_id = ? AND kind = 'category' AND type = ? AND item_id = ?",
       [accountId, type, categoryId]
     );
-    logger.info('Removed favorite category:', { accountId, type, categoryId });
   } catch (error) {
     logger.error('Error removing favorite category:', error);
     throw error;

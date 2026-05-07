@@ -12,6 +12,7 @@ export const spatialPlugin: NavigationPlugin = {
     if (!current) {
       return null;
     }
+
     // Prevent navigation loops by tracking recent positions
     const recentPositions = state.lastPositionByAxis;
     if (recentPositions && direction === 'down') {
@@ -40,8 +41,10 @@ export const spatialPlugin: NavigationPlugin = {
 
     // Phase 2: If no result and current has container, search globally but penalize other containers
     // IMPORTANT: Don't leave modal containers (e.g., settings-modal, portal-actions)
+    // IMPORTANT: Don't leave navigation container when in submenu (prevent exiting)
     const isModalContainer = (id: string) => id && id !== 'main' && id !== 'navigation';
-    if (!best && current.containerId && !isModalContainer(current.containerId)) {
+    const isNavigationContainer = (id: string) => id === 'navigation';
+    if (!best && current.containerId && !isModalContainer(current.containerId) && !isNavigationContainer(current.containerId)) {
       best = findBestGlobally(current, state.nodes, direction, state);
     } else if (!best && current.containerId && isModalContainer(current.containerId)) {
       return null;

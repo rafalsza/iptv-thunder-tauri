@@ -2,6 +2,7 @@
 // 🔄 PORTAL TEST COMPONENT
 // =========================
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { PortalAccount, PortalTestResult } from './portals.types';
 
@@ -11,6 +12,7 @@ interface PortalTestProps {
 }
 
 export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
+  const { t } = useTranslation();
   const [testResult, setTestResult] = useState<PortalTestResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const testButtonRef = useRef<HTMLButtonElement>(null);
@@ -50,14 +52,14 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
       if (channelsResult.totalItems === 0) {
         setTestResult({
           success: false,
-          message: 'Brak dostępnych kanałów',
+          message: t('noChannelsAvailable'),
           responseTime,
           channels: 0,
         });
       } else {
         setTestResult({
           success: true,
-          message: 'Połączenie udane!',
+          message: t('connectionSuccess'),
           responseTime,
           channels: channelsResult.totalItems,
           profile,
@@ -69,7 +71,7 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
       
       setTestResult({
         success: false,
-        message: error?.message || 'Błąd połączenia',
+        message: error?.message || t('connectionError'),
         responseTime,
       });
     } finally {
@@ -101,7 +103,7 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
         <div className="p-6 border-b border-slate-700 bg-slate-800 bg-opacity-50">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold text-white">
-              Test Połączenia
+              {t('connectionTest')}
             </h2>
             <button
               data-tv-focusable
@@ -149,12 +151,12 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
               {isTesting ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Testowanie...
+                  {t('testing')}
                 </>
               ) : (
                 <>
                   🔄
-                  Rozpocznij Test
+                  {t('startTest')}
                 </>
               )}
             </button>
@@ -175,7 +177,7 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
                   </h3>
                   {testResult.responseTime && (
                     <p className="text-sm text-slate-400">
-                      Czas odpowiedzi: <span className={`font-medium ${getResponseTimeColor(testResult.responseTime)}`}>
+                      {t('responseTime')} <span className={`font-medium ${getResponseTimeColor(testResult.responseTime)}`}>
                         {testResult.responseTime}ms
                       </span>
                     </p>
@@ -187,22 +189,22 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
               {testResult.success && testResult.profile && (
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Status:</span>
+                    <span className="text-slate-400">{t('status')}:</span>
                     <span className="font-medium text-green-400">
                       {testResult.profile.status === 1 || testResult.profile.status === '1' || testResult.profile.status === 'Active' || testResult.profile.status === 'active'
-                        ? 'Aktywne' 
-                        : testResult.profile.status || 'Aktywne'}
+                        ? t('active') 
+                        : testResult.profile.status || t('active')}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Użytkownik:</span>
+                    <span className="text-slate-400">{t('user')}:</span>
                     <span className="font-medium text-white">
-                      {testResult.profile.login || portal.login || 'Brak danych'}
+                      {testResult.profile.login || portal.login || t('noData')}
                     </span>
                   </div>
                   {testResult.channels !== undefined && (
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Liczba kanałów:</span>
+                      <span className="text-slate-400">{t('channelCount')}:</span>
                       <span className="font-medium text-green-700">
                         {testResult.channels.toLocaleString('pl-PL')}
                       </span>
@@ -214,13 +216,13 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
               {/* Error Details */}
               {!testResult.success && (
                 <div className="text-sm text-slate-300 mt-3">
-                  <p className="font-medium mb-2">Możliwe przyczyny błędu:</p>
+                  <p className="font-medium mb-2">{t('possibleErrorCauses')}</p>
                   <ul className="list-disc list-inside space-y-1 text-slate-400">
-                    <li>Nieprawidłowy adres URL portalu</li>
-                    <li>Błędne dane logowania (login/hasło)</li>
-                    <li>Nieprawidłowy adres MAC</li>
-                    <li>Portal jest niedostępny lub zablokowany</li>
-                    <li>Problem z połączeniem sieciowym</li>
+                    <li>{t('invalidPortalUrl')}</li>
+                    <li>{t('invalidCredentials')}</li>
+                    <li>{t('invalidMac')}</li>
+                    <li>{t('portalUnavailable')}</li>
+                    <li>{t('networkError')}</li>
                   </ul>
                 </div>
               )}
@@ -239,7 +241,7 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
               onClick={onClose}
               className="px-6 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-700 hover:text-white transition-colors"
             >
-              Zamknij
+              {t('close')}
             </button>
           </div>
         </div>

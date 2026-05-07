@@ -56,7 +56,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const isMobile = currentPlatform === 'android' || currentPlatform === 'ios';
 
   return (
-    <div className={`flex flex-col h-full ${player.current ? 'bg-transparent' : 'dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 bg-gradient-to-br from-white via-gray-100 to-white'}`}>
+    <div className={`flex flex-col h-full min-h-screen ${player.current ? 'bg-transparent' : 'dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 bg-gradient-to-br from-white via-gray-100 to-white'}`}>
       {/* Custom TitleBar - hidden on mobile (Android/iOS) and when fullscreen */}
       {!isFullscreen && !isMobile && <TitleBar />}
 
@@ -71,10 +71,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
         {/* Main Content - hidden when player active */}
         {!player.current && (
-          <div id="main" data-tv-container="main" className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+          <div id="main" data-tv-container="main" className="flex-1 flex flex-col min-w-0 overflow-x-hidden overflow-y-auto">
             {/* Search Bar - only show for list views */}
             {activeView !== 'portals' && activeView !== 'movie-details' && activeView !== 'series-details' && activePortal && (
-              <div className="p-4 dark:border-b border-slate-700/50 border-b-gray-300/50">
+              <div className="px-4 pt-4 pb-0">
                 <input
                   type="text"
                   placeholder="Search..."
@@ -83,7 +83,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   data-tv-focusable
                   data-tv-search
                   tabIndex={0}
-                  className="w-full px-4 py-3 dark:bg-slate-800/50 bg-gray-200/50 dark:bg-opacity-50 bg-opacity-50 dark:border border-slate-600/50 border-gray-300/50 rounded-lg dark:text-white text-slate-900 dark:placeholder-slate-400 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-700 focus:border-green-700 backdrop-blur-sm shadow-sm transition-all duration-200"
+                  className="w-full px-4 py-3 dark:bg-slate-800/50 bg-gray-200/50 dark:bg-opacity-50 bg-opacity-50 rounded-lg dark:text-white text-slate-900 dark:placeholder-slate-400 placeholder-slate-500 backdrop-blur-sm shadow-sm transition-all duration-200"
                 />
               </div>
             )}

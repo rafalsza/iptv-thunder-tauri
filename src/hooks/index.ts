@@ -80,7 +80,7 @@ export {
   useFavoriteIds,
   useFavoriteCategories,
   // Functions
-  loadFavorites, addFavorite, removeFavorite, toggleFavorite, isFavorite,
+  loadFavorites, addFavorite, removeFavorite, isFavorite,
   loadFavoriteCategories, loadAllFavoriteCategories,
   addFavoriteCategory, removeFavoriteCategory, toggleFavoriteCategory, isFavoriteCategory,
   initFavoritesTable,

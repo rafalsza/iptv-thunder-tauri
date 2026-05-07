@@ -20,19 +20,13 @@ import { ContinueWatching } from './ContinueWatching';
 
 // Responsive row height based on screen size (calculated dynamically)
 const getRowHeight = () => {
-  if (globalThis.window === undefined) return 240;
+  if (globalThis.window === undefined) return 280;
   const width = globalThis.window.innerWidth;
-  if (width > 3000) return 280;
-  if (width > 2000) return 240;
-  return 200;
+  if (width > 3000) return 320;
+  if (width > 2000) return 280;
+  return 240;
 };
 
-// Responsive card width based on available width
-const getCardWidth = (availableWidth: number) => {
-  if (availableWidth > 3000) return 180;
-  if (availableWidth > 2000) return 160;
-  return 140;
-};
 const IMAGE_CACHE_LIMIT = 500;
 
 // ─── Image cache (module-level, survives re-renders, bounded size) ─────────────
@@ -52,7 +46,7 @@ function setCachedImage(key: string, value: string) {
 const SkeletonCard = React.memo(() => {
   return (
     <div className="h-full">
-      <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 dark:bg-slate-800 bg-white h-full flex flex-col">
+      <div className="relative overflow-hidden rounded-lg dark:bg-slate-800 bg-white h-full flex flex-col">
         {/* Poster skeleton */}
         <div className="flex-1 dark:bg-slate-700 bg-gray-200 relative overflow-hidden">
           <div className="absolute inset-0 animate-pulse dark:bg-slate-600 bg-gray-300" />
@@ -156,9 +150,9 @@ const MovieCard = React.memo<MovieCardProps>(({
         onLongPress(movie);
       }}
       {...longPressHandlers}
-      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)]"
+      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1"
     >
-      <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
+      <div className="relative overflow-hidden rounded-lg hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
 
         {/* Poster */}
         <div className="flex-1 dark:bg-slate-700 bg-gray-200 relative overflow-hidden">
@@ -268,29 +262,8 @@ export const MovieList: React.FC<MovieListProps> = ({
 
   // ── Layout ────────────────────────────────────────────────────────────────────
   const parentRef    = useRef<HTMLDivElement>(null);
-  const [cols, setCols] = useState(() => {
-    if (globalThis.window === undefined) return 5;
-    // Subtract sidebar (~256px) and padding (~32px)
-    const availableWidth = window.innerWidth - 256 - 32;
-    // Responsive card width: larger screens get larger cards
-    const cardWidth = getCardWidth(availableWidth);
-    return Math.max(2, Math.floor(availableWidth / cardWidth));
-  });
-
-  // Responsive column count based on container width
-  useEffect(() => {
-    const calc = () => {
-      if (!parentRef.current) return;
-      const availableWidth = parentRef.current.offsetWidth;
-      // Responsive card width based on screen size
-      const cardWidth = getCardWidth(availableWidth);
-      setCols(Math.max(2, Math.floor(availableWidth / cardWidth)));
-    };
-    calc();
-    const ro = new ResizeObserver(calc);
-    if (parentRef.current) ro.observe(parentRef.current);
-    return () => ro.disconnect();
-  }, []);
+  // Fixed column count for consistency
+  const [cols] = useState(9);
 
   // Reset scroll when category changes
   useEffect(() => {
@@ -388,13 +361,13 @@ export const MovieList: React.FC<MovieListProps> = ({
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Category header with skeleton */}
         {selectedCategory && (
-          <div className="flex-shrink-0 border-b dark:border-slate-700 border-gray-300 px-4 py-3">
+          <div className="flex-shrink-0 px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-green-700 rounded-lg flex items-center justify-center text-lg">
                 🎬
               </div>
               <div className="flex-1">
-                <h2 className="text-base font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+                <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
                 <div className="h-4 w-24 dark:bg-slate-700 bg-gray-200 rounded animate-pulse mt-1" />
               </div>
             </div>
@@ -433,13 +406,13 @@ export const MovieList: React.FC<MovieListProps> = ({
 
       {/* Category header */}
       {selectedCategory && (
-        <div className="flex-shrink-0 border-b dark:border-slate-700 border-gray-300 px-4 py-3">
+        <div className="flex-shrink-0 px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-green-700 rounded-lg flex items-center justify-center text-lg">
               🎬
             </div>
             <div className="flex-1">
-              <h2 className="text-base font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+              <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
               <p className="text-xs dark:text-slate-400 text-slate-600">
                 {filtered.length} {(() => {
                   const count = filtered.length;

@@ -1,7 +1,8 @@
 // =========================
 // 🧠 COMPLETE APP WITH ALL FEATURES
 // =========================
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
+import { platform } from '@tauri-apps/plugin-os';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
@@ -100,6 +101,17 @@ function AppInner({ }: AppProps) {
             savedElement.focus();
           }
         }, 50);
+      } else {
+        // No saved focus - set focus to main content area first element
+        setTimeout(() => {
+          const mainContent = document.querySelector('[data-tv-container="main"]');
+          if (mainContent) {
+            const firstFocusable = mainContent.querySelector('[data-tv-initial]') as HTMLElement;
+            if (firstFocusable) {
+              firstFocusable.focus();
+            }
+          }
+        }, 100);
       }
     }
 
@@ -147,7 +159,6 @@ function AppInner({ }: AppProps) {
       // Element click is handled by the hook, this is for additional logic if needed
     },
   });
-
   // Set active container based on current view
   // Note: We don't set active container for main layout to allow free navigation
   // between sidebar and main content. Container system is only for modals/popups.
@@ -204,14 +215,29 @@ function AppInner({ }: AppProps) {
 }
 
 export const App: React.FC<AppProps> = ({ }) => {
+  const [isAndroid, setIsAndroid] = useState(false);
+
+  useEffect(() => {
+    try {
+      const osPlatform = platform();
+      console.log('[App] Platform detected:', osPlatform);
+      setIsAndroid(osPlatform === 'android');
+    } catch (e) {
+      console.log('[App] Platform detection failed:', e);
+      setIsAndroid(false);
+    }
+  }, []);
+
   return (
     <PersistQueryClientProvider
       client={queryClient}
       persistOptions={{ persister, maxAge: 7 * 24 * 60 * 60 * 1000, buster: 'iptv-v1' }}
     >
-      <ToastProvider>
-        <AppInner />
-      </ToastProvider>
+      <div className={`app-wrapper ${isAndroid ? 'android-tv' : ''}`}>
+        <ToastProvider>
+          <AppInner />
+        </ToastProvider>
+      </div>
     </PersistQueryClientProvider>
   );
 };

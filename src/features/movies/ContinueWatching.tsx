@@ -7,6 +7,7 @@ import { usePortalsStore } from '@/store/portals.store';
 import { getVodByIds } from '@/hooks/useDatabase';
 import { StalkerVOD } from '@/types';
 import { getImageUrl } from '@/hooks/useImageCache';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ContinueWatchingProps {
   onMovieSelect: (movie: StalkerVOD, resumePosition?: number) => void;
@@ -160,6 +161,7 @@ const MovieCardWithProgress: React.FC<MovieCardWithProgressProps> = ({
 export const ContinueWatching: React.FC<ContinueWatchingProps> = ({
   onMovieSelect,
 }) => {
+  const { t } = useTranslation();
   const [inProgressMovies, setInProgressMovies] = useState<StalkerVOD[]>([]);
   const [inProgressData, setInProgressData] = useState<Map<string, { position: number; percentage: number; status: WatchStatus }>>(new Map());
   const activePortalId = usePortalsStore((s) => s.activePortalId);
@@ -238,7 +240,7 @@ export const ContinueWatching: React.FC<ContinueWatchingProps> = ({
             <svg className="w-5 h-5 text-green-700" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
             </svg>
-            Kontynuuj oglądanie
+            {t('continueWatching')}
           </h2>
           <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
             {inProgress.map((movie) => (
@@ -260,7 +262,7 @@ export const ContinueWatching: React.FC<ContinueWatchingProps> = ({
             <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
             </svg>
-            Ostatnio obejrzane
+            {t('recentlyViewed')}
           </h2>
           <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
             {watched.map((movie) => (

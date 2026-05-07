@@ -6,6 +6,11 @@ export default {
   ],
   theme: {
     extend: {
+      screens: {
+        '3xl': '1920px',
+        '4k': '2560px',
+        '4ktv': '3840px',
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

@@ -14,7 +14,13 @@ import { useLongPress } from '@/hooks/useLongPress';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ROW_HEIGHT = 320; // px — single source of truth
+const getRowHeight = () => {
+  if (globalThis.window === undefined) return 280;
+  const width = globalThis.window.innerWidth;
+  if (width > 3000) return 320;
+  if (width > 2000) return 280;
+  return 240;
+};
 const IMAGE_CACHE_LIMIT = 500;
 
 // ─── Image cache (module-level, survives re-renders, bounded size) ─────────────
@@ -103,6 +109,7 @@ const MovieCard = React.memo<MovieCardProps>(({
       data-tv-index={index}
       data-tv-initial={index === 0}
       tabIndex={0}
+      {...longPressHandlers}
       onClick={handleClick}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -114,10 +121,9 @@ const MovieCard = React.memo<MovieCardProps>(({
           onSelect(movie);
         }
       }}
-      {...longPressHandlers}
-      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)]"
+      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1"
     >
-      <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
+      <div className="relative overflow-hidden rounded-lg hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
         {/* Poster */}
         <div className="flex-1 dark:bg-slate-700 bg-gray-200 relative overflow-hidden">
           {imgSrc && !imgError ? (
@@ -243,26 +249,8 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
 
   // ── Layout ────────────────────────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null);
-  const [cols, setCols] = useState(() => {
-    if (globalThis.window === undefined) return 5;
-    const availableWidth = window.innerWidth - 256 - 32;
-    const cardWidth = availableWidth > 3000 ? 220 : availableWidth > 2000 ? 200 : 180;
-    return Math.max(2, Math.floor(availableWidth / cardWidth));
-  });
-
-  // Responsive column count
-  useEffect(() => {
-    const calc = () => {
-      if (!parentRef.current) return;
-      const availableWidth = parentRef.current.offsetWidth;
-      const cardWidth = availableWidth > 3000 ? 220 : availableWidth > 2000 ? 200 : 180;
-      setCols(Math.max(2, Math.floor(availableWidth / cardWidth)));
-    };
-    calc();
-    const ro = new ResizeObserver(calc);
-    if (parentRef.current) ro.observe(parentRef.current);
-    return () => ro.disconnect();
-  }, []);
+  // Fixed column count for consistency
+  const [cols] = useState(9);
 
   // ── Virtualizer ───────────────────────────────────────────────────────────────
   const rowCount = Math.ceil(filtered.length / cols);
@@ -270,7 +258,7 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => getRowHeight(),
     overscan: 5,
   });
 
@@ -311,7 +299,7 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
           <circle cx="12" cy="12" r="10" stroke="#334155" strokeWidth="2" />
           <path d="M12 2 A10 10 0 0 1 22 12" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
         </svg>
-        <p className="dark:text-slate-400 text-slate-600 text-sm">Ładowanie ulubionych filmów…</p>
+        <p className="dark:text-slate-400 text-slate-600 text-sm">{t('loadingFavoriteMovies')}</p>
       </div>
     );
   }
@@ -321,9 +309,9 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
       <div className="flex-1 flex items-center justify-center dark:text-white text-slate-900">
         <div className="text-center">
           <div className="text-6xl mb-4">❤️</div>
-          <h2 className="text-2xl font-bold mb-2">Brak ulubionych filmów</h2>
+          <h2 className="text-2xl font-bold mb-2">{t('noFavoriteMovies')}</h2>
           <p className="dark:text-slate-400 text-slate-600 mb-4">
-            Dodaj filmy do ulubionych klikając ❤️ przy filmie
+            {t('addFavoriteMoviesHint')}
           </p>
         </div>
       </div>
@@ -331,11 +319,11 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div data-tv-container="main" className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 border-b dark:border-slate-700 border-gray-300 px-4 py-3">
+      <div className="flex-shrink-0 px-4 py-3">
         <div>
-          <h2 className="text-base font-bold dark:text-white text-slate-900">{t('favoriteMovies')}</h2>
+          <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{t('favoriteMovies')}</h2>
           <p className="text-xs dark:text-slate-400 text-slate-600">
             {t('moviesCount').replace('{{count}}', String(favoriteMovies.length))}
           </p>
@@ -359,14 +347,14 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
                 top: 0,
                 left: 0,
                 width: '100%',
-                height: ROW_HEIGHT,
+                height: getRowHeight(),
                 transform: `translateY(${vRow.start}px)`,
                 overflow: 'visible',
                 zIndex: 1,
               }}
             >
               <div
-                className="grid gap-4 h-full"
+                className="grid gap-6 h-full"
                 style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, rowGap: '2px' }}
               >
                 {getRow(vRow.index).map((movie, colIndex) => {

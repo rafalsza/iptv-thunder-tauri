@@ -110,9 +110,11 @@ export const containerPlugin: NavigationPlugin = {
 
     // Single source of truth for all container navigation
     const { targetId, newContainerId } = getTargetContainer(state, current, direction, context);
-    if (targetId && targetId !== current.id) {
+    if (targetId) {
       // Only save current focus when actually navigating away
-      saveContainerFocus(context, current.containerId, current.id);
+      if (targetId !== current.id) {
+        saveContainerFocus(context, current.containerId, current.id);
+      }
 
       // Update active container if changed
       const activeId = getActiveContainerId(context);
@@ -202,7 +204,7 @@ function findPrevByIndex(state: NavigationState, current: NavigationState['nodes
     .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
   const currentIndex = groupNodes.findIndex(n => n.id === current.id);
   if (currentIndex <= 0) {
-    return null; // At the start, let spatial plugin handle it
+    return null; // At the beginning, let spatial plugin handle it
   }
   return groupNodes[currentIndex - 1].id;
 }

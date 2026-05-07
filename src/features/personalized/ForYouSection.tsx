@@ -58,34 +58,34 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
   if (items.length === 0) return null;
 
   return (
-    <div className="mb-4">
+    <div className="mb-[calc(0.5rem*var(--ui-scale))]">
       {/* Title */}
-      <div className="flex items-center gap-2 mb-4 px-6">
+      <div className="flex items-center gap-[calc(0.5rem*var(--ui-scale))] mb-[calc(1rem*var(--ui-scale))] px-[calc(1.5rem*var(--ui-scale))]">
         {icon}
-        <h2 className="text-xl font-bold dark:text-white text-slate-900">{title}</h2>
+        <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{title}</h2>
       </div>
 
       {/* Carousel Container */}
-      <div className="relative group -mt-4">
+      <div className="relative group -mt-[calc(1rem*var(--ui-scale))]">
         {/* Left Arrow */}
         {canScrollLeft && (
           <button
             onClick={() => scroll('left')}
-            className="absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r dark:from-slate-950/90 dark:to-transparent from-white/90 to-transparent hover:dark:from-slate-950 hover:from-white flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+            className="absolute left-0 top-0 bottom-0 z-10 w-[calc(3rem*var(--ui-scale))] bg-gradient-to-r dark:from-slate-950/90 dark:to-transparent from-white/90 to-transparent hover:dark:from-slate-950 hover:from-white flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
           >
-            <ChevronLeft className="w-8 h-8 dark:text-white text-slate-900 drop-shadow-lg" />
+            <ChevronLeft className="w-[calc(2rem*var(--ui-scale))] h-[calc(2rem*var(--ui-scale))] dark:text-white text-slate-900 drop-shadow-lg" />
           </button>
         )}
 
         {/* Scrollable Content */}
         <div
           ref={scrollRef}
-          className="flex gap-0 overflow-x-auto px-6 pt-6 pb-2 scroll-smooth snap-x snap-mandatory"
+          className="flex gap-0 overflow-x-auto px-[calc(1.5rem*var(--ui-scale))] pt-[calc(1.5rem*var(--ui-scale))] pb-[calc(0.5rem*var(--ui-scale))] scroll-smooth snap-x snap-mandatory"
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
-            scrollPaddingLeft: '1.5rem',
-            scrollPaddingRight: '1.5rem',
+            scrollPaddingLeft: 'calc(1.5rem * var(--ui-scale))',
+            scrollPaddingRight: 'calc(1.5rem * var(--ui-scale))',
           }}
         >
           {/* Left placeholder for virtualization - hidden on TV */}
@@ -139,9 +139,9 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
         {canScrollRight && (
           <button
             onClick={() => scroll('right')}
-            className="absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l dark:from-slate-950/90 dark:to-transparent from-white/90 to-transparent hover:dark:from-slate-950 hover:from-white flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+            className="absolute right-0 top-0 bottom-0 z-10 w-[calc(3rem*var(--ui-scale))] bg-gradient-to-l dark:from-slate-950/90 dark:to-transparent from-white/90 to-transparent hover:dark:from-slate-950 hover:from-white flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
           >
-            <ChevronRight className="w-8 h-8 dark:text-white text-slate-900 drop-shadow-lg" />
+            <ChevronRight className="w-[calc(2rem*var(--ui-scale))] h-[calc(2rem*var(--ui-scale))] dark:text-white text-slate-900 drop-shadow-lg" />
           </button>
         )}
       </div>
@@ -259,14 +259,14 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
 
   if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Star className="w-5 h-5 text-green-500" />
-          <h2 className="text-xl font-bold dark:text-white text-slate-900">{t('forYou')}</h2>
+      <div className="p-[calc(1.5rem*var(--ui-scale))]">
+        <div className="flex items-center gap-[calc(0.5rem*var(--ui-scale))] mb-[calc(1rem*var(--ui-scale))]">
+          <Star className="w-[calc(1.25rem*var(--ui-scale))] h-[calc(1.25rem*var(--ui-scale))] text-green-500" />
+          <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{t('forYou')}</h2>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-[calc(1rem*var(--ui-scale))]">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-32 dark:bg-slate-800/50 bg-gray-100/50 rounded-lg animate-pulse" />
+            <div key={i} className="h-[calc(8rem*var(--ui-scale))] dark:bg-slate-800/50 bg-gray-100/50 rounded-lg animate-pulse" />
           ))}
         </div>
       </div>
@@ -278,15 +278,15 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="p-6"
+        className="p-[calc(1.5rem*var(--ui-scale))]"
       >
-        <div className="flex items-center gap-2 mb-4">
-          <Star className="w-5 h-5 text-green-500" />
-          <h2 className="text-xl font-bold dark:text-white text-slate-900">{t('forYou') || 'Dla Ciebie'}</h2>
+        <div className="flex items-center gap-[calc(0.5rem*var(--ui-scale))] mb-[calc(1rem*var(--ui-scale))]">
+          <Star className="w-[calc(1.25rem*var(--ui-scale))] h-[calc(1.25rem*var(--ui-scale))] text-green-500" />
+          <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{t('forYou') || 'Dla Ciebie'}</h2>
         </div>
-        <div className="dark:bg-slate-800/30 bg-gray-100/30 rounded-xl p-8 text-center backdrop-blur-sm border dark:border-slate-700/50 border-gray-200/50">
-          <Clock className="w-12 h-12 mx-auto mb-3 dark:text-slate-500 text-slate-400" />
-          <p className="text-sm dark:text-slate-400 text-slate-600">
+        <div className="dark:bg-slate-800/30 bg-gray-100/30 rounded-xl p-[calc(2rem*var(--ui-scale))] text-center backdrop-blur-sm border dark:border-slate-700/50 border-gray-200/50">
+          <Clock className="w-[calc(3rem*var(--ui-scale))] h-[calc(3rem*var(--ui-scale))] mx-auto mb-[calc(0.75rem*var(--ui-scale))] dark:text-slate-500 text-slate-400" />
+          <p className="text-[calc(0.875rem*var(--ui-scale))] dark:text-slate-400 text-slate-600">
             {t('noWatchHistory') || 'Rozpocznij oglądanie, aby zobaczyć rekomendacje'}
           </p>
         </div>
@@ -308,11 +308,11 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="p-6 pt-8 min-w-0 overflow-x-hidden"
+      className="p-[calc(1.5rem*var(--ui-scale))] pt-[calc(0.5rem*var(--ui-scale))] min-w-0 overflow-x-hidden"
     >
       {/* Header with title and actions */}
-      <div className="flex items-center justify-between mb-6 px-6">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between mb-[calc(0.5rem*var(--ui-scale))] px-[calc(1.5rem*var(--ui-scale))]">
+        <div className="flex items-center gap-[calc(0.75rem*var(--ui-scale))]">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{
@@ -325,11 +325,11 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
               ease: 'easeInOut',
             }}
           >
-            <Star className="w-6 h-6 text-green-500" />
+            <Star className="w-[calc(1.5rem*var(--ui-scale))] h-[calc(1.5rem*var(--ui-scale))] text-green-500" />
           </motion.div>
           <div>
-            <h2 className="text-xl font-bold dark:text-white text-slate-900">{t('forYou') || 'Dla Ciebie'}</h2>
-            <p className="text-sm dark:text-slate-400 text-slate-600">
+            <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{t('forYou') || 'Dla Ciebie'}</h2>
+            <p className="text-[calc(0.875rem*var(--ui-scale))] dark:text-slate-400 text-slate-600">
               {resolvedRecentItems.length} {t('recentlyViewed') || 'ostatnio oglądanych'}
             </p>
           </div>
@@ -337,11 +337,11 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
       </div>
 
       {/* Netflix-style horizontal carousels */}
-      <div className="space-y-3 mt-1">
+      <div className="gap-[calc(0.25rem*var(--ui-scale))] space-y-[calc(0.25rem*var(--ui-scale))] mt-[calc(0.25rem*var(--ui-scale))]">
         {/* Live Channels Row */}
         <CarouselRow
           title={t('recentChannels')}
-          icon={<Tv className="w-5 h-5 text-blue-500" />}
+          icon={<Tv className="w-[calc(1.25rem*var(--ui-scale))] h-[calc(1.25rem*var(--ui-scale))] text-blue-500" />}
           items={liveItems}
           onItemClick={handleItemClick}
           getProgressPercentage={getProgressPercentage}
@@ -352,7 +352,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
         {/* Movies Row */}
         <CarouselRow
           title={t('recentMovies')}
-          icon={<Film className="w-5 h-5 text-purple-500" />}
+          icon={<Film className="w-[calc(1.25rem*var(--ui-scale))] h-[calc(1.25rem*var(--ui-scale))] text-purple-500" />}
           items={vodItems}
           onItemClick={handleItemClick}
           getProgressPercentage={getProgressPercentage}
@@ -363,7 +363,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
         {/* Series Row */}
         <CarouselRow
           title={t('recentSeries')}
-          icon={<Film className="w-5 h-5 text-orange-500" />}
+          icon={<Film className="w-[calc(1.25rem*var(--ui-scale))] h-[calc(1.25rem*var(--ui-scale))] text-orange-500" />}
           items={seriesItems}
           onItemClick={handleItemClick}
           getProgressPercentage={getProgressPercentage}

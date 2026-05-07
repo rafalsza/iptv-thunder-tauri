@@ -1,7 +1,9 @@
 import React, { useRef, useCallback, useState } from 'react';
 
+type LongPressCallback = (e: React.TouchEvent | React.MouseEvent | React.KeyboardEvent) => void;
+
 interface UseLongPressOptions {
-  onLongPress: (e: React.TouchEvent | React.MouseEvent) => void;
+  onLongPress: LongPressCallback;
   delay?: number;
   shouldPreventDefault?: boolean;
 }
@@ -90,6 +92,10 @@ export const useLongPress = ({
     },
     [clear]
   );
+
+  // Note: onKeyDown and onKeyUp are intentionally not included in the return
+  // to avoid blocking TV remote key events. Long press on TV should be triggered
+  // by holding the button, not by the key handlers which can interfere with navigation.
 
   return {
     onMouseDown,

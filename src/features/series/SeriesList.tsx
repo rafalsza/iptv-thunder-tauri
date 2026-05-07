@@ -106,6 +106,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
       data-tv-index={seriesIndex}
       data-tv-initial={seriesIndex === 0}
       tabIndex={0}
+      {...longPressHandlers}
       onMouseEnter={() => onPrefetch(series)}
       onFocus={() => onPrefetch(series)}
       onClick={handleClick}
@@ -119,10 +120,9 @@ const SeriesCard = React.memo<SeriesCardProps>(({
           onSelect(String(series.id));
         }
       }}
-      {...longPressHandlers}
-      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 focus:outline-none focus:shadow-[inset_0_0_0_3px_rgba(34,197,94,0.9)]"
+      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1"
     >
-      <div className="relative overflow-hidden rounded-lg dark:border border-slate-700 border-gray-300 hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
+      <div className="relative overflow-hidden rounded-lg hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
 
         {/* Poster */}
         <div className="flex-1 dark:bg-slate-700 bg-gray-200 relative overflow-hidden">
@@ -208,42 +208,8 @@ export const SeriesList: React.FC<SeriesListProps> = ({
 
   // ── Layout ────────────────────────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null);
-  const [columnCount, setColumnCount] = useState(() => {
-    if (globalThis.window === undefined) return 5;
-    const availableWidth = globalThis.window.innerWidth - 256 - 32;
-    // Responsive card width: larger screens get larger cards
-    let cardWidth: number;
-    if (availableWidth > 3000) {
-      cardWidth = 180;
-    } else if (availableWidth > 2000) {
-      cardWidth = 160;
-    } else {
-      cardWidth = 140;
-    }
-    return Math.max(2, Math.floor(availableWidth / cardWidth));
-  });
-
-  // Responsive column count
-  useEffect(() => {
-    const calc = () => {
-      if (!parentRef.current) return;
-      const availableWidth = parentRef.current.offsetWidth;
-      // Responsive card width based on screen size
-      let cardWidth: number;
-      if (availableWidth > 3000) {
-        cardWidth = 180;
-      } else if (availableWidth > 2000) {
-        cardWidth = 160;
-      } else {
-        cardWidth = 140;
-      }
-      setColumnCount(Math.max(2, Math.floor(availableWidth / cardWidth)));
-    };
-    calc();
-    const ro = new ResizeObserver(calc);
-    if (parentRef.current) ro.observe(parentRef.current);
-    return () => ro.disconnect();
-  }, []);
+  // Fixed column count for consistency
+  const [columnCount] = useState(9);
 
   // Reset scroll when category changes
   useEffect(() => {
@@ -359,13 +325,13 @@ export const SeriesList: React.FC<SeriesListProps> = ({
       <div className="w-full flex flex-col overflow-hidden">
         {/* Category header */}
         {selectedCategory && (
-          <div className="flex-shrink-0 border-b dark:border-slate-700 border-gray-300 px-4 py-3">
+          <div className="flex-shrink-0 px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-green-700 rounded-lg flex items-center justify-center text-lg">
                 📺
               </div>
               <div className="flex-1">
-                <h2 className="text-base font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+                <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
                 <p className="text-xs dark:text-slate-400 text-slate-600">
                   {filteredSeries.length} {(() => {
                     const count = filteredSeries.length;

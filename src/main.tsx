@@ -7,7 +7,7 @@ import "./App.css";
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <ErrorBoundary>
     <ThemeProvider defaultTheme="dark" storageKey="iptv-thunder-theme">
-      <div className="h-screen w-full overflow-hidden bg-transparent">
+      <div className="ui h-screen w-full overflow-hidden bg-transparent">
         <App />
       </div>
     </ThemeProvider>

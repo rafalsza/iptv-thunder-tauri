@@ -19,6 +19,7 @@ export type NavigationItem = {
     id: string;
     label: string;
     onClick: () => void;
+    active?: boolean;
   }>;
 };
 
@@ -53,21 +54,30 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
     <div
       id="navigation"
       data-tv-container="navigation"
-      className="flex flex-col h-full w-56 dark:bg-slate-900/40 bg-white/40 backdrop-blur-md border-r dark:border-slate-700/30 border-gray-200/30"
+      className="flex flex-col h-full w-44 md:w-52 lg:w-56 xl:w-64 2xl:w-72 dark:bg-slate-900/40 bg-white/40 backdrop-blur-md border-r dark:border-slate-700/30 border-gray-200/30"
     >
       {/* Header */}
-      <div className="p-6 border-b dark:border-slate-700/30 border-gray-200/30">
+      <div className="p-3 md:p-4 lg:p-5 border-b dark:border-slate-700/30 border-gray-200/30">
         <div className="flex items-center justify-center">
-          <img src="/logo.svg" alt="IPTV Thunder" className="h-10 w-auto max-w-full" />
+          <img src="/logo.svg" alt="IPTV Thunder" className="h-8 md:h-10 lg:h-12 w-auto max-w-full" />
         </div>
       </div>
 
       {/* Navigation Items */}
-      <nav className="flex-1 p-4 space-y-3 overflow-y-auto">
+      <nav className="flex-1 p-2 md:p-3 lg:p-4 gap-2 md:gap-3 space-y-2 md:space-y-3 overflow-y-auto scrollbar-hide">
         {items.map((item, index) => {
           const hasSubItems = item.subItems && item.subItems.length > 0;
-          const isExpanded = expandedItem === item.id;
+          const isExpanded = hasSubItems && (expandedItem === item.id || (!expandedItem && item.subItems?.some((sub) => sub.active)));
           const baseIndex = index * 10;
+
+          let buttonClass;
+          if (item.active && !hasSubItems) {
+            buttonClass = 'bg-green-700/90 text-white';
+          } else if (item.disabled) {
+            buttonClass = 'dark:bg-slate-700/20 bg-gray-200/30 dark:text-slate-500 text-slate-500 cursor-not-allowed';
+          } else {
+            buttonClass = 'dark:bg-slate-800/30 bg-gray-100/30 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 hover:text-white';
+          }
 
           return (
             <div key={item.id} className="relative group">
@@ -88,13 +98,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
                 disabled={item.disabled}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className={`w-full text-left px-4 py-4 rounded-2xl flex items-center gap-4 transition-all duration-200 relative overflow-hidden group ${
-                  item.active && !hasSubItems
-                    ? 'bg-green-700/90 text-white'
-                    : item.disabled
-                    ? 'dark:bg-slate-700/20 bg-gray-200/30 dark:text-slate-500 text-slate-500 cursor-not-allowed'
-                    : 'dark:bg-slate-800/30 bg-gray-100/30 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 hover:text-white'
-                }`}
+                className={`w-full text-left px-3 md:px-4 py-2.5 md:py-3 rounded-xl md:rounded-2xl flex items-center gap-3 md:gap-4 transition-all duration-200 relative overflow-hidden group ${buttonClass}`}
               >
                 {/* Active state gradient overlay */}
                 {item.active && !hasSubItems && (
@@ -105,7 +109,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
                   />
                 )}
                 
-                <span className={`text-xl relative z-10 flex-shrink-0 ${item.active && !hasSubItems ? 'animate-pulse' : ''}`}>
+                <span className={`text-lg md:text-xl relative z-10 flex-shrink-0 ${item.active && !hasSubItems ? 'animate-pulse' : ''}`}>
                   {item.icon}
                 </span>
                 
@@ -120,12 +124,12 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
                     exit={{ opacity: 0, rotate: -90 }}
                     transition={{ duration: 0.2 }}
                   >
-                    <ChevronDown className="w-4 h-4 relative z-10 dark:text-white text-slate-900" />
+                    <ChevronDown className="w-5 h-5 relative z-10 dark:text-white text-slate-900" />
                   </motion.div>
                 )}
                 
                 {item.disabled && (
-                  <span className="ml-auto text-xs dark:bg-slate-600 bg-gray-400 px-2 py-1 rounded-full">
+                  <span className="ml-auto text-sm dark:bg-slate-600 bg-gray-400 px-2 py-0.5 rounded-full">
                     🔒
                   </span>
                 )}
@@ -146,21 +150,22 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="mt-6 ml-5 space-y-3 overflow-visible p-2"
+                    className="mt-6 ml-5 gap-3 space-y-3 overflow-visible p-2"
                   >
                     {item.subItems.map((subItem, subIndex) => (
                       <motion.button
                         key={subItem.id}
                         data-tv-focusable
+                        data-tv-group={subItem.id}
                         data-tv-index={baseIndex + subIndex + 1}
                         data-tv-initial={subIndex === 0}
                         tabIndex={0}
                         onClick={subItem.onClick}
                         whileHover={{ scale: 1.02, x: 4 }}
                         whileTap={{ scale: 0.98 }}
-                        className="w-full text-left px-5 py-4 rounded-xl flex items-center gap-3 transition-all duration-200 text-sm dark:bg-slate-800/20 bg-gray-100/20 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-700/40 hover:bg-gray-200/40 hover:text-white"
+                        className="w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 transition-all duration-200 text-base dark:bg-slate-800/20 bg-gray-100/20 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-700/40 hover:bg-gray-200/40 hover:text-white"
                       >
-                        <span className="text-sm dark:text-white text-slate-900">▸</span>
+                        <span className="text-base dark:text-white text-slate-900">▸</span>
                         <span className="dark:text-white text-slate-900">{subItem.label}</span>
                       </motion.button>
                     ))}
@@ -173,7 +178,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t dark:border-slate-700/30 border-gray-200/30 space-y-4">
+      <div className="p-2 md:p-3 lg:p-4 gap-2 md:gap-3 lg:gap-4 border-t dark:border-slate-700/30 border-gray-200/30 space-y-2 md:space-y-3 lg:space-y-4">
         {/* Close App Button - subtle style */}
         <motion.button
           data-tv-focusable
@@ -182,14 +187,14 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
           onClick={handleCloseApp}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          className="w-full px-5 py-3 rounded-xl flex items-center justify-center gap-3 transition-all duration-200 dark:bg-slate-800/30 bg-gray-100/30 dark:text-slate-400 text-slate-600 dark:hover:bg-red-500/10 hover:bg-red-500/10 dark:hover:text-red-400 hover:text-red-400"
+          className="w-full px-3 md:px-4 py-2 md:py-3 rounded-lg md:rounded-xl flex items-center justify-center gap-2 md:gap-3 transition-all duration-200 dark:bg-slate-800/30 bg-gray-100/30 dark:text-slate-400 text-slate-600 dark:hover:bg-red-500/10 hover:bg-red-500/10 dark:hover:text-red-400 hover:text-red-400"
         >
-          <Power className="w-4 h-4" />
-          <span className="text-sm font-medium dark:text-white text-slate-900">{t('exit') || 'Wyjdź'}</span>
+          <Power className="w-4 md:w-5 h-4 md:h-5" />
+          <span className="text-sm md:text-base font-medium dark:text-white text-slate-900">{t('exit') || 'Wyjdź'}</span>
         </motion.button>
 
-        <div className="text-center py-3">
-          <p className="text-xs dark:text-slate-500 text-slate-400">v1.0.0</p>
+        <div className="text-center py-2 md:py-3">
+          <p className="text-xs md:text-sm dark:text-slate-500 text-slate-400">v1.0.0</p>
         </div>
       </div>
     </div>

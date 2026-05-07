@@ -63,6 +63,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
       data-tv-index={index}
       data-tv-initial={index === 0}
       tabIndex={0}
+      {...longPressHandlers}
       ref={isLastItem && hasMore ? (el) => {
         if (el && observerRef.current) observerRef.current.observe(el);
       } : undefined}
@@ -79,22 +80,18 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
           onSelect(channel);
         }
       }}
-      {...longPressHandlers}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: index * 0.03 }}
       whileHover={{ scale: 1.05, y: -4, boxShadow: '0 10px 40px rgba(34, 197, 94, 0.2)' }}
       whileTap={{ scale: 0.98 }}
-      className="p-3 dark:border border-slate-700/50 border-gray-300/50 rounded-xl cursor-pointer dark:bg-slate-800/30 bg-gray-100/30 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 dark:hover:border-green-700 hover:border-green-700 transition-all dark:focus:bg-slate-700/50 focus:bg-gray-200/50 dark:focus:border-green-700 focus:border-green-700 backdrop-blur-sm"
+      className="p-2 rounded-lg cursor-pointer dark:bg-slate-800/30 bg-gray-100/30 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 dark:hover:border-green-700 hover:border-green-700 transition-all dark:focus:bg-slate-700/50 focus:bg-gray-200/50 dark:focus:border-green-700 focus:border-green-700 backdrop-blur-sm"
     >
       <div className="flex justify-between items-start">
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-sm dark:text-white text-slate-900 truncate">
+          <h3 className="font-medium text-sm dark:text-white text-slate-900">
             {channel.name}
           </h3>
-          {!!channel.number && (
-            <p className="text-xs dark:text-slate-400 text-slate-600">#{channel.number}</p>
-          )}
         </div>
         <motion.button
           tabIndex={-1}
@@ -172,7 +169,7 @@ export const TVList: React.FC<TVListProps> = ({
     timeoutsRef.current.clear();
   }, [selectedCategory?.id]);
 
-  // Focus first channel after category change
+  // Focus first channel after category change or initial load
   useEffect(() => {
     if (allChannels.length > 0) {
       setTimeout(() => {
@@ -182,7 +179,7 @@ export const TVList: React.FC<TVListProps> = ({
         }
       }, 100);
     }
-  }, [selectedCategory?.id]);
+  }, [selectedCategory?.id, allChannels.length]);
 
   // Debounced prefetch - waits 300ms and limits total prefetches
   const debouncedPreload = useCallback((channel: StalkerChannel) => {
@@ -260,7 +257,7 @@ export const TVList: React.FC<TVListProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
-            className="border-b dark:border-slate-700/50 border-gray-200/50 p-4 backdrop-blur-sm"
+            className="p-4 backdrop-blur-sm"
           >
             <div className="flex items-center gap-3">
               <motion.div
@@ -271,7 +268,7 @@ export const TVList: React.FC<TVListProps> = ({
                 {selectedCategory.id === '*' ? '🌍' : '📺'}
               </motion.div>
               <div className="flex-1">
-                <h2 className="text-lg font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+                <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
                 <p className="text-sm dark:text-slate-400 text-slate-600">
                   {allChannels.length} {t('channels').toLowerCase()}
                 </p>
@@ -306,7 +303,7 @@ export const TVList: React.FC<TVListProps> = ({
       {/* Channels Grid */}
       <div className="flex-1 overflow-y-auto p-4">
         <motion.div
-          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
+          className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}

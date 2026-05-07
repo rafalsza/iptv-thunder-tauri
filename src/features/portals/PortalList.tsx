@@ -133,7 +133,7 @@ export const PortalList: React.FC = () => {
   };
 
   return (
-    <div data-tv-container="main" className="min-h-screen p-8">
+    <div data-tv-container="main" className="p-8">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-12">
         <div className="flex flex-wrap justify-between items-start gap-6">

@@ -32,6 +32,9 @@ const mockT = jest.fn((key: string) => {
   const translations: Record<string, string> = {
     favoriteMovieCategories: 'Ulubione kategorie filmów',
     yourFavoriteMovieCategories: 'Twoje ulubione kategorie filmów',
+    noFavoriteMovieCategories: 'Brak ulubionych kategorii filmów',
+    addFavoriteMovieCategoriesHint: 'Nie masz jeszcze żadnych ulubionych kategorii filmów.',
+    movieCategoryTip: '💡 Wskazówka: Przejdź do Movies → Categories i kliknij serce.',
   };
   return translations[key] || key;
 });

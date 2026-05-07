@@ -54,12 +54,27 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
 
         // Get credentials and episode data from playback store (set by usePlaybackManager)
         const player = usePlaybackStore.getState().current;
+        
+        // 🔥 CRITICAL: Validate player data exists
+        if (!player) {
+          logger.error('[ExoPlayer] No player data in playback store, cannot open native player');
+          onClose();
+          return;
+        }
+
         const portalUrl = player?.portalUrl || '';
         const mac = player?.mac || '';
         const token = player?.token || '';
         const episodes = player?.episodes || [];
         const currentEpisodeIndex = player?.currentEpisodeIndex || 0;
         const autoPlayEpisodes = player?.autoPlayEpisodes ?? true;
+
+        // 🔥 CRITICAL: Validate required fields
+        if (!portalUrl || !mac || !token) {
+          logger.error('[ExoPlayer] Missing required player data: portalUrl, mac, or token');
+          onClose();
+          return;
+        }
 
         // Create PlayerParams object
         const params = {
@@ -73,11 +88,37 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
           autoPlayEpisodes,
         };
 
+        // 🔥 CRITICAL: Final validation of params object
+        if (!params?.channelId || !params?.portalUrl || !params?.mac || !params?.token) {
+          logger.error('[ExoPlayer] Invalid params object:', {
+            hasParams: !!params,
+            channelId: params?.channelId,
+            portalUrl: params?.portalUrl,
+            mac: params?.mac,
+            token: params?.token
+          });
+          onClose();
+          return;
+        }
+
         try {
-          exoPlayer.open_compose_player(url, name, params);
+          // Pass individual parameters instead of object (Kotlin JavaScriptInterface doesn't deserialize objects to data classes)
+          exoPlayer.open_compose_player(
+            url,
+            name,
+            params.channelId,
+            params.portalUrl,
+            params.mac,
+            params.token,
+            params.isVod,
+            params.episodesJson,
+            params.currentEpisodeIndex,
+            params.autoPlayEpisodes
+          );
         } catch (error) {
           console.error('[ExoPlayer] Error calling open_compose_player:', error);
           logger.error(`Error calling open_compose_player: ${error}`);
+          onClose();
         }
       } else {
         logger.error('ExoPlayer.open_compose_player method not available');

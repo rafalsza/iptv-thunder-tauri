@@ -39,7 +39,7 @@ const SeriesMetadata: React.FC<SeriesMetadataProps> = ({
   return (
     <>
       {/* Meta info */}
-      <div className="flex items-center gap-3 mb-4 text-sm flex-wrap">
+      <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 text-xs sm:text-sm flex-wrap">
         {fullSeries.year && <span className="text-slate-300">{fullSeries.year}</span>}
         {(fullSeries.genres_str || seriesInfo?.series?.genres_str) && (
           <span className="text-slate-400">{fullSeries.genres_str || seriesInfo?.series?.genres_str}</span>
@@ -62,16 +62,16 @@ const SeriesMetadata: React.FC<SeriesMetadataProps> = ({
 
       {/* Description */}
       {(fullSeries.description || seriesInfo?.series?.description) && (
-        <p className="text-slate-300 mb-6 leading-relaxed">
+        <p className="text-slate-300 mb-4 sm:mb-6 leading-relaxed text-sm sm:text-base">
           {fullSeries.description || seriesInfo?.series?.description}
         </p>
       )}
 
       {/* Directors */}
       {(directorsList.length > 0 || fullSeries.director || seriesInfo?.series?.director) && (
-        <div className="mb-3">
-          <span className="text-slate-400 text-sm">{t('director')}: </span>
-          <span className="text-slate-300 text-sm">
+        <div className="mb-2 sm:mb-3">
+          <span className="text-slate-400 text-xs sm:text-sm">{t('director')}: </span>
+          <span className="text-slate-300 text-xs sm:text-sm">
             {directorsList.length > 0
               ? directorsList.join(', ')
               : fullSeries.director || seriesInfo?.series?.director}
@@ -81,9 +81,9 @@ const SeriesMetadata: React.FC<SeriesMetadataProps> = ({
 
       {/* Cast */}
       {(actorsList.length > 0 || fullSeries.actors || seriesInfo?.series?.actors) && (
-        <div className="mb-4">
-          <span className="text-slate-400 text-sm">{t('cast')}: </span>
-          <span className="text-slate-300 text-sm">
+        <div className="mb-3 sm:mb-4">
+          <span className="text-slate-400 text-xs sm:text-sm">{t('cast')}: </span>
+          <span className="text-slate-300 text-xs sm:text-sm">
             {actorsList.length > 0
               ? actorsList.join(', ')
               : fullSeries.actors || seriesInfo?.series?.actors}
@@ -151,15 +151,15 @@ const EpisodeList: React.FC<EpisodeListProps> = ({
             data-tv-index={index}
             tabIndex={0}
             onClick={() => handleEpisodePlay(episode)}
-            className="group flex items-start gap-6 py-6 cursor-pointer hover:bg-slate-800/50 transition-colors"
+            className="group flex items-start gap-3 sm:gap-4 lg:gap-6 py-4 sm:py-6 cursor-pointer hover:bg-slate-800/50 transition-colors"
           >
             {/* Episode number */}
-            <span className="text-2xl font-light text-slate-500 w-8 text-center pt-8">
+            <span className="text-lg sm:text-xl lg:text-2xl font-light text-slate-500 w-6 sm:w-8 text-center pt-2 sm:pt-8">
               {epNum}
             </span>
 
             {/* Thumbnail */}
-            <div className="relative w-40 aspect-video bg-slate-800 rounded-lg overflow-hidden flex-shrink-0">
+            <div className="relative w-24 sm:w-32 lg:w-40 aspect-video bg-slate-800 rounded-lg overflow-hidden flex-shrink-0">
               {episode.logo || fullSeries.poster ? (
                 <img
                   src={episode.logo || fullSeries.poster}
@@ -167,32 +167,32 @@ const EpisodeList: React.FC<EpisodeListProps> = ({
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-3xl text-slate-600">
+                <div className="w-full h-full flex items-center justify-center text-2xl sm:text-3xl text-slate-600">
                   {epNum}
                 </div>
               )}
               
               {/* Play overlay */}
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <Play className="w-10 h-10 text-white" />
+                <Play className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
               </div>
             </div>
 
             {/* Info */}
-            <div className="flex-1 min-w-0 py-2">
-              <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0 py-1 sm:py-2">
+              <div className="flex flex-col sm:flex-row items-start sm:justify-between sm:items-center gap-2 sm:gap-4">
                 <div>
-                  <h3 className="text-lg font-medium text-white mb-2 group-hover:text-green-700 transition-colors">
+                  <h3 className="text-base sm:text-lg lg:text-lg font-medium text-white mb-1 sm:mb-2 group-hover:text-green-700 transition-colors">
                     {displayName}
                   </h3>
                   {episode.description && (
-                    <p className="text-sm text-slate-400 line-clamp-2 mb-2">
+                    <p className="text-xs sm:text-sm text-slate-400 line-clamp-2 mb-1 sm:mb-2">
                       {episode.description}
                     </p>
                   )}
                 </div>
                 
-                <div className="flex items-center gap-4 flex-shrink-0">
+                <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
                   {hasResume && (
                     <span className="text-xs bg-green-700 text-white px-2 py-1 rounded">
                       {t('resume')}
@@ -243,9 +243,9 @@ const ResumeDialog: React.FC<ResumeDialogProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50" data-tv-container="resume-dialog">
-      <div className="bg-slate-900 rounded-2xl p-8 max-w-md w-full mx-4">
-        <div className="flex items-start justify-between mb-6">
-          <h3 className="text-2xl font-semibold text-white">{t('resumeWatching')}</h3>
+      <div className="bg-slate-900 rounded-2xl p-4 sm:p-6 lg:p-8 max-w-sm sm:max-w-md w-full mx-4">
+        <div className="flex items-start justify-between mb-4 sm:mb-6">
+          <h3 className="text-xl sm:text-2xl font-semibold text-white">{t('resumeWatching')}</h3>
           <button
             onClick={onClose}
             className="flex items-center justify-center w-10 h-10 text-slate-400 hover:text-white transition-colors"
@@ -257,11 +257,11 @@ const ResumeDialog: React.FC<ResumeDialogProps> = ({
             <X className="w-6 h-6" />
           </button>
         </div>
-        <p className="text-slate-400 mb-8">
+        <p className="text-slate-400 mb-6 sm:mb-8 text-sm sm:text-base">
           <span className="text-slate-300">{t('watchedEpisodeTo')} <span className="text-white font-medium">{formatTime(resumePosition)}</span></span>
         </p>
 
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <Button variant="secondary" onClick={onPlayFromStart} className="flex-1" data-tv-focusable data-tv-id="resume-from-start" data-tv-group="resume-actions" data-tv-initial tabIndex={0}>
             {t('playFromStart')}
           </Button>
@@ -613,11 +613,11 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
   return (
     <>
-      <div ref={containerRef} className="flex-1  overflow-y-auto" data-tv-container="main">
-        <div className="max-w-6xl mx-auto p-8">
+      <div ref={containerRef} className="flex-1 overflow-y-auto" data-tv-container="main">
+        <div className="max-w-7xl 3xl:max-w-8xl 4ktv:max-w-[2400px] mx-auto p-4 sm:p-6 lg:p-8 4ktv:p-12">
           {/* Header z przyciskiem wstecz po prawej */}
-          <div className="flex items-start justify-between mb-6">
-            <h1 className="text-4xl font-bold text-white pr-8">{fullSeries.name}</h1>
+          <div className="flex items-start justify-between mb-4 sm:mb-6">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl 3xl:text-5xl 4ktv:text-6xl font-bold text-white pr-4 sm:pr-8">{fullSeries.name}</h1>
             <button
               data-tv-focusable
               data-tv-id="series-back-btn"
@@ -632,9 +632,9 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           </div>
 
           {/* Netflix Style Layout - Poster left, info right */}
-          <div className="flex gap-6 mb-10">
+          <div className="flex flex-col md:flex-row gap-4 sm:gap-6 lg:gap-6 4ktv:gap-16 mb-6 sm:mb-10">
             {/* Poster with Play Button */}
-            <div className="flex-shrink-0 w-[280px]">
+            <div className="flex-shrink-0 w-40 sm:w-52 md:w-60 lg:w-64 3xl:w-72 4ktv:w-[480px]">
               <div className="relative rounded-lg overflow-hidden group cursor-pointer"
                    data-tv-focusable
                    data-tv-id="series-poster"
@@ -673,7 +673,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
               />
 
               {/* Buttons */}
-              <div className="flex gap-4 mt-6">
+              <div className="flex flex-wrap gap-3 sm:gap-4 mt-4 sm:mt-6">
                 {episodes.length > 0 && (
                   <button
                     data-tv-focusable
@@ -681,7 +681,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                     data-tv-group="series-actions"
                     tabIndex={0}
                     onClick={handlePlayFirstEpisode}
-                    className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-slate-100 rounded-lg text-slate-900 font-semibold transition-colors"
+                    className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-white hover:bg-slate-100 rounded-lg text-slate-900 font-semibold transition-colors text-sm sm:text-base"
                   >
                     <Play className="w-5 h-5 fill-current" />
                     {t('playFirstEpisode')}
@@ -693,7 +693,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                   data-tv-group="series-actions"
                   tabIndex={0}
                   onClick={handleToggleFavorite}
-                  className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors text-sm sm:text-base"
                 >
                   <Heart className={isFavorite ? 'fill-red-500 text-red-500 w-5 h-5' : 'w-5 h-5'} />
                   {isFavorite ? t('removeFromFavorites') : t('addToFavorites')}
@@ -705,8 +705,8 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           {/* Episodes Section */}
           <div>
           {/* Header with season selector */}
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-bold text-white">{t('episodes')}</h2>
+          <div className="flex flex-col sm:flex-row items-start sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
+            <h2 className="text-xl sm:text-2xl 3xl:text-3xl font-bold text-white">{t('episodes')}</h2>
             <SeasonSelector
               seasons={seasons}
               selectedSeason={selectedSeason}

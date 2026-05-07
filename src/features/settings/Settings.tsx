@@ -57,15 +57,17 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   // Load data when modal opens or store values change
   useEffect(() => {
     if (isOpen) {
-      getSettings().then(setSettings);
+      getSettings().then((s) => {
+        setSettings(s);
+        // Auto-focus first element after settings are loaded
+        setTimeout(() => {
+          const firstFocusable = document.querySelector('[data-tv-container="settings-modal"] [data-tv-focusable]') as HTMLElement;
+          if (firstFocusable) {
+            firstFocusable.focus();
+          }
+        }, 100);
+      });
       getVersion().then(setVersion);
-      // Auto-focus first element when modal opens
-      setTimeout(() => {
-        const firstFocusable = document.querySelector('[data-tv-container="settings-modal"] [data-tv-focusable]') as HTMLElement;
-        if (firstFocusable) {
-          firstFocusable.focus();
-        }
-      }, 100);
     }
   }, [isOpen]);
 
@@ -152,10 +154,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="dark:bg-slate-900 bg-white dark:border border-slate-700 border-gray-300 rounded-3xl w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col"
+            className="dark:bg-slate-900 bg-white dark:border border-slate-700 border-gray-300 rounded-3xl w-[95%] sm:w-full max-w-3xl lg:max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-8 py-5 dark:border-b border-slate-700 border-b-gray-300">
+            <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 sm:py-5 dark:border-b border-slate-700 border-b-gray-300">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 bg-green-700 rounded-2xl flex items-center justify-center">
                   <SettingsIcon className="w-5 h-5 text-white" />
@@ -177,7 +179,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
             <div className="flex flex-1 overflow-hidden">
               {/* Sidebar Tabs */}
-              <div className="w-56 dark:border-r border-slate-700 border-r-gray-300 dark:bg-slate-950 bg-gray-100 p-4 flex-shrink-0">
+              <div className="w-44 sm:w-56 dark:border-r border-slate-700 border-r-gray-300 dark:bg-slate-950 bg-gray-100 p-3 sm:p-4 flex-shrink-0">
                 <div className="space-y-1">
                   {TABS.map((tab, tabIndex) => (
                     <button
@@ -203,7 +205,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Content Area */}
-              <div className="flex-1 overflow-y-auto p-8">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
                 {activeTab === 'general' && (
                   <div className="max-w-md space-y-8">
                     <div>
@@ -235,7 +237,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                             e.currentTarget.size = 0;
                           }
                         }}
-                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
+                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900"
                       >
                         <option value="dark">{t('dark')}</option>
                         <option value="light">{t('light')}</option>
@@ -271,7 +273,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                             e.currentTarget.size = 0;
                           }
                         }}
-                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
+                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900"
                       >
                         <option value="pl">Polski</option>
                         <option value="en">English</option>
@@ -327,7 +329,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         tabIndex={0}
                         value={settings.videoQuality}
                         onChange={(e) => updateSetting('videoQuality', e.target.value as any)}
-                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
+                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900"
                       >
                         <option value="auto">{t('auto')}</option>
                         <option value="1080p">{t('1080p')}</option>
@@ -403,7 +405,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                             e.currentTarget.size = 0;
                           }
                         }}
-                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-700"
+                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900"
                       >
                         {epgServices.map(service => (
                           <option key={service.id} value={service.id}>
@@ -428,7 +430,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                             }
                           }}
                           placeholder="https://twoj-serwer.pl/epg.xml"
-                          className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-2xl focus:outline-none focus:border-green-700"
+                          className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-2xl"
                         />
                       </div>
                     )}
@@ -507,7 +509,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             </div>
 
             {/* Footer */}
-            <div data-tv-group="settings-footer" className="dark:border-t border-slate-700 border-t-gray-300 px-8 py-5 flex justify-end gap-3">
+            <div data-tv-group="settings-footer" className="dark:border-t border-slate-700 border-t-gray-300 px-4 sm:px-6 lg:px-8 py-4 sm:py-5 flex justify-end gap-3">
               <Button
                 data-tv-focusable
                 data-tv-id="settings-cancel-btn"

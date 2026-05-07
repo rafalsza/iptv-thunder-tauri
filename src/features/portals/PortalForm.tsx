@@ -167,7 +167,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               type="text"
               value={formData.name}
               onChange={(e) => handleInputChange('name', e.target.value)}
-              className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-white placeholder-slate-500 transition-all duration-200 ${
+              className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl text-white placeholder-slate-500 transition-all duration-200 ${
                 errors.name ? 'border-red-500' : 'border-slate-700'
               }`}
               placeholder="np. Mój Portal IPTV"
@@ -191,7 +191,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               type="url"
               value={formData.portalUrl}
               onChange={(e) => handleInputChange('portalUrl', e.target.value)}
-              className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-white placeholder-slate-500 transition-all duration-200 ${
+              className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl text-white placeholder-slate-500 transition-all duration-200 ${
                 errors.portalUrl ? 'border-red-500' : 'border-slate-700'
               }`}
               placeholder="http://portal.example.com/"
@@ -214,7 +214,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
                 type="text"
                 value={formData.mac}
                 onChange={(e) => handleInputChange('mac', e.target.value.toUpperCase())}
-                className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-white placeholder-slate-500 font-mono transition-all duration-200 ${
+                className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl text-white placeholder-slate-500 font-mono transition-all duration-200 ${
                   errors.mac ? 'border-red-500' : 'border-slate-700'
                 }`}
                 placeholder="00:1A:79:84:1A:AB"

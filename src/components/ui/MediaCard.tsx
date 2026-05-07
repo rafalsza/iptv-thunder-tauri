@@ -70,18 +70,29 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   };
 
   const handleFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+    const card = e.currentTarget;
+    const carouselContainer = card.closest('.overflow-x-auto') as HTMLElement | null;
+
     // Special case: reset for-you-live carousel to beginning when first element gets focus
     if (index === 0 && tvGroup === 'for-you-live') {
-      const carouselContainer = e.currentTarget.closest('.overflow-x-auto') as HTMLElement | null;
       if (carouselContainer) {
-        // Reset first, then scrollIntoView will handle the element
         carouselContainer.scrollTo({ left: 0, behavior: 'auto' });
       }
-    } else {
-      // Auto-scroll focused card into view (MUST HAVE for TV)
-      e.currentTarget.scrollIntoView({
-        inline: 'center',
-        block: 'nearest',
+      return;
+    }
+
+    // Manually scroll ONLY the carousel container (not parent containers)
+    // to prevent the entire page from shifting
+    if (carouselContainer) {
+      const cardRect = card.getBoundingClientRect();
+      const containerRect = carouselContainer.getBoundingClientRect();
+      const cardCenter = cardRect.left + cardRect.width / 2;
+      const containerCenter = containerRect.left + containerRect.width / 2;
+      const scrollDelta = cardCenter - containerCenter;
+
+      carouselContainer.scrollBy({
+        left: scrollDelta,
+        behavior: 'smooth',
       });
     }
   };
@@ -102,7 +113,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       data-tv-initial={tvInitial || undefined}
       data-media-card
       tabIndex={0}
-      className="relative group/card cursor-pointer flex-shrink-0 w-[140px] min-[2000px]:w-[160px] min-[3000px]:w-[180px] rounded-lg mr-4 last:mr-0 snap-start focus:outline-none focus:ring-4 focus:ring-green-500/50 focus:ring-offset-6"
+      className="relative group/card cursor-pointer flex-shrink-0 w-24 sm:w-28 md:w-32 lg:w-36 xl:w-40 2xl:w-36 3xl:w-32 4ktv:w-28 rounded-lg mr-2 sm:mr-3 last:mr-0 snap-start"
     >
       {/* Card container */}
       <div className="dark:bg-slate-800/50 bg-gray-100/50 rounded-lg backdrop-blur-sm border dark:border-slate-700/50 border-gray-200/50 hover:shadow-glow transition-all">
@@ -139,7 +150,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           {hasProgress && (
             <>
               <div className="absolute top-1.5 right-1.5 dark:bg-green-700/90 bg-green-600/90 backdrop-blur-sm px-1.5 py-0.5 rounded flex items-center gap-1">
-                <Play className="w-2.5 h-2.5 text-white" />
+                <Play className="w-1 h-1 text-white" />
                 <span className="text-[10px] font-medium text-white">
                   {progressPercentage}%
                 </span>

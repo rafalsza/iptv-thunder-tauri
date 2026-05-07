@@ -18,7 +18,6 @@ function findSubmenuForNavbar(
   const submenuElements = state.nodes.filter(
     n => n.containerId === current.containerId && n.groupId && n.groupId !== current.groupId
   );
-  console.log('[NavbarPlugin] findSubmenuForNavbar', direction, 'submenu elements:', submenuElements.length);
 
   if (submenuElements.length === 0) {
     return null;
@@ -35,10 +34,6 @@ function findSubmenuForNavbar(
     ? findSubmenuDown(state, current, currentNode, submenuElements)
     : findSubmenuUp(state, current, currentNode, submenuElements);
 
-  if (!result) {
-    console.log('[NavbarPlugin] findSubmenuForNavbar: submenu not in direction, skip');
-  }
-
   return result;
 }
 
@@ -54,11 +49,9 @@ function findSubmenuDown(
   }
 
   if (hasNavbarBetween(state, current.containerId, currentNode.rect.top, firstSubmenu.rect.top)) {
-    console.log('[NavbarPlugin] findSubmenuForNavbar: other navbar elements between current and submenu, skip');
     return null;
   }
 
-  console.log('[NavbarPlugin] findSubmenuForNavbar result:', firstSubmenu.id, '(directly below)');
   return firstSubmenu.id;
 }
 
@@ -74,11 +67,9 @@ function findSubmenuUp(
   }
 
   if (hasNavbarBetween(state, current.containerId, lastSubmenu.rect.top, currentNode.rect.top)) {
-    console.log('[NavbarPlugin] findSubmenuForNavbar: other navbar elements between submenu and current, skip');
     return null;
   }
 
-  console.log('[NavbarPlugin] findSubmenuForNavbar result:', lastSubmenu.id, '(directly above)');
   return lastSubmenu.id;
 }
 
@@ -98,7 +89,6 @@ function findParentNavbarForSubmenu(state: NavigationState, current: { id: strin
   const navbarElements = state.nodes.filter(
     n => n.containerId === current.containerId && n.groupId === 'navbar'
   );
-  console.log('[NavbarPlugin] findParentNavbarForSubmenu, navbar elements:', navbarElements.length);
   if (navbarElements.length > 0) {
     navbarElements.sort((a, b) => a.rect.top - b.rect.top);
 
@@ -112,7 +102,6 @@ function findParentNavbarForSubmenu(state: NavigationState, current: { id: strin
     const isFirstInSubmenu = submenuElements[0]?.id === current.id;
 
     if (!isFirstInSubmenu) {
-      console.log('[NavbarPlugin] findParentNavbarForSubmenu: not first in submenu, skip');
       return null;
     }
 
@@ -121,7 +110,6 @@ function findParentNavbarForSubmenu(state: NavigationState, current: { id: strin
       .sort((a, b) => b.rect.top - a.rect.top)[0];
 
     if (parentNavbar) {
-      console.log('[NavbarPlugin] findParentNavbarForSubmenu result:', parentNavbar.id);
       return parentNavbar.id;
     }
   }
@@ -155,6 +143,19 @@ function handleNavbarNavigation(state: NavigationState, current: NavigationState
 
 function handleSubmenuNavigation(state: NavigationState, current: NavigationState['nodes'][0], direction: Direction): string | null {
   if (direction !== 'up' || !current.groupId || current.groupId === 'navbar') return null;
+  
+  // Only return parent navbar if on first submenu item overall (by rect.top)
+  // Otherwise return null to let containerPlugin handle navigation within submenu
+  const allSubmenuElements = state.nodes.filter(
+    n => n.containerId === current.containerId && n.groupId !== 'navbar'
+  );
+  allSubmenuElements.sort((a, b) => a.rect.top - b.rect.top);
+  const isFirstInSubmenu = allSubmenuElements[0]?.id === current.id;
+  
+  if (!isFirstInSubmenu) {
+    return null;
+  }
+  
   return findParentNavbarForSubmenu(state, current);
 }
 

@@ -40,6 +40,26 @@ class MainActivity : TauriActivity() {
         super.onCreate(savedInstanceState)
         currentInstance = this
         Log.d("MainActivity", "onCreate called - MainActivity initialized")
+
+        // Set up key listener after view is created
+        window.decorView.postDelayed({
+            window.decorView.isFocusable = true
+            window.decorView.isFocusableInTouchMode = true
+            window.decorView.requestFocus()
+            window.decorView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_UP,
+                        KeyEvent.KEYCODE_DPAD_DOWN,
+                        KeyEvent.KEYCODE_DPAD_LEFT,
+                        KeyEvent.KEYCODE_DPAD_RIGHT,
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER -> true
+                        else -> false
+                    }
+                } else false
+            }
+        }, 1000)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -52,7 +72,7 @@ class MainActivity : TauriActivity() {
                 KeyEvent.KEYCODE_DPAD_DOWN,
                 KeyEvent.KEYCODE_DPAD_LEFT,
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    return false // Let NativePlayerActivity handle it
+                    return false
                 }
             }
         }
@@ -60,22 +80,44 @@ class MainActivity : TauriActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // Handle BACK key only - send to WebView for tv-navigation system
+        // Handle BACK key - send to WebView for tv-navigation system
         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK) {
             webView?.evaluateJavascript(
-                """
-                window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Back', code: 'Back' }));
-                """.trimIndent(),
+                "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Back', code: 'Back' }))",
                 null
             )
-            return true // Don't close app
+            return true
         }
+
+        // Handle D-pad keys - send to WebView for TV navigation
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            val keyName = when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP -> "ArrowUp"
+                KeyEvent.KEYCODE_DPAD_DOWN -> "ArrowDown"
+                KeyEvent.KEYCODE_DPAD_LEFT -> "ArrowLeft"
+                KeyEvent.KEYCODE_DPAD_RIGHT -> "ArrowRight"
+                KeyEvent.KEYCODE_DPAD_CENTER -> "Enter"
+                KeyEvent.KEYCODE_ENTER -> "Enter"
+                else -> null
+            }
+            if (keyName != null) {
+                webView?.evaluateJavascript(
+                    "window.dispatchEvent(new KeyboardEvent('keydown', { key: '$keyName', code: '$keyName' }))",
+                    null
+                )
+                return true
+            }
+        }
+
         return super.dispatchKeyEvent(event)
     }
 
     override fun onWebViewCreate(webView: WebView) {
         super.onWebViewCreate(webView)
         this.webView = webView
+
+        // Request focus for WebView to receive key events
+        webView.requestFocus()
 
         // Configure WebView for 4K TV density scaling
         val metrics = resources.displayMetrics
@@ -113,25 +155,32 @@ class MainActivity : TauriActivity() {
         webView.addJavascriptInterface(object {
             @JavascriptInterface
             fun open_compose_player(
-                url: String,
-                channelName: String,
-                params: PlayerParams
+                url: String?,
+                channelName: String?,
+                channelId: String?,
+                portalUrl: String?,
+                mac: String?,
+                token: String?,
+                isVod: Boolean?,
+                episodesJson: String?,
+                currentEpisodeIndex: Int?,
+                autoPlayEpisodes: Boolean?
             ) {
                 Log.e("MainActivity", "=== open_compose_player ENTRY POINT ===")
-                Log.d("MainActivity", "open_compose_player called with: channelId=${params.channelId}, portalUrl=${params.portalUrl}, mac=${params.mac}, token=${if(params.token.isNotEmpty()) "SET" else "EMPTY"}, isVod=${params.isVod}, currentEpisodeIndex=${params.currentEpisodeIndex}, autoPlayEpisodes=${params.autoPlayEpisodes}")
+                Log.d("MainActivity", "open_compose_player called with: channelId=$channelId, portalUrl=$portalUrl, mac=$mac, token=${if(!token.isNullOrEmpty()) "SET" else "EMPTY"}, isVod=$isVod, currentEpisodeIndex=$currentEpisodeIndex, autoPlayEpisodes=$autoPlayEpisodes")
                 runOnUiThread {
                     Log.d("MainActivity", "Starting NativePlayerActivity intent")
                     val intent = android.content.Intent(this@MainActivity, NativePlayerActivity::class.java)
                     intent.putExtra("url", url)
                     intent.putExtra("channelName", channelName)
-                    intent.putExtra("channelId", params.channelId)
-                    intent.putExtra("portalUrl", params.portalUrl)
-                    intent.putExtra("mac", params.mac)
-                    intent.putExtra("token", params.token)
-                    intent.putExtra("isVod", params.isVod)
-                    intent.putExtra("episodesJson", params.episodesJson)
-                    intent.putExtra("currentEpisodeIndex", params.currentEpisodeIndex)
-                    intent.putExtra("autoPlayEpisodes", params.autoPlayEpisodes)
+                    intent.putExtra("channelId", channelId)
+                    intent.putExtra("portalUrl", portalUrl)
+                    intent.putExtra("mac", mac)
+                    intent.putExtra("token", token)
+                    intent.putExtra("isVod", isVod)
+                    intent.putExtra("episodesJson", episodesJson)
+                    intent.putExtra("currentEpisodeIndex", currentEpisodeIndex)
+                    intent.putExtra("autoPlayEpisodes", autoPlayEpisodes)
                     startActivity(intent)
                     Log.e("MainActivity", "NativePlayerActivity intent started")
                 }

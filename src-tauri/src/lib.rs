@@ -111,6 +111,7 @@ async fn stalker_request(
     request = request.header("X-Requested-With", "XMLHttpRequest");
     request = request.header("Accept", "*/*");
     request = request.header("Accept-Language", "en-US,en;q=0.9");
+    request = request.header("User-Agent", "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.85 Mobile Safari/537.36");
 
     // Add body if provided
     if let Some(request_body) = body {
@@ -136,11 +137,19 @@ async fn stalker_request(
                 v.to_str().ok().map(|s| (k.to_string(), s.to_string()))
             })
             .collect();
-        let response_text = response.text().await.map_err(|e| e.to_string())?;
+        
+        // Use bytes() to get raw response, then convert to string
+        let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+        let response_text = String::from_utf8_lossy(&bytes).to_string();
+        
+        // Parse the JSON body to include js at top level
+        let parsed: serde_json::Value = serde_json::from_str(&response_text).unwrap_or(json!({}));
+        
         Ok(json!({
             "status": status,
             "headers": response_headers,
-            "body": response_text
+            "body": response_text,
+            "js": parsed
         }))
     };
 

@@ -15,7 +15,7 @@ export const ChannelLogo: React.FC<ChannelLogoProps> = ({ logo, name }) => {
 
   useEffect(() => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000); // 3s timeout
+    const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout - longer than image cache timeout
 
     getImageUrl(logo, '', controller.signal)
       .then(url => {

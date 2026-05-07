@@ -22,22 +22,29 @@ export const usePlaybackManager = ({
   queryClient,
 }: UsePlaybackManagerProps) => {
   const { t } = useTranslation();
-  const [episodesList, setEpisodesList] = useState<StalkerVOD[]>([]);
+  const episodesRef = useRef<StalkerVOD[]>([]);
   const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
   const currentEpisodeIndexRef = useRef(currentEpisodeIndex);
   const autoplayEpisodeIndexRef = useRef(0);
+  const autoplayTokenRef = useRef<symbol | null>(null);
+  const autoPlayRef = useRef<boolean | null>(null);
   const seriesCacheRef = useRef<Record<string, any>>({});
 
-  // Keep ref in sync with state
+  // Keep ref in sync with state - CRITICAL for autoplay
   useEffect(() => {
     currentEpisodeIndexRef.current = currentEpisodeIndex;
   }, [currentEpisodeIndex]);
+
+  // Clear series cache when portal changes to prevent stale data
+  useEffect(() => {
+    seriesCacheRef.current = {};
+  }, [activePortal?.id]);
 
   // Single player manager (store)
   const player = usePlaybackStore();
   const abortRef = useRef<AbortController | null>(null);
 
-  const play = async (channel: StalkerChannel, queryClient: QueryClient, vodFlag: boolean = false, resumePos: number = 0, movieId?: string) => {
+  const play = async (channel: StalkerChannel, vodFlag: boolean = false, resumePos: number = 0, movieId?: string) => {
     if (!client) return;
 
     // Cancel any previous request
@@ -68,18 +75,20 @@ export const usePlaybackManager = ({
         staleTime: 2 * 60 * 1000, // Use cache for 2 minutes (allows prefetch to work)
       });
 
+      // Check if request was aborted before continuing
+      if (controller.signal.aborted) return;
+
       console.log('[usePlaybackManager] client.token:', client.token, 'client.account.token:', client.getAccount()?.token);
 
       // Clean portalUrl - extract valid URL and ignore trailing garbage
       const rawPortalUrl = client.getAccount()?.portalUrl || '';
       let cleanPortalUrl = rawPortalUrl;
 
-      // Extract valid URL by matching http:// or https:// followed by domain and first path segment, then remove trailing garbage
-      const urlRegex = /(https?:\/\/[^\/]+\/[^\/]+)/;
-      const urlMatch = urlRegex.exec(cleanPortalUrl);
-      if (urlMatch) {
-        cleanPortalUrl = urlMatch[1] + '/';
-      } else {
+      // Use URL constructor for proper URL parsing
+      try {
+        const u = new URL(rawPortalUrl);
+        cleanPortalUrl = u.origin + '/';
+      } catch {
         // Fallback: remove any trailing characters that are not URL-safe
         cleanPortalUrl = cleanPortalUrl.replace(/[^a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$/, '');
         // Ensure it ends with /
@@ -87,8 +96,6 @@ export const usePlaybackManager = ({
           cleanPortalUrl += '/';
         }
       }
-
-      console.log('[usePlaybackManager] rawPortalUrl:', rawPortalUrl, 'cleanPortalUrl:', cleanPortalUrl);
 
       player.setMedia({
         url,
@@ -111,10 +118,10 @@ export const usePlaybackManager = ({
   };
 
   const handleChannelSelect = useCallback((channel: StalkerChannel) => {
-    if (client) {
+    if (client && activePortal) {
       player.setContentType('tv');
-      play(channel, queryClient, false);
-      addRecentViewed(activePortal!.id, 'live', String(channel.id), {
+      play(channel, false);
+      addRecentViewed(activePortal.id, 'live', String(channel.id), {
         name: channel.name,
         poster: client.resolveLogoUrl(channel.logo),
         cmd: channel.cmd,
@@ -125,10 +132,10 @@ export const usePlaybackManager = ({
   }, [client, queryClient, activePortal]);
 
   const handleMoviePlay = useCallback((movie: StalkerVOD, resumePosition?: number) => {
-    if (client) {
+    if (client && activePortal) {
       player.setContentType('movies');
-      play(movie as any, queryClient, true, resumePosition || 0, String(movie.id));
-      addRecentViewed(activePortal!.id, 'vod', String(movie.id), {
+      play(movie as any, true, resumePosition || 0, String(movie.id));
+      addRecentViewed(activePortal.id, 'vod', String(movie.id), {
         name: movie.name,
         poster: client.resolvePosterUrl(movie),
         cmd: movie.cmd,
@@ -152,44 +159,38 @@ export const usePlaybackManager = ({
 
   const fetchSeriesData = async (seriesId: string): Promise<any> => {
     // Check cache first
-    if (seriesCacheRef.current[seriesId]) {
-      return seriesCacheRef.current[seriesId];
+    const cached = seriesCacheRef.current[seriesId];
+    if (cached) {
+      return cached;
     }
 
     // Fetch and cache the data
-    const data = await queryClient.fetchQuery({
+    const rawData = await queryClient.fetchQuery({
       queryKey: ['series', seriesId, 'info'],
       queryFn: async () => {
         return await getSeriesInfo(client!, seriesId);
       },
     });
 
-    seriesCacheRef.current[seriesId] = data;
-    return data;
+    // Process and cache the result
+    const uniqueEpisodes = deduplicateEpisodes(rawData.episodes);
+    const processedData = {
+      raw: rawData,
+      episodes: uniqueEpisodes,
+    };
+
+    seriesCacheRef.current[seriesId] = processedData;
+
+    // Prevent unbounded cache growth
+    if (Object.keys(seriesCacheRef.current).length > 20) {
+      seriesCacheRef.current = {};
+    }
+
+    return processedData;
   };
 
   const fetchStreamUrl = async (episode: StalkerVOD, signal?: AbortSignal): Promise<string> => {
-    const response = await client!._makeRequest({
-      action: 'create_link',
-      cmd: episode.cmd,
-      type: 'vod',
-      series: String(episode.episode || '1'),
-      disable_ad: '0',
-      download: '0',
-      mac: client!.getAccount().mac,
-      JsHttpRequest: '1-xml',
-      signal,
-    });
-    
-    const streamUrl = response?.js?.cmd || response.data?.js?.cmd;
-    if (!streamUrl) throw new Error('No stream URL in response');
-    
-    const cleanedUrl = streamUrl.replace(/^ffmpeg\s+/, '');
-    if (cleanedUrl?.includes('stream=.')) {
-      throw new Error('Invalid stream URL from server');
-    }
-    
-    return cleanedUrl;
+    return await client!.getEpisodeStream(episode.cmd, episode.episode || '1', { signal });
   };
 
   const buildEpisodeName = (episode: StalkerVOD): string => {
@@ -213,17 +214,31 @@ export const usePlaybackManager = ({
     if (!selectedSeries?.id) return null;
 
     try {
-      const seriesData = await fetchSeriesData(String(selectedSeries.id));
-      if (!seriesData?.episodes) return null;
+      const cachedData = await fetchSeriesData(String(selectedSeries.id));
+      if (!cachedData?.episodes) return null;
 
-      const uniqueEpisodes = deduplicateEpisodes(seriesData.episodes);
-      const episodeIndex = explicitIndex ?? findEpisodeIndex(uniqueEpisodes, episode);
+      const uniqueEpisodes = cachedData.episodes; // Already deduplicated
+      
+      // Sort episodes chronologically: by season (ascending), then by episode (ascending)
+      const sortedEpisodes = [...uniqueEpisodes].sort((a, b) => {
+        const seasonA = Number.parseInt(String(a.season ?? 1));
+        const seasonB = Number.parseInt(String(b.season ?? 1));
+        const episodeA = Number.parseInt(String(a.episode ?? 1));
+        const episodeB = Number.parseInt(String(b.episode ?? 1));
+        
+        if (seasonA !== seasonB) {
+          return seasonA - seasonB;
+        }
+        return episodeA - episodeB;
+      });
+      
+      const episodeIndex = explicitIndex ?? findEpisodeIndex(sortedEpisodes, episode);
       
       if (episodeIndex !== -1) {
-        setEpisodesList(uniqueEpisodes);
+        episodesRef.current = sortedEpisodes;
         setCurrentEpisodeIndex(episodeIndex);
         currentEpisodeIndexRef.current = episodeIndex;
-        return { episodes: uniqueEpisodes, index: episodeIndex };
+        return { episodes: sortedEpisodes, index: episodeIndex };
       }
       return null;
     } catch (e) {
@@ -243,7 +258,7 @@ export const usePlaybackManager = ({
     abortRef.current = controller;
 
     const result = await updateEpisodesList(episode, explicitIndex);
-    
+
     // Reset autoplay index when manually selecting an episode
     autoplayEpisodeIndexRef.current = explicitIndex ?? currentEpisodeIndexRef.current;
 
@@ -253,13 +268,21 @@ export const usePlaybackManager = ({
         queryFn: () => fetchStreamUrl(episode, controller.signal),
         staleTime: 0,
       });
-      
+
+      if (controller.signal.aborted) return;
+
       const fullName = buildEpisodeName(episode);
-      const autoPlayEpisodes = await getSetting('autoPlayEpisodes');
-      
+
+      // Cache autoplay setting to avoid repeated async calls
+      autoPlayRef.current ??= await getSetting('autoPlayEpisodes');
+
       // Use returned data instead of stale state
       const localEpisodes = result?.episodes ?? [];
       const localIndex = result?.index ?? 0;
+
+      // Single source of truth - always update episodesRef with result data
+      episodesRef.current = localEpisodes;
+
       const episodesData = prepareEpisodesData(localEpisodes);
 
       player.setContentType('series');
@@ -272,12 +295,12 @@ export const usePlaybackManager = ({
         resumePosition: resumePosition || 0,
         episodes: episodesData,
         currentEpisodeIndex: explicitIndex ?? localIndex,
-        autoPlayEpisodes,
+        autoPlayEpisodes: autoPlayRef.current,
       });
 
       const seriesInfo = selectedSeries;
       if (seriesInfo) {
-        addRecentViewed(activePortal!.id, 'series', String(seriesInfo.id), {
+        await addRecentViewed(activePortal!.id, 'series', String(seriesInfo.id), {
           name: seriesInfo.name,
           poster: client.resolvePosterUrl(seriesInfo),
           cmd: seriesInfo.cmd,
@@ -293,10 +316,11 @@ export const usePlaybackManager = ({
   }, [client, queryClient, selectedSeries, activePortal, t]);
 
   const handleEpisodeEnded = useCallback(async () => {
-    const { getSetting } = await import('@/hooks/useSettings');
-    const autoPlayEpisodes = await getSetting('autoPlayEpisodes');
+    // Cache autoplay setting to avoid repeated async calls
+    autoPlayRef.current ??= await getSetting('autoPlayEpisodes');
 
-    if (!autoPlayEpisodes || !selectedSeries || episodesList.length === 0) {
+    const episodes = episodesRef.current;
+    if (!autoPlayRef.current || !selectedSeries || episodes.length === 0) {
       return;
     }
 
@@ -304,11 +328,11 @@ export const usePlaybackManager = ({
     const autoplayEpisodeIndex = autoplayEpisodeIndexRef.current;
     const originalCurrentIndex = currentEpisodeIndexRef.current;
     
-    if (autoplayEpisodeIndex >= episodesList.length - 1) {
+    if (autoplayEpisodeIndex >= episodes.length - 1) {
       return;
     }
 
-    const nextEpisode = episodesList[autoplayEpisodeIndex + 1];
+    const nextEpisode = episodes[autoplayEpisodeIndex + 1];
     if (!nextEpisode) {
       console.error('Next episode not found at autoplay index', autoplayEpisodeIndex + 1);
       return;
@@ -317,28 +341,38 @@ export const usePlaybackManager = ({
     // Update autoplay index BEFORE calling next episode
     autoplayEpisodeIndexRef.current = autoplayEpisodeIndex + 1;
 
-    // Find the episode in the episodesList to get the correct index
-    const nextIndex = episodesList.findIndex(ep => 
+    // Find the episode in the episodes to get the correct index
+    const nextIndex = episodes.findIndex(ep => 
       ep.id === nextEpisode.id || 
       (ep.season === nextEpisode.season && ep.episode === nextEpisode.episode)
     );
 
     if (nextIndex === -1) {
-      console.error('Next episode not found in episodesList');
+      console.error('Next episode not found in episodes');
       return;
     }
+
+    // Prevent race conditions with user interactions
+    const currentAutoplayToken = Symbol();
+    autoplayTokenRef.current = currentAutoplayToken;
 
     try {
       setCurrentEpisodeIndex(nextIndex);
       currentEpisodeIndexRef.current = nextIndex;
       await handleEpisodeSelect(nextEpisode, 0, nextIndex);
+
+      // Check if another autoplay or user interaction occurred during async operation
+      if (autoplayTokenRef.current !== currentAutoplayToken) {
+        console.log('Autoplay cancelled due to race condition');
+        return;
+      }
     } catch (error) {
       console.error('Failed to autoplay next episode:', error);
       // Revert refs on error
       autoplayEpisodeIndexRef.current = autoplayEpisodeIndex;
       currentEpisodeIndexRef.current = originalCurrentIndex;
     }
-  }, [episodesList, selectedSeries, handleEpisodeSelect]);
+  }, [selectedSeries, handleEpisodeSelect]);
 
   const close = () => {
     if (abortRef.current) {

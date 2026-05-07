@@ -5,7 +5,7 @@ import { useCallback } from 'react';
 
 // Cache configuration
 const MAX_CACHE_SIZE = 200 * 1024 * 1024; // 200MB
-const FETCH_TIMEOUT_MS = 5000; // 5 seconds - reduced to prevent freezing
+const FETCH_TIMEOUT_MS = 20000; // 20 seconds - slow image servers need more time
 const MAX_RETRIES = 1; // Reduced retries to prevent long waits
 const MAX_CONCURRENT_FETCHES = 4; // Reduced concurrent downloads
 
@@ -416,7 +416,7 @@ export async function fetchAndCacheImage(url: string, signal?: AbortSignal): Pro
     releaseFetchSlot();
     console.warn('[ImageCache] Timeout for:', url);
     rejectPromise(new Error('Timeout'));
-  }, FETCH_TIMEOUT_MS + 2000); // Reduced buffer time
+  }, FETCH_TIMEOUT_MS + 5000); // Extra buffer for slow servers
 
   // Register immediately (synchronously) to prevent race condition
   pendingRequests.set(url, { promise, timeout: cleanupTimeout, abortController });
