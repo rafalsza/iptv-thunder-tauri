@@ -78,8 +78,6 @@ export const usePlaybackManager = ({
       // Check if request was aborted before continuing
       if (controller.signal.aborted) return;
 
-      console.log('[usePlaybackManager] client.token:', client.token, 'client.account.token:', client.getAccount()?.token);
-
       // Clean portalUrl - extract valid URL and ignore trailing garbage
       const rawPortalUrl = client.getAccount()?.portalUrl || '';
       let cleanPortalUrl = rawPortalUrl;

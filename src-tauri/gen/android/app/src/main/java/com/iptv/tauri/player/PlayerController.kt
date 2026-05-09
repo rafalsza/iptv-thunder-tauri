@@ -57,6 +57,10 @@ class PlayerController(
     private val WATCHDOG_TIMEOUT_MS = 10000L // 10 seconds
     private val WATCHDOG_MAX_STUCK_COUNT = 3 // After 3 checks (3s) of no change, trigger reprepare
 
+    // End credits detection for VOD
+    private var endedDetected = false
+    private val END_CREDITS_THRESHOLD = 0.90f // 90% - detect end credits
+
     sealed class PlayerState {
         data object Loading : PlayerState()
         data object Live : PlayerState()
@@ -140,6 +144,9 @@ class PlayerController(
         // Update initial UI state with isVod
         currentUiState = currentUiState.copy(isVod = isVod)
         onUiStateChange(currentUiState)
+
+        // Reset end credits detection
+        endedDetected = false
 
         setupListeners()
     }
@@ -227,6 +234,7 @@ class PlayerController(
         val progress = if (duration > 0) (position.toFloat() / duration) * 100 else 0f
         val isLive = player?.isCurrentMediaItemLive == true
         val isPlaying = player?.isPlaying == true
+        val isVod = currentUiState.isVod
 
         // Watchdog: detect if position hasn't changed while player reports playing
         if (isPlaying && position > 0) {
@@ -245,6 +253,17 @@ class PlayerController(
         } else {
             watchdogStuckCount = 0
             lastPosition = position
+        }
+
+        // End credits detection for VOD: trigger Ended state at 90%
+        if (isVod && !endedDetected && !isLive && duration > 0) {
+            val progressRatio = position.toFloat() / duration
+            if (progressRatio >= END_CREDITS_THRESHOLD) {
+                android.util.Log.d("PlayerController", "End credits detected at ${String.format("%.1f%%", progressRatio * 100)}")
+                endedDetected = true
+                onStateChange(PlayerState.Ended)
+                return
+            }
         }
 
         currentUiState = currentUiState.copy(
@@ -330,6 +349,8 @@ class PlayerController(
         watchdogStuckCount = 0
         lastPosition = 0L
         lastPositionTimestamp = 0L
+        // Reset end credits detection
+        endedDetected = false
         player?.stop()
 
         // Create appropriate media source for the URL
@@ -549,6 +570,7 @@ class PlayerController(
         watchdogStuckCount = 0
         lastPosition = 0L
         lastPositionTimestamp = 0L
+        endedDetected = false
         player?.stop()
         player?.clearMediaItems()
         player?.release()

@@ -8,10 +8,12 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 interface AppState {
   isHydrated: boolean;
   isFullscreen: boolean;
+  isPip: boolean;
 
   // Actions
   setHydrated: (value: boolean) => void;
   setFullscreen: (value: boolean) => void;
+  setPip: (value: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -19,6 +21,7 @@ export const useAppStore = create<AppState>()(
     immer((set) => ({
       isHydrated: false,
       isFullscreen: false,
+      isPip: false,
 
       setHydrated: (value: boolean) => {
         set((state) => {
@@ -29,6 +32,12 @@ export const useAppStore = create<AppState>()(
       setFullscreen: (value: boolean) => {
         set((state) => {
           state.isFullscreen = value;
+        });
+      },
+
+      setPip: (value: boolean) => {
+        set((state) => {
+          state.isPip = value;
         });
       },
     })),

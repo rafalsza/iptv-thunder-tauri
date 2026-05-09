@@ -5,6 +5,7 @@ import { Navigation } from '@/components/ui/Navigation';
 import { Settings } from '@/features/settings/Settings';
 import { Player } from '@/features/player/Player';
 import { platform } from '@tauri-apps/plugin-os';
+import { useAppStore } from '@/store/app.store';
 
 interface AppLayoutProps {
   activeView: string;
@@ -38,6 +39,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   handleEpisodeEnded,
 }) => {
   const [currentPlatform, setCurrentPlatform] = useState<string>('desktop');
+  const isPip = useAppStore(state => state.isPip);
 
   // Detect platform using OS plugin
   useEffect(() => {
@@ -57,8 +59,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
   return (
     <div className={`flex flex-col h-full min-h-screen ${player.current ? 'bg-transparent' : 'dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 bg-gradient-to-br from-white via-gray-100 to-white'}`}>
-      {/* Custom TitleBar - hidden on mobile (Android/iOS) and when fullscreen */}
-      {!isFullscreen && !isMobile && <TitleBar />}
+      {/* Custom TitleBar - hidden on mobile (Android/iOS), when fullscreen, or when PiP is active */}
+      {!isFullscreen && !isMobile && !isPip && <TitleBar />}
 
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">

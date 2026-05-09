@@ -61,13 +61,24 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   const isFavorite = favoriteIds.has(String(series.id));
   const seriesName = String(series.series || series.name || '');
 
-  const { isLongPress, ...longPressHandlers } = useLongPress({
+  const { isLongPress, ref, ...longPressHandlers } = useLongPress({
     onLongPress: () => onLongPress(series),
     delay: 500,
   });
 
+  const handleKeyUp = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+      // Check if long press was triggered - if so, don't call onSelect
+      if (!(window as any).__tvLongPressPreventClick) {
+        e.preventDefault();
+        onSelect(String(series.id));
+      }
+    }
+  };
+
   const handleClick = () => {
-    if (!isLongPress) {
+    // For mouse/touch, let useLongPress handle it
+    if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
       onSelect(String(series.id));
     }
   };
@@ -107,18 +118,17 @@ const SeriesCard = React.memo<SeriesCardProps>(({
       data-tv-initial={seriesIndex === 0}
       tabIndex={0}
       {...longPressHandlers}
+      ref={ref}
       onMouseEnter={() => onPrefetch(series)}
       onFocus={() => onPrefetch(series)}
       onClick={handleClick}
+      onKeyUp={handleKeyUp}
       onContextMenu={(e) => {
         e.preventDefault();
         onLongPress(series);
       }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-          e.preventDefault();
-          onSelect(String(series.id));
-        }
+      onKeyDown={() => {
+        // Let useLongPress handle it
       }}
       className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1"
     >

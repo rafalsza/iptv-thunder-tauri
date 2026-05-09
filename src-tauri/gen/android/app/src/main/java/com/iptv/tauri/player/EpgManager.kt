@@ -112,7 +112,9 @@ class EpgManager(
 
         // Live TV EPG
         epg?.let { info ->
-            val now = (System.currentTimeMillis() / 60000).toInt()
+            // Get current time in minutes since midnight (not since epoch)
+            val calendar = java.util.Calendar.getInstance()
+            val now = calendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + calendar.get(java.util.Calendar.MINUTE)
             val startMin = info.startMin
             val endMin = info.endMin
 
@@ -156,24 +158,19 @@ class EpgManager(
     }
 
     private suspend fun refreshEpg() {
-        // EPG refresh with IO dispatcher for network operations
+        // EPG refresh is now handled by the TypeScript side
+        // The initial EPG data is passed when opening the player
+        // Future refreshes could be implemented via Tauri commands if needed
         try {
-            val channel = epgTextView?.tag as? String ?: return
-
-            val epg = withContext(Dispatchers.IO) {
-                // TODO: Actual API call here
-                fetchEpgForChannel(channel)
-            }
-
-            withContext(Dispatchers.Main) {
-                updateEpg(epg.title, epg.start, epg.end, epg.nextTitle, epg.nextStart, epg.nextEnd)
-            }
+            // For now, we don't auto-refresh EPG from Android side
+            // The data is provided by the JavaScript layer
+            android.util.Log.d("EpgManager", "EPG refresh skipped - data provided by JS layer")
         } catch (e: Exception) {
             android.util.Log.e("EpgManager", "Failed to refresh EPG", e)
         }
     }
 
-    private fun fetchEpgForChannel(channel: String): EpgInfo {
+    private fun fetchEpgForChannel(): EpgInfo {
         // TODO: Replace with actual API implementation
         // This is a placeholder that returns mock data
         val now = System.currentTimeMillis()

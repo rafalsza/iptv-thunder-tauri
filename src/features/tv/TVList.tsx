@@ -44,13 +44,28 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
   observerRef,
   hasMore,
 }) => {
-  const { isLongPress, ...longPressHandlers } = useLongPress({
+  const { isLongPress, ref, isLongPressRef, ...longPressHandlers } = useLongPress({
     onLongPress: () => onLongPress(channel),
     delay: 500,
   });
 
+  const handleKeyDown = () => {
+    // Let useLongPress handle mouse/touch, but we'll handle TV separately
+  };
+
+  const handleKeyUp = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+      // Check if long press was triggered - if so, don't call onSelect
+      if (!(window as any).__tvLongPressPreventClick) {
+        e.preventDefault();
+        onSelect(channel);
+      }
+    }
+  };
+
   const handleClick = () => {
-    if (!isLongPress) {
+    // For mouse/touch, let useLongPress handle it
+    if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
       onSelect(channel);
     }
   };
@@ -64,9 +79,12 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
       data-tv-initial={index === 0}
       tabIndex={0}
       {...longPressHandlers}
-      ref={isLastItem && hasMore ? (el) => {
-        if (el && observerRef.current) observerRef.current.observe(el);
-      } : undefined}
+      ref={(el) => {
+        ref(el);
+        if (isLastItem && hasMore && el && observerRef.current) {
+          observerRef.current.observe(el);
+        }
+      }}
       onMouseEnter={() => onPrefetch(channel)}
       onFocus={() => onPrefetch(channel)}
       onClick={handleClick}
@@ -74,12 +92,8 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
         e.preventDefault();
         onLongPress(channel);
       }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-          e.preventDefault();
-          onSelect(channel);
-        }
-      }}
+      onKeyDown={handleKeyDown}
+      onKeyUp={handleKeyUp}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: index * 0.03 }}

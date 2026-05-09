@@ -54,13 +54,24 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   const [imgError, setImgError] = useState(false);
   const seriesName = String(series.series || series.name || '');
 
-  const { isLongPress, ...longPressHandlers } = useLongPress({
+  const { isLongPress, ref, ...longPressHandlers } = useLongPress({
     onLongPress: () => onLongPress(series),
     delay: 500,
   });
 
+  const handleKeyUp = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+      // Check if long press was triggered - if so, don't call onSelect
+      if (!(globalThis as any).__tvLongPressPreventClick) {
+        e.preventDefault();
+        onSelect(series);
+      }
+    }
+  };
+
   const handleClick = () => {
-    if (!isLongPress) {
+    // For mouse/touch, let useLongPress handle it
+    if (!isLongPress && !(globalThis as any).__tvLongPressPreventClick) {
       onSelect(series);
     }
   };
@@ -87,25 +98,24 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   }, [posterUrl]);
 
   return (
-    <div
+    <button
+      type="button"
       data-tv-focusable
       data-tv-group="favorite-series"
       data-tv-index={seriesIndex}
       data-tv-initial={seriesIndex === 0}
-      tabIndex={0}
       {...longPressHandlers}
+      ref={ref}
       onClick={handleClick}
+      onKeyUp={handleKeyUp}
       onContextMenu={(e) => {
         e.preventDefault();
         onLongPress(series);
       }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-          e.preventDefault();
-          onSelect(series);
-        }
+      onKeyDown={() => {
+        // Let useLongPress handle it
       }}
-      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1"
+      className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 bg-transparent border-0 p-0 text-left"
     >
       <div className="relative overflow-hidden rounded-lg hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
 
@@ -142,7 +152,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
           </h3>
         </div>
       </div>
-    </div>
+    </button>
   );
 });
 

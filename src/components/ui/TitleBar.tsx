@@ -44,7 +44,7 @@ export const TitleBar: React.FC = () => {
   return (
     <div
       data-tauri-drag-region
-      className="flex items-center justify-between px-4 py-2 dark:bg-slate-900/80 bg-white/80 backdrop-blur-md border-b dark:border-slate-700/30 border-gray-200/30 select-none relative z-60"
+      className="flex items-center justify-between px-4 py-1.5 dark:bg-slate-900/80 bg-white/80 backdrop-blur-md border-b dark:border-slate-700/30 border-gray-200/30 select-none relative z-60"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       <div className="flex items-center gap-2">

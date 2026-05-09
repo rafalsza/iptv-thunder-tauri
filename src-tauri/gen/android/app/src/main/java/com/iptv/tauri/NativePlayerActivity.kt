@@ -40,6 +40,14 @@ class NativePlayerActivity : AppCompatActivity() {
     private var currentEpisodeIndex = 0
     private var autoPlayEpisodes = true
 
+    // EPG data
+    private var epgTitle = ""
+    private var epgStart = ""
+    private var epgEnd = ""
+    private var epgNextTitle = ""
+    private var epgNextStart = ""
+    private var epgNextEnd = ""
+
     data class EpisodeInfo(
         val id: String,
         val url: String,
@@ -68,6 +76,15 @@ class NativePlayerActivity : AppCompatActivity() {
         val episodesJson = intent.getStringExtra("episodesJson") ?: "[]"
         episodes = parseEpisodesJson(episodesJson)
         android.util.Log.d("NativePlayerActivity", "Episodes loaded: ${episodes.size}, currentIndex: $currentEpisodeIndex, autoPlay: $autoPlayEpisodes")
+
+        // Parse EPG data
+        epgTitle = intent.getStringExtra("epgTitle") ?: ""
+        epgStart = intent.getStringExtra("epgStart") ?: ""
+        epgEnd = intent.getStringExtra("epgEnd") ?: ""
+        epgNextTitle = intent.getStringExtra("epgNextTitle") ?: ""
+        epgNextStart = intent.getStringExtra("epgNextStart") ?: ""
+        epgNextEnd = intent.getStringExtra("epgNextEnd") ?: ""
+        android.util.Log.d("NativePlayerActivity", "EPG data: title=$epgTitle, start=$epgStart, end=$epgEnd")
 
         initializeViews()
         initializeControllers(channelName)
@@ -174,7 +191,10 @@ class NativePlayerActivity : AppCompatActivity() {
             }
         }
 
-        // Start EPG
+        // Start EPG with initial data if available
+        if (epgTitle.isNotEmpty() && epgStart.isNotEmpty() && epgEnd.isNotEmpty()) {
+            epgManager.updateEpg(epgTitle, epgStart, epgEnd, epgNextTitle, epgNextStart, epgNextEnd)
+        }
         epgManager.start(isVod)
 
         // Start auto-hide timer for controls
@@ -202,7 +222,17 @@ class NativePlayerActivity : AppCompatActivity() {
                 }
             }
             is PlayerController.PlayerState.Ended -> {
-                if (isVod) resumeManager.clearPosition(currentUrl)
+                if (isVod) {
+                    // Mark as watched by saving position (ResumeManager sets status to "watched" at 90%+)
+                    playerController.player?.let { player ->
+                        val duration = player.duration
+                        val position = player.currentPosition
+                        if (duration > 0) {
+                            resumeManager.savePosition(currentUrl, position, duration)
+                        }
+                    }
+                    resumeManager.clearPosition(currentUrl)
+                }
                 // Auto-play next episode if enabled
                 if (autoPlayEpisodes && episodes.isNotEmpty() && currentEpisodeIndex < episodes.size - 1) {
                     playNextEpisode()
@@ -319,9 +349,9 @@ class NativePlayerActivity : AppCompatActivity() {
                     id = obj.optString("id", ""),
                     url = obj.optString("url", ""),
                     name = obj.optString("name", ""),
-                    season = obj.optString("season", null),
-                    episode = obj.optString("episode", null),
-                    cmd = obj.optString("cmd", null)
+                    season = obj.optString("season", ""),
+                    episode = obj.optString("episode", ""),
+                    cmd = obj.optString("cmd", "")
                 ))
             }
             list

@@ -56,13 +56,24 @@ const MovieCard = React.memo<MovieCardProps>(({
   const isWatched = watchStatus === 'watched';
   const isInProgress = watchStatus === 'in_progress';
 
-  const { isLongPress, ...longPressHandlers } = useLongPress({
+  const { isLongPress, ref, ...longPressHandlers } = useLongPress({
     onLongPress: () => onLongPress(movie),
     delay: 500,
   });
 
+  const handleKeyUp = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+      // Check if long press was triggered - if so, don't call onSelect
+      if (!(window as any).__tvLongPressPreventClick) {
+        e.preventDefault();
+        onSelect(movie);
+      }
+    }
+  };
+
   const handleClick = () => {
-    if (!isLongPress) {
+    // For mouse/touch, let useLongPress handle it
+    if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
       onSelect(movie);
     }
   };
@@ -110,16 +121,15 @@ const MovieCard = React.memo<MovieCardProps>(({
       data-tv-initial={index === 0}
       tabIndex={0}
       {...longPressHandlers}
+      ref={ref}
       onClick={handleClick}
+      onKeyUp={handleKeyUp}
       onContextMenu={(e) => {
         e.preventDefault();
         onLongPress(movie);
       }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-          e.preventDefault();
-          onSelect(movie);
-        }
+      onKeyDown={() => {
+        // Let useLongPress handle it
       }}
       className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1"
     >

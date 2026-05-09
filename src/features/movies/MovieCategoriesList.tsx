@@ -7,7 +7,6 @@ import { StalkerGenre } from '@/types';
 import { useFavoriteCategories } from '@/hooks/useFavorites';
 import { useMovieCategories } from './movies.hooks';
 import { useTranslation } from '@/hooks/useTranslation';
-import { useTVKeyboard } from '@/hooks/useTVKeyboard';
 import { CategoryCard } from '@/components/ui/CategoryCard';
 
 interface MovieCategoriesListProps {
@@ -25,15 +24,6 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
   const accountId = client?.getAccount?.()?.id || 'default';
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'vod');
-
-  // TV keyboard with MENU key support
-  useTVKeyboard({
-    onMenu: () => {
-      if (selectedCategory) {
-        handleLongPress(selectedCategory);
-      }
-    },
-  });
 
   const { 
     data: categories = [], 

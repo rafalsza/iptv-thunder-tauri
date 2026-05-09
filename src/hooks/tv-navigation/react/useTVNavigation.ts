@@ -391,57 +391,14 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
           }
         },
         Enter: () => {
-          const current = currentElementRef.current;
-          if (current) {
-            onEnterRef.current?.(current);
-            // Special handling for select elements
-            if (current instanceof HTMLSelectElement) {
-              // Try to open select dropdown by dispatching mousedown event
-              const mousedown = new MouseEvent('mousedown', {
-                bubbles: true,
-                cancelable: true,
-                view: globalThis.window
-              });
-              current.dispatchEvent(mousedown);
-              current.focus();
-            } else {
-              current.click();
-            }
-          }
+          // Don't auto-click here - let components handle Enter via onKeyUp
+          // This prevents navigation on long press while allowing short press
         },
         OK: () => {
-          const current = currentElementRef.current;
-          if (current) {
-            onEnterRef.current?.(current);
-            if (current instanceof HTMLSelectElement) {
-              const mousedown = new MouseEvent('mousedown', {
-                bubbles: true,
-                cancelable: true,
-                view: globalThis.window
-              });
-              current.dispatchEvent(mousedown);
-              current.focus();
-            } else {
-              current.click();
-            }
-          }
+          // Don't auto-click here - let components handle OK via onKeyUp
         },
         Select: () => {
-          const current = currentElementRef.current;
-          if (current) {
-            onEnterRef.current?.(current);
-            if (current instanceof HTMLSelectElement) {
-              const mousedown = new MouseEvent('mousedown', {
-                bubbles: true,
-                cancelable: true,
-                view: globalThis.window
-              });
-              current.dispatchEvent(mousedown);
-              current.focus();
-            } else {
-              current.click();
-            }
-          }
+          // Don't auto-click here - let components handle Select via onKeyUp
         },
         Backspace: () => {
           if (!isTyping) {
@@ -589,12 +546,38 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     };
     const focusHandler = (e: FocusEvent) => handleFocusRef.current?.(e);
 
+    // Handle keyup for Enter/OK/Select to simulate click on short press
+    const keyUpHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+        // Only click if long press was NOT triggered
+        if (!(window as any).__tvLongPressPreventClick) {
+          const current = currentElementRef.current;
+          if (current) {
+            onEnterRef.current?.(current);
+            if (current instanceof HTMLSelectElement) {
+              const mousedown = new MouseEvent('mousedown', {
+                bubbles: true,
+                cancelable: true,
+                view: globalThis.window
+              });
+              current.dispatchEvent(mousedown);
+              current.focus();
+            } else {
+              current.click();
+            }
+          }
+        }
+      }
+    };
+
     // Use capturing phase to intercept before browser default navigation
     globalThis.addEventListener('keydown', keyHandler, true);
+    globalThis.addEventListener('keyup', keyUpHandler, true);
     document.addEventListener('focusin', focusHandler);
 
     return () => {
       globalThis.removeEventListener('keydown', keyHandler, true);
+      globalThis.removeEventListener('keyup', keyUpHandler, true);
       document.removeEventListener('focusin', focusHandler);
     };
   }, []);

@@ -202,7 +202,6 @@ export class TauriHttpClient {
   }
 
   private parseResponse<T>(response: { status: number; headers: Record<string, string>; body: string }): T {
-    logger.debug('parseResponse - status:', response.status, 'body length:', response.body?.length);
 
     if (response.status >= 400) {
       throw new Error(`HTTP ${response.status} - request failed`);
@@ -213,11 +212,6 @@ export class TauriHttpClient {
     }
 
     this.validateResponseBody(response.body);
-
-    // Debug: Log raw response for Android issues
-    if (response.body.length > 0) {
-      logger.debug('Raw response preview:', response.body.substring(0, 200));
-    }
 
     return this.parseJsonBody<T>(response.body);
   }
@@ -239,21 +233,6 @@ export class TauriHttpClient {
       parsed = JSON.parse(body) as T;
     } catch (parseError) {
       const errorMsg = (parseError as Error).message;
-      
-      // Try to recover - find the last "}]}" pattern which closes the data array
-      const lastDataEnd = body.lastIndexOf('}]}');
-      if (lastDataEnd > 0) {
-        const tryJson = body.substring(0, lastDataEnd + 3);
-        try {
-          const test = JSON.parse(tryJson);
-          if (test?.js?.data) {
-            logger.warn('Recovered partial JSON data');
-            return test as T;
-          }
-        } catch {
-          // Continue to error
-        }
-      }
       
       logger.error('JSON parse error:', parseError);
       logger.error('Response length:', body.length);

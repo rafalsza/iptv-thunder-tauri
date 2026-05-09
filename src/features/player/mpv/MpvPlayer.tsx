@@ -903,7 +903,8 @@ function usePlayerControls(): UsePlayerControlsReturn {
   const [volume, setVolume] = useState(80);
   const setFullscreen = useAppStore(state => state.setFullscreen);
   const isFullscreen = useAppStore(state => state.isFullscreen);
-  const [isPip, setIsPip] = useState(false);
+  const setPip = useAppStore(state => state.setPip);
+  const isPip = useAppStore(state => state.isPip);
   const [showUi, setShowUi] = useState(true);
   const uiHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
@@ -969,9 +970,9 @@ function usePlayerControls(): UsePlayerControlsReturn {
         await window.setDecorations(false);
       }
 
-      setIsPip(newState);
+      setPip(newState);
     } catch (e) { console.error('PiP failed:', e); }
-  }, [isPip, isFullscreen, setFullscreen]);
+  }, [isPip, isFullscreen, setFullscreen, setPip]);
 
   const exitFullscreen = useCallback(async () => {
     if (!isFullscreen) return;

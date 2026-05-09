@@ -100,18 +100,21 @@ async fn stalker_request(
         cookies.push(format!("stb_token={}", token));
     }
     
-    cookies.push("stb_lang=en".to_string());
+    cookies.push("stb_lang=en_US".to_string());
     cookies.push("timezone=Europe%2FWarsaw".to_string());
     
     let cookie_string = cookies.join("; ");
     request = request.header("Cookie", &cookie_string);
 
-    // Add required Stalker headers
+    // Add required Stalker headers (matching desktop exactly)
     request = request.header("Referer", &url);
     request = request.header("X-Requested-With", "XMLHttpRequest");
     request = request.header("Accept", "*/*");
     request = request.header("Accept-Language", "en-US,en;q=0.9");
-    request = request.header("User-Agent", "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.85 Mobile Safari/537.36");
+    request = request.header("Connection", "keep-alive");
+    let user_agent = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG250 Safari/533.3";
+    request = request.header("User-Agent", user_agent);
+    request = request.header("X-User-Agent", user_agent);
 
     // Add body if provided
     if let Some(request_body) = body {

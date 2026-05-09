@@ -61,6 +61,37 @@ async function generateIcons() {
     console.log(`✓ Created ${folder}/ic_launcher_round.png (${size}x${size})`);
   }
 
+  // Create foreground icons for adaptive icons
+  for (const [folder, size] of Object.entries(sizes)) {
+    const outputPath = path.join(outputDir, folder, 'ic_launcher_foreground.png');
+    
+    await image
+      .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .toFile(outputPath);
+    
+    console.log(`✓ Created ${folder}/ic_launcher_foreground.png (${size}x${size})`);
+  }
+
+  // Generate Android TV banner (320x180)
+  const bannerPath = path.join(outputDir, 'drawable', 'ic_banner.png');
+  fs.mkdirSync(path.dirname(bannerPath), { recursive: true });
+  
+  await image
+    .resize(320, 180, { fit: 'contain', background: { r: 15, g: 23, b: 42, alpha: 1 } })
+    .toFile(bannerPath);
+  
+  console.log(`✓ Created drawable/ic_banner.png (320x180)`);
+
+  // Generate TV launcher icon (for Android TV)
+  const tvIconPath = path.join(outputDir, 'drawable-tv', 'ic_launcher.png');
+  fs.mkdirSync(path.dirname(tvIconPath), { recursive: true });
+  
+  await image
+    .resize(192, 192, { fit: 'contain', background: { r: 15, g: 23, b: 42, alpha: 1 } })
+    .toFile(tvIconPath);
+  
+  console.log(`✓ Created drawable-tv/ic_launcher.png (192x192)`);
+
   console.log('\nAndroid icons generated successfully!');
 }
 

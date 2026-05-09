@@ -30,13 +30,24 @@ const FavoriteChannelCard: React.FC<FavoriteChannelCardProps> = ({
   onToggleFavorite,
   onLongPress,
 }) => {
-  const { isLongPress, ...longPressHandlers } = useLongPress({
+  const { isLongPress, ref, isLongPressRef, ...longPressHandlers } = useLongPress({
     onLongPress: () => onLongPress(channel),
     delay: 500,
   });
 
+  const handleKeyUp = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+      // Check if long press was triggered - if so, don't call onSelect
+      if (!(window as any).__tvLongPressPreventClick) {
+        e.preventDefault();
+        onSelect(channel);
+      }
+    }
+  };
+
   const handleClick = () => {
-    if (!isLongPress) {
+    // For mouse/touch, let useLongPress handle it
+    if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
       onSelect(channel);
     }
   };
@@ -50,16 +61,15 @@ const FavoriteChannelCard: React.FC<FavoriteChannelCardProps> = ({
       data-tv-initial={index === 0}
       tabIndex={0}
       {...longPressHandlers}
+      ref={ref}
       onClick={handleClick}
+      onKeyUp={handleKeyUp}
       onContextMenu={(e) => {
         e.preventDefault();
         onLongPress(channel);
       }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-          e.preventDefault();
-          onSelect(channel);
-        }
+      onKeyDown={() => {
+        // Let useLongPress handle it
       }}
       className="p-2 rounded-lg cursor-pointer dark:hover:bg-slate-700 hover:bg-gray-200 hover:border-green-700 transition-all dark:bg-slate-800 bg-white dark:focus:bg-slate-700 focus:bg-gray-200 dark:focus:border-green-700 focus:border-green-700"
     >

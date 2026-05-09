@@ -23,24 +23,32 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
   onLongPress,
   groupId = 'category-cards',
 }) => {
-  const { isLongPress, ...longPressHandlers } = useLongPress({
+  const { isLongPress, ref, isLongPressRef, ...longPressHandlers } = useLongPress({
     onLongPress: () => onLongPress(category),
     delay: 500,
   });
-
-  const handleClick = () => {
-    if (!isLongPress) {
-      onSelect(category);
-    }
-  };
 
   const isFavorite = isCategoryFavorite?.(String(category.id));
   const categoryName = category.name || category.title || '';
   const categoryId = String(category.id);
 
+  const handleClick = (e: React.MouseEvent) => {
+    // Immediate check for long press flag
+    if ((window as any).__tvLongPressPreventClick) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    // For mouse/touch, let useLongPress handle it
+    if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
+      onSelect(category);
+    }
+  };
+
   return (
     <div
       key={category.id}
+      ref={ref}
       data-tv-focusable
       data-tv-group={groupId}
       data-tv-index={categoryIndex}
@@ -59,9 +67,6 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
       }}
       onKeyUp={(e) => {
         (e.currentTarget as HTMLElement).classList.remove('long-press-active');
-        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-          e.preventDefault();
-        }
       }}
       className={`
         relative dark:bg-slate-800 dark:bg-opacity-50 bg-white bg-opacity-50 backdrop-blur-sm dark:border border-slate-600 border-gray-300 rounded-lg p-2 sm:p-3 md:p-4 h-full min-h-[80px] sm:min-h-[100px] md:min-h-[120px]

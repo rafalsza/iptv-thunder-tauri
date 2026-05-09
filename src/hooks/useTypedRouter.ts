@@ -56,7 +56,10 @@ export const useTypedRouter = () => {
 
   // Navigate to a simple route
   const navigate = useCallback((newRoute: SimpleRoute) => {
-    setRoute(newRoute);
+    setRoute(currentRoute => {
+      previousRouteRef.current = currentRoute;
+      return newRoute;
+    });
   }, []);
 
   // Navigate to movie details (with data)
@@ -73,28 +76,50 @@ export const useTypedRouter = () => {
 
   // Go back from details view
   const goBack = useCallback(() => {
-    setRoute(previousRouteRef.current);
-  }, []);
+    const targetRoute = previousRouteRef.current;
+    // Clear selected category when going back to category views
+    if (targetRoute.type === 'movie-categories' ||
+        targetRoute.type === 'favorite-movie-categories' ||
+        targetRoute.type === 'series-categories' ||
+        targetRoute.type === 'favorite-series-categories' ||
+        targetRoute.type === 'categories' ||
+        targetRoute.type === 'favorite-categories') {
+      setSelectedCategory(null);
+    }
+    setRoute(targetRoute);
+  }, [route]);
 
   // Handle category selection with context-aware navigation
   const navigateToCategory = useCallback((category: StalkerGenre) => {
     setSelectedCategory(category);
 
     setRoute(currentRoute => {
+      previousRouteRef.current = currentRoute;
       switch (currentRoute.type) {
         case 'movie-categories':
         case 'favorite-movie-categories':
+          previousRouteRef.current = currentRoute;
           return { type: 'movies' };
         case 'series-categories':
         case 'favorite-series-categories':
+          previousRouteRef.current = currentRoute;
           return { type: 'series' };
+        case 'categories':
+        case 'favorite-categories':
+          previousRouteRef.current = currentRoute;
+          return { type: 'tv' };
         case 'movies':
         case 'series':
         case 'tv':
-          // Already in the correct content view
+        case 'portals':
+        case 'for-you':
+        case 'favorite-channels':
+        case 'favorite-movies':
+        case 'favorite-series':
+        case 'movie-details':
+        case 'series-details':
+          // Already in the correct content view or not applicable
           return currentRoute;
-        default:
-          return { type: 'tv' };
       }
     });
   }, []);

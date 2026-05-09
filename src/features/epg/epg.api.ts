@@ -12,7 +12,8 @@ export const getChannelEPG = async (
   _to?: number
 ): Promise<StalkerEPG[]> => {
   // Always use short EPG - get_epg endpoint is disabled
-  return client.getEPG(channelId);
+  // Increase size to get more programs with full descriptions
+  return client.getEPG(channelId, 50);
 };
 
 export const getChannelsEPG = async (

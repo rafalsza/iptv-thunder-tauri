@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 
 interface TVKeyboardOptions {
   onBack?: () => void;
@@ -25,6 +25,16 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
   const onEnterRef = useRef(onEnter);
   const onMenuRef = useRef(onMenu);
   const onFocusNextRef = useRef(onFocusNext);
+  const enterClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Listen for tvlongpress event to cancel pending click
+  const handleTvLongPress = useCallback(() => {
+    console.log('[useTVKeyboard] tvlongpress event received, cancelling pending click');
+    if (enterClickTimeoutRef.current) {
+      clearTimeout(enterClickTimeoutRef.current);
+      enterClickTimeoutRef.current = null;
+    }
+  }, []);
   
   useEffect(() => { onBackRef.current = onBack; }, [onBack]);
   useEffect(() => { onEnterRef.current = onEnter; }, [onEnter]);
@@ -61,13 +71,26 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
       const handleEnter = () => {
         const current = getCurrentElement?.();
         if (current) {
-          // Call onEnter callback - if it returns true, don't auto-click
-          // This allows the callback to handle the action itself (e.g., toggle UI)
-          const handled = onEnterRef.current?.(current);
-          // Only auto-click if onEnter didn't handle it (didn't return true)
-          if (handled !== true) {
-            current.click();
+          console.log('[useTVKeyboard] handleEnter called, scheduling click in 100ms');
+          // Clear any pending click
+          if (enterClickTimeoutRef.current) {
+            clearTimeout(enterClickTimeoutRef.current);
           }
+          
+          // Delay the click to allow long press detection
+          enterClickTimeoutRef.current = setTimeout(() => {
+            console.log('[useTVKeyboard] Click delay expired, __tvLongPressPreventClick:', (window as any).__tvLongPressPreventClick);
+            // Check if long press was triggered
+            if (!(window as any).__tvLongPressPreventClick) {
+              const handled = onEnterRef.current?.(current);
+              if (handled !== true) {
+                console.log('[useTVKeyboard] Executing click');
+                current.click();
+              }
+            } else {
+              console.log('[useTVKeyboard] Click cancelled due to long press');
+            }
+          }, 550); // Delay longer than MainActivity's 500ms long press
         }
       };
 
@@ -106,9 +129,14 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
     };
 
     globalThis.addEventListener('keydown', handleKeyDown);
+    globalThis.addEventListener('tvlongpress', handleTvLongPress);
 
     return () => {
       globalThis.removeEventListener('keydown', handleKeyDown);
+      globalThis.removeEventListener('tvlongpress', handleTvLongPress);
+      if (enterClickTimeoutRef.current) {
+        clearTimeout(enterClickTimeoutRef.current);
+      }
     };
   }, [getCurrentElement, getGlobalActiveContainer, getLocalActiveContainer]);
 

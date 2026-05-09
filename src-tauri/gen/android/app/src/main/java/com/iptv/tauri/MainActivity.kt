@@ -1,6 +1,8 @@
 package com.iptv.tauri
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -15,7 +17,13 @@ data class PlayerParams(
     val isVod: Boolean,
     val episodesJson: String,
     val currentEpisodeIndex: Int,
-    val autoPlayEpisodes: Boolean
+    val autoPlayEpisodes: Boolean,
+    val epgTitle: String,
+    val epgStart: String,
+    val epgEnd: String,
+    val epgNextTitle: String,
+    val epgNextStart: String,
+    val epgNextEnd: String
 )
 
 class MainActivity : TauriActivity() {
@@ -30,6 +38,28 @@ class MainActivity : TauriActivity() {
     }
 
     private var webView: WebView? = null
+    private var keyDownTime = 0L
+    private val LONG_PRESS_DELAY = 500L // 500ms for long press
+    private val handler = Handler(Looper.getMainLooper())
+    private var longPressTriggered = false
+    private var longPressEventSent = false
+
+    // Single long press handler that's reused
+    private val longPressRunnable = Runnable {
+        webView?.evaluateJavascript("console.log('[MainActivity] Long press handler fired, longPressEventSent=$longPressEventSent')", null)
+        if (!longPressEventSent) {
+            webView?.evaluateJavascript(
+                "window.dispatchEvent(new CustomEvent('tvlongpress', { bubbles: true, cancelable: true }))",
+                null
+            )
+            webView?.evaluateJavascript("console.log('[MainActivity] Long press detected on Enter/OK - sending tvlongpress event')", null)
+            longPressTriggered = true
+            longPressEventSent = true
+            webView?.evaluateJavascript("console.log('[MainActivity] Set longPressTriggered=true')", null)
+        } else {
+            webView?.evaluateJavascript("console.log('[MainActivity] Long press already sent, skipping')", null)
+        }
+    }
 
     init {
         Log.d("MainActivity", "MainActivity constructor called - MainActivity class loaded")
@@ -83,26 +113,71 @@ class MainActivity : TauriActivity() {
         // Handle BACK key - send to WebView for tv-navigation system
         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK) {
             webView?.evaluateJavascript(
-                "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Back', code: 'Back' }))",
+                "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Back', code: 'Back', cancelable: true }))",
                 null
             )
             return true
         }
 
         // Handle D-pad keys - send to WebView for TV navigation
+        if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                // Start long press detection (only on initial keydown, not repeat)
+                if (event.repeatCount == 0) {
+                    longPressTriggered = false
+                    longPressEventSent = false
+                    keyDownTime = System.currentTimeMillis()
+                    // Cancel any existing handler before posting new one
+                    handler.removeCallbacks(longPressRunnable)
+                    handler.postDelayed(longPressRunnable, LONG_PRESS_DELAY)
+                    webView?.evaluateJavascript("console.log('[MainActivity] Long press timer posted')", null)
+                } else {
+                    webView?.evaluateJavascript("console.log('[MainActivity] Repeat keydown, skipping timer')", null)
+                }
+
+                // Send regular keydown event
+                webView?.evaluateJavascript(
+                    "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', cancelable: true }))",
+                    null
+                )
+                return true
+            } else if (event.action == KeyEvent.ACTION_UP) {
+                // Cancel long press if key is released before delay
+                handler.removeCallbacks(longPressRunnable)
+
+                webView?.evaluateJavascript("console.log('[MainActivity] ACTION_UP received, longPressTriggered=$longPressTriggered')", null)
+
+                // Only send keyup event if long press was NOT triggered
+                if (!longPressTriggered) {
+                    webView?.evaluateJavascript("console.log('[MainActivity] Sending keyup event')", null)
+                    webView?.evaluateJavascript(
+                        "window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', cancelable: true }))",
+                        null
+                    )
+                } else {
+                    webView?.evaluateJavascript("console.log('[MainActivity] Skipping keyup event - long press was triggered')", null)
+                    // Reset native flags after a short delay
+                    handler.postDelayed({
+                        longPressTriggered = false
+                        longPressEventSent = false
+                    }, 500)
+                }
+                return true
+            }
+        }
+
+        // Handle other D-pad keys
         if (event.action == KeyEvent.ACTION_DOWN) {
             val keyName = when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP -> "ArrowUp"
                 KeyEvent.KEYCODE_DPAD_DOWN -> "ArrowDown"
                 KeyEvent.KEYCODE_DPAD_LEFT -> "ArrowLeft"
                 KeyEvent.KEYCODE_DPAD_RIGHT -> "ArrowRight"
-                KeyEvent.KEYCODE_DPAD_CENTER -> "Enter"
-                KeyEvent.KEYCODE_ENTER -> "Enter"
                 else -> null
             }
             if (keyName != null) {
                 webView?.evaluateJavascript(
-                    "window.dispatchEvent(new KeyboardEvent('keydown', { key: '$keyName', code: '$keyName' }))",
+                    "window.dispatchEvent(new KeyboardEvent('keydown', { key: '$keyName', code: '$keyName', cancelable: true }))",
                     null
                 )
                 return true
@@ -110,6 +185,13 @@ class MainActivity : TauriActivity() {
         }
 
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Restore focus to WebView when returning from NativePlayerActivity
+        webView?.requestFocus()
+        window.decorView.requestFocus()
     }
 
     override fun onWebViewCreate(webView: WebView) {
@@ -164,7 +246,13 @@ class MainActivity : TauriActivity() {
                 isVod: Boolean?,
                 episodesJson: String?,
                 currentEpisodeIndex: Int?,
-                autoPlayEpisodes: Boolean?
+                autoPlayEpisodes: Boolean?,
+                epgTitle: String?,
+                epgStart: String?,
+                epgEnd: String?,
+                epgNextTitle: String?,
+                epgNextStart: String?,
+                epgNextEnd: String?
             ) {
                 Log.e("MainActivity", "=== open_compose_player ENTRY POINT ===")
                 Log.d("MainActivity", "open_compose_player called with: channelId=$channelId, portalUrl=$portalUrl, mac=$mac, token=${if(!token.isNullOrEmpty()) "SET" else "EMPTY"}, isVod=$isVod, currentEpisodeIndex=$currentEpisodeIndex, autoPlayEpisodes=$autoPlayEpisodes")
@@ -181,6 +269,12 @@ class MainActivity : TauriActivity() {
                     intent.putExtra("episodesJson", episodesJson)
                     intent.putExtra("currentEpisodeIndex", currentEpisodeIndex)
                     intent.putExtra("autoPlayEpisodes", autoPlayEpisodes)
+                    intent.putExtra("epgTitle", epgTitle)
+                    intent.putExtra("epgStart", epgStart)
+                    intent.putExtra("epgEnd", epgEnd)
+                    intent.putExtra("epgNextTitle", epgNextTitle)
+                    intent.putExtra("epgNextStart", epgNextStart)
+                    intent.putExtra("epgNextEnd", epgNextEnd)
                     startActivity(intent)
                     Log.e("MainActivity", "NativePlayerActivity intent started")
                 }

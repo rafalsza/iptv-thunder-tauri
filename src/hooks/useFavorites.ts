@@ -7,11 +7,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { getDB } from './db';
 import { createLogger } from '../lib/logger';
 
+type FavoriteType = 'live' | 'vod' | 'series';
+
 interface FavoriteItem {
   id: number;
   account_id: string;
   kind: 'item' | 'category';
-  type: 'live' | 'vod' | 'series';
+  type: FavoriteType;
   item_id: string;
   parent_id?: string;
   name: string;
@@ -55,7 +57,6 @@ export async function initFavoritesTable(): Promise<void> {
   }
 
   isInitializing = true;
-  logger.info('Initializing table...');
 
   initPromise = (async () => {
     try {
@@ -71,7 +72,8 @@ export async function initFavoritesTable(): Promise<void> {
           await db.execute(`DROP TABLE IF EXISTS favorites`);
         }
       } catch (e) {
-        // Table doesn't exist, continue
+        // Table doesn't exist yet, continue with creation
+        logger.debug('Table check failed (expected if table does not exist):', e);
       }
 
       // Create unified favorites table with kind field
@@ -134,7 +136,7 @@ export async function loadFavorites(accountId: string): Promise<FavoriteItem[]> 
 // Add/update favorite item (UPSERT)
 export async function addFavorite(
   accountId: string,
-  type: 'live' | 'vod' | 'series',
+  type: FavoriteType,
   itemId: string,
   metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }
 ): Promise<void> {
@@ -165,7 +167,7 @@ export async function addFavorite(
 // Remove item from favorites
 export async function removeFavorite(
   accountId: string,
-  type: 'live' | 'vod' | 'series',
+  type: FavoriteType,
   itemId: string
 ): Promise<void> {
   try {
@@ -187,7 +189,7 @@ export async function removeFavorite(
 // Add item to favorites
 export async function addToFavorites(
   accountId: string,
-  type: 'live' | 'vod' | 'series',
+  type: FavoriteType,
   itemId: string,
   metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }
 ): Promise<void> {
@@ -197,7 +199,7 @@ export async function addToFavorites(
 // Remove item from favorites
 export async function removeFromFavorites(
   accountId: string,
-  type: 'live' | 'vod' | 'series',
+  type: FavoriteType,
   itemId: string
 ): Promise<void> {
   await removeFavorite(accountId, type, itemId);
@@ -206,7 +208,7 @@ export async function removeFromFavorites(
 // Check if item is favorite
 export async function isFavorite(
   accountId: string,
-  type: 'live' | 'vod' | 'series',
+  type: FavoriteType,
   itemId: string
 ): Promise<boolean> {
   try {
@@ -229,7 +231,7 @@ export async function isFavorite(
 // Load favorite categories
 export async function loadFavoriteCategories(
   accountId: string,
-  type: 'live' | 'vod' | 'series'
+  type: FavoriteType
 ): Promise<string[]> {
   try {
     const db = await getDB();
@@ -266,7 +268,7 @@ export async function loadAllFavoriteCategories(accountId: string): Promise<Reco
 // Add favorite category
 export async function addFavoriteCategory(
   accountId: string,
-  type: 'live' | 'vod' | 'series',
+  type: FavoriteType,
   categoryId: string,
   name?: string
 ): Promise<void> {
@@ -289,7 +291,7 @@ export async function addFavoriteCategory(
 // Remove favorite category
 export async function removeFavoriteCategory(
   accountId: string,
-  type: 'live' | 'vod' | 'series',
+  type: FavoriteType,
   categoryId: string
 ): Promise<void> {
   try {
@@ -307,7 +309,7 @@ export async function removeFavoriteCategory(
 // Toggle favorite category
 export async function toggleFavoriteCategory(
   accountId: string,
-  type: 'live' | 'vod' | 'series',
+  type: FavoriteType,
   categoryId: string,
   name?: string
 ): Promise<boolean> {
@@ -324,7 +326,7 @@ export async function toggleFavoriteCategory(
 // Check if category is favorite
 export async function isFavoriteCategory(
   accountId: string,
-  type: 'live' | 'vod' | 'series',
+  type: FavoriteType,
   categoryId: string
 ): Promise<boolean> {
   try {
@@ -361,14 +363,14 @@ export function useFavorites(accountId: string) {
     );
   }, [favorites]);
 
-  const isItemFavorite = (type: 'live' | 'vod' | 'series', itemId: string): boolean => {
+  const isItemFavorite = (type: FavoriteType, itemId: string): boolean => {
     const key = `${type}:${itemId.replace(/\.0$/, '')}`; // Normalize the lookup key too
     return favoriteSet.has(key);
   };
 
   const toggleMutation = useMutation({
     mutationFn: async ({ type, itemId, isFavorite, metadata }: { 
-      type: 'live' | 'vod' | 'series'; 
+      type: FavoriteType; 
       itemId: string; 
       isFavorite: boolean; 
       metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any };
@@ -426,7 +428,7 @@ export function useFavorites(accountId: string) {
     },
   });
 
-  const toggleItemFavorite = (type: 'live' | 'vod' | 'series', itemId: string, metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }) => {
+  const toggleItemFavorite = (type: FavoriteType, itemId: string, metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }) => {
     const currentlyFavorite = isItemFavorite(type, itemId);
     toggleMutation.mutate({ type, itemId, isFavorite: !currentlyFavorite, metadata });
   };
@@ -440,10 +442,10 @@ export function useFavorites(accountId: string) {
     isLoading,
     isItemFavorite,
     toggleItemFavorite,
-    addToFavorites: (type: 'live' | 'vod' | 'series', itemId: string, metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }) => {
+    addToFavorites: (type: FavoriteType, itemId: string, metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }) => {
       toggleMutation.mutate({ type, itemId, isFavorite: true, metadata });
     },
-    removeFromFavorites: (type: 'live' | 'vod' | 'series', itemId: string) => {
+    removeFromFavorites: (type: FavoriteType, itemId: string) => {
       toggleMutation.mutate({ type, itemId, isFavorite: false });
     },
     isPending: toggleMutation.isPending,
@@ -451,7 +453,7 @@ export function useFavorites(accountId: string) {
 }
 
 // Get favorite IDs as array of strings (for compatibility)
-export function useFavoriteIds(accountId: string, type: 'live' | 'vod' | 'series') {
+export function useFavoriteIds(accountId: string, type: FavoriteType) {
   const { favorites, isLoading } = useFavorites(accountId);
   
   const ids = favorites
@@ -465,7 +467,7 @@ export function useFavoriteIds(accountId: string, type: 'live' | 'vod' | 'series
 // USE FAVORITE CATEGORIES HOOK
 // =========================
 
-export function useFavoriteCategories(accountId: string, type: 'live' | 'vod' | 'series') {
+export function useFavoriteCategories(accountId: string, type: FavoriteType) {
   const queryClient = useQueryClient();
   const tableReady = useTableReady();
 

@@ -6,7 +6,6 @@ import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
 import { useFavoriteCategories } from '@/hooks/useFavorites';
 import { useChannelCategories } from './tv.hooks';
-import { useTVKeyboard } from '@/hooks/useTVKeyboard';
 import { useTranslation } from '@/hooks/useTranslation';
 import { CategoryCard as UICategoryCard } from '@/components/ui/CategoryCard';
 
@@ -60,15 +59,6 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
       navigator.vibrate(50);
     }
   };
-
-  // TV keyboard with MENU key support
-  useTVKeyboard({
-    onMenu: () => {
-      if (selectedCategory) {
-        handleLongPress(selectedCategory);
-      }
-    },
-  });
 
   if (isLoading) {
     return (

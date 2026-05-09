@@ -151,7 +151,7 @@ function AppInner({ }: AppProps) {
   useTVNavigation({
     selector: '[data-tv-focusable]',
     onBack: () => {
-      if ((isMovieDetails(route) && selectedMovie) || (isSeriesDetails(route) && selectedSeries)) {
+      if ((isMovieDetails(route) && selectedMovie) || (isSeriesDetails(route) && selectedSeries) || route.type === 'tv' || route.type === 'movies' || route.type === 'series') {
         goBack();
       }
     },
@@ -220,7 +220,6 @@ export const App: React.FC<AppProps> = ({ }) => {
   useEffect(() => {
     try {
       const osPlatform = platform();
-      console.log('[App] Platform detected:', osPlatform);
       setIsAndroid(osPlatform === 'android');
     } catch (e) {
       console.log('[App] Platform detection failed:', e);
