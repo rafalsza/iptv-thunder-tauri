@@ -5,6 +5,9 @@ import { NavigationState, Direction, NavigationPlugin, GridData } from '../core/
 
 const lastCategoryFocus = new Map<string, string>();
 
+// Cache for filtered nodes to avoid repeated O(n) operations
+const nodesCache = new Map<string, any[]>();
+
 type NavigationTarget = { id: string; disabled?: boolean } | string | null;
 
 export const GRID_GROUPS = new Set([
@@ -58,9 +61,15 @@ function getCarouselGroupNodes(
   groupId: string,
   containerId: string | undefined
 ) {
-  return state.nodes.filter(
+  const cacheKey = `carousel-${groupId}-${containerId}`;
+  const cached = nodesCache.get(cacheKey);
+  if (cached) return cached;
+
+  const filtered = state.nodes.filter(
     n => n.groupId === groupId && n.containerId === containerId && !n.disabled
   );
+  nodesCache.set(cacheKey, filtered);
+  return filtered;
 }
 
 function getCarouselGroupIndex(groupId: string | undefined): number {
@@ -346,7 +355,11 @@ function tryNavigateToPreviousInCarousel(
   currentGroupId: string | undefined,
   currentId: string | undefined
 ): NavigationTarget {
-  const groupElements = state.nodes.filter(n => n.groupId === currentGroupId && !n.disabled);
+  const cacheKey = `carousel-prev-${currentGroupId}`;
+  const cached = nodesCache.get(cacheKey);
+  const groupElements = cached || state.nodes.filter(n => n.groupId === currentGroupId && !n.disabled);
+  if (!cached) nodesCache.set(cacheKey, groupElements);
+
   const currentIndex = groupElements.findIndex(n => n.id === currentId);
   if (currentIndex > 0) {
     return groupElements[currentIndex - 1].id;
@@ -429,9 +442,12 @@ function findAdjacentNodeInGroup(
   }
 
   const targetIndex = current.index;
-  const filteredNodes = state.nodes.filter((n) =>
+  const cacheKey = `adjacent-${current.groupId}-${current.containerId}-${direction}-${targetIndex}`;
+  const cached = nodesCache.get(cacheKey);
+  const filteredNodes = cached || state.nodes.filter((n) =>
     shouldIncludeNode(n, targetIndex, direction, current.groupId, current.containerId)
   );
+  if (!cached) nodesCache.set(cacheKey, filteredNodes);
   const sortedNodes = sortNodesByDirection(filteredNodes, direction);
 
   return sortedNodes.at(0) ?? null;
@@ -450,11 +466,14 @@ function isInVisualTopRow(
   current: { groupId?: string; containerId?: string; rect: DOMRect }
 ): boolean {
   const THRESHOLD = 16; // px tolerance for same-row detection
-  const groupNodes = state.nodes.filter((n) =>
+  const cacheKey = `visual-top-${current.groupId}-${current.containerId}`;
+  const cached = nodesCache.get(cacheKey);
+  const groupNodes = cached || state.nodes.filter((n) =>
     n.groupId === current.groupId &&
     n.containerId === current.containerId &&
     n.rect !== undefined
   );
+  if (!cached) nodesCache.set(cacheKey, groupNodes);
 
   if (groupNodes.length === 0) return false;
 

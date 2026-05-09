@@ -163,6 +163,16 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   const updateState = useCallback(() => {
     const elements = getFocusableElements();
     const visibleElements = filterVisibleElements(elements);
+
+    // Dirty checking: only rebuild state if elements actually changed
+    const prevElements = elementsRef.current;
+    const elementsChanged = prevElements.length !== visibleElements.length ||
+      prevElements.some((el, i) => el !== visibleElements[i]);
+
+    if (!elementsChanged) {
+      return; // Skip rebuild if nothing changed
+    }
+
     elementsRef.current = visibleElements;
 
     // Clear current element if detached from DOM
@@ -289,6 +299,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     window.addEventListener('resize', resizeListener);
     window.addEventListener('scroll', scrollListener, true);
 
+    // Optimized mutation observer - observe only TV containers
     let mutationScheduled = false;
     const observer = new MutationObserver((mutations) => {
       // Only process mutations that add or remove nodes
@@ -303,9 +314,22 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         mutationScheduled = false;
       });
     });
+
+    // Observe only TV containers instead of entire document
+    const containers = document.querySelectorAll('[data-tv-container]');
+    containers.forEach(container => {
+      observer.observe(container, {
+        childList: true,
+        subtree: true,
+        attributes: false,
+        characterData: false,
+      });
+    });
+
+    // Also observe body for container additions/removals
     observer.observe(document.body, {
       childList: true,
-      subtree: true,
+      subtree: false,
       attributes: false,
       characterData: false,
     });

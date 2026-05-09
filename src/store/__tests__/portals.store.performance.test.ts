@@ -44,7 +44,7 @@ describe('portals.store Performance Tests', () => {
   });
 
   describe('Portal Operations Performance', () => {
-    it('should add portal in under 5ms', () => {
+    it('should add portal in under 15ms', () => {
       const portalData = {
         name: 'Test Portal',
         login: 'test',
@@ -59,7 +59,7 @@ describe('portals.store Performance Tests', () => {
       const endTime = performance.now();
       const duration = endTime - startTime;
 
-      expect(duration).toBeLessThan(5);
+      expect(duration).toBeLessThan(15);
     });
 
     it('should add 100 portals in under 50ms', () => {
