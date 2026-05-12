@@ -1,12 +1,13 @@
 // =========================
 // 🌐 PORTAL LIST COMPONENT
 // =========================
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { usePortalsStore } from '@/store/portals.store';
 import { useTranslation } from '@/hooks/useTranslation';
 import { PortalAccount } from './portals.types';
 import { PortalForm } from './PortalForm';
 import { PortalTest } from './PortalTest';
+import { CheckCircle, Circle, Plus, Target, RefreshCw, Edit, Trash2, X, Globe, User, Monitor } from 'lucide-react';
 
 export const PortalList: React.FC = () => {
   const { t } = useTranslation();
@@ -28,44 +29,70 @@ export const PortalList: React.FC = () => {
   );
   const menuRef = useRef<HTMLDivElement>(null);
   const lastPortalRef = useRef<string | null>(null);
+  const portalCardRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const testingPortalRef = useRef<string | null>(null);
+  const editingPortalRef = useRef<string | null>(null);
+
+  // Focus management using useCallback and refs
+  const focusMenuButton = useCallback(() => {
+    if (menuRef.current) {
+      const firstButton = menuRef.current.querySelector('[data-tv-initial]') as HTMLElement;
+      if (firstButton) {
+        firstButton.focus();
+      } else {
+        const firstButtonAny = menuRef.current.querySelector('button') as HTMLElement;
+        if (firstButtonAny) {
+          firstButtonAny.focus();
+        }
+      }
+    }
+  }, []);
+
+  const focusPortalCard = useCallback((portalId: string) => {
+    // Don't restore focus if a modal is open (e.g., PortalTest, PortalForm)
+    const openModal = document.querySelector('[data-tv-container]:not([data-tv-container="main"]):not([data-tv-container="navigation"])');
+    if (openModal) {
+      return;
+    }
+
+    const portalCard = portalCardRefs.current.get(portalId);
+    if (portalCard) {
+      portalCard.focus();
+    }
+  }, []);
+
+  const focusAddButton = useCallback(() => {
+    if (addButtonRef.current) {
+      addButtonRef.current.focus();
+    }
+  }, []);
 
   // Auto-focus first menu button when menu opens, restore focus when closes
   useEffect(() => {
     if (activeMenuPortal) {
-      // Menu is opening - save the portal ID
       lastPortalRef.current = activeMenuPortal;
-
-      // Delay to ensure DOM and navigation state are fully updated
-      const timeout = setTimeout(() => {
-        const firstButton = menuRef.current?.querySelector('[data-tv-initial]') as HTMLElement;
-        if (firstButton) {
-          firstButton.focus();
-        } else {
-          const firstButtonAny = menuRef.current?.querySelector('button') as HTMLElement;
-          if (firstButtonAny) {
-            firstButtonAny.focus();
-          }
-        }
-      }, 200);
-
-      return () => clearTimeout(timeout);
+      focusMenuButton();
     } else if (lastPortalRef.current) {
-      // Menu is closing - restore focus to the portal card
-      const timeout = setTimeout(() => {
-        // Don't restore focus if a modal is open (e.g., PortalTest, PortalForm)
-        const openModal = document.querySelector('[data-tv-container]:not([data-tv-container="main"]):not([data-tv-container="navigation"])');
-        if (openModal) {
-          return;
-        }
-
-        const portalCard = document.querySelector(`[data-portal-id="${lastPortalRef.current}"]`) as HTMLElement;
-        if (portalCard) {
-          portalCard.focus();
-        }
-      }, 100);
-      return () => clearTimeout(timeout);
+      focusPortalCard(lastPortalRef.current);
     }
-  }, [activeMenuPortal]);
+  }, [activeMenuPortal, focusMenuButton, focusPortalCard]);
+
+  // Restore focus to portal card after test closes
+  useEffect(() => {
+    if (!testingPortal && testingPortalRef.current) {
+      focusPortalCard(testingPortalRef.current);
+      testingPortalRef.current = null;
+    }
+  }, [testingPortal, focusPortalCard]);
+
+  // Restore focus to portal card after edit form closes
+  useEffect(() => {
+    if (!showForm && editingPortalRef.current) {
+      focusPortalCard(editingPortalRef.current);
+      editingPortalRef.current = null;
+    }
+  }, [showForm, focusPortalCard]);
 
   // Close menu when clicking outside or pressing Escape
   useEffect(() => {
@@ -99,6 +126,7 @@ export const PortalList: React.FC = () => {
   }, [activeMenuPortal]);
 
   const handleEdit = (portal: PortalAccount) => {
+    editingPortalRef.current = portal.id;
     setEditingPortal(portal);
     setShowForm(true);
   };
@@ -113,24 +141,16 @@ export const PortalList: React.FC = () => {
       setDeletingPortal(null);
 
       // Restore focus after delete modal closes
-      setTimeout(() => {
-        // If there are still portals, focus the first one
-        if (portals.length > 1) {
-          const firstPortal = portals.find(p => p.id !== deletingPortal.id);
-          if (firstPortal) {
-            const portalCard = document.querySelector(`[data-portal-id="${firstPortal.id}"]`) as HTMLElement;
-            if (portalCard) {
-              portalCard.focus();
-            }
-          }
-        } else {
-          // No portals left, focus the "Add Portal" button
-          const addButton = document.querySelector('[data-tv-group="portals-content"][data-tv-initial]') as HTMLElement;
-          if (addButton) {
-            addButton.focus();
-          }
+      // If there are still portals, focus the first one
+      if (portals.length > 1) {
+        const firstPortal = portals.find(p => p.id !== deletingPortal.id);
+        if (firstPortal) {
+          focusPortalCard(firstPortal.id);
         }
-      }, 100);
+      } else {
+        // No portals left, focus the "Add Portal" button
+        focusAddButton();
+      }
     }
   };
 
@@ -139,12 +159,7 @@ export const PortalList: React.FC = () => {
 
     // Restore focus to the portal card after canceling delete
     if (deletingPortal) {
-      setTimeout(() => {
-        const portalCard = document.querySelector(`[data-portal-id="${deletingPortal.id}"]`) as HTMLElement;
-        if (portalCard) {
-          portalCard.focus();
-        }
-      }, 100);
+      focusPortalCard(deletingPortal.id);
     }
   };
 
@@ -163,8 +178,8 @@ export const PortalList: React.FC = () => {
   };
 
   const getStatusIcon = (portal: PortalAccount) => {
-    if (portal.id === activePortalId) return '✅';
-    return '⚪';
+    if (portal.id === activePortalId) return <CheckCircle className="w-5 h-5 md:w-6 md:h-6 text-emerald-400" />;
+    return <Circle className="w-5 h-5 md:w-6 md:h-6 text-slate-400" />;
   };
 
   return (
@@ -181,6 +196,7 @@ export const PortalList: React.FC = () => {
             </p>
           </div>
           <button
+            ref={addButtonRef}
             data-tv-focusable
             data-tv-index={100}
             data-tv-group="portals-content"
@@ -190,7 +206,7 @@ export const PortalList: React.FC = () => {
             className="group relative px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl md:rounded-2xl font-semibold shadow-xl shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 flex items-center gap-2 md:gap-3 overflow-hidden text-sm md:text-base"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <span className="relative text-xl md:text-2xl group-hover:rotate-90 transition-transform duration-300">➕</span>
+            <Plus className="relative w-5 h-5 md:w-6 md:h-6 group-hover:rotate-90 transition-transform duration-300" />
             <span className="relative">{t('addPortal')}</span>
           </button>
         </div>
@@ -202,6 +218,9 @@ export const PortalList: React.FC = () => {
           {portals.map((portal, portalIndex) => (
             <div
               key={portal.id}
+              ref={(el) => {
+                if (el) portalCardRefs.current.set(portal.id, el);
+              }}
               data-tv-id={portal.id}
               data-portal-id={portal.id}
               data-tv-focusable
@@ -220,8 +239,7 @@ export const PortalList: React.FC = () => {
                 }
               }}
               onClick={() => setActiveMenuPortal(portal.id)}
-              className={`group relative backdrop-blur-xl rounded-2xl md:rounded-3xl p-4 md:p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 cursor-pointer ${getStatusColor(portal)} dark:border border-white/10 border-gray-300/20`}
-              style={{ pointerEvents: activeMenuPortal === portal.id ? 'none' : undefined }}
+              className={`group relative backdrop-blur-xl rounded-2xl md:rounded-3xl p-4 md:p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 cursor-pointer ${getStatusColor(portal)} dark:border border-white/10 border-gray-300/20 ${activeMenuPortal === portal.id ? 'pointer-events-none' : ''}`}
             >
             {/* Header */}
             <div className="flex justify-between items-start mb-4 md:mb-6">
@@ -243,7 +261,6 @@ export const PortalList: React.FC = () => {
                   ref={menuRef}
                   className="absolute inset-0 z-20 bg-slate-900/95 backdrop-blur-md rounded-2xl md:rounded-3xl flex flex-col items-center justify-center gap-2 md:gap-3 p-3 md:p-4 pointer-events-auto"
                   data-tv-container="portal-actions"
-                  style={{ pointerEvents: 'auto' }}
                 >
                   <p className="text-white font-semibold mb-1 md:mb-2 text-sm md:text-base truncate px-2">{portal.name}</p>
                   <div className="flex flex-col gap-2 w-full max-w-[180px] md:max-w-[200px]">
@@ -258,7 +275,7 @@ export const PortalList: React.FC = () => {
                         onClick={(e) => { e.stopPropagation(); handleSetActive(portal); setActiveMenuPortal(null); }}
                         className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg md:rounded-xl transition-all text-sm md:text-base"
                       >
-                        <span className="text-lg md:text-xl">🎯</span>
+                        <Target className="w-5 h-5 md:w-6 md:h-6" />
                         <span className="whitespace-nowrap">{t('setActive')}</span>
                       </button>
                     )}
@@ -269,10 +286,10 @@ export const PortalList: React.FC = () => {
                       data-tv-index={portal.id !== activePortalId ? 1 : 0}
                       data-tv-initial={portal.id === activePortalId ? true : undefined}
                       tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); setTestingPortal(portal.id); setActiveMenuPortal(null); }}
+                      onClick={(e) => { e.stopPropagation(); testingPortalRef.current = portal.id; setTestingPortal(portal.id); setActiveMenuPortal(null); }}
                       className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg md:rounded-xl transition-all text-sm md:text-base"
                     >
-                      <span className="text-lg md:text-xl">🔄</span>
+                      <RefreshCw className="w-5 h-5 md:w-6 md:h-6" />
                       <span className="whitespace-nowrap">{t('testConnection')}</span>
                     </button>
                     <button
@@ -284,7 +301,7 @@ export const PortalList: React.FC = () => {
                       onClick={(e) => { e.stopPropagation(); handleEdit(portal); setActiveMenuPortal(null); }}
                       className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg md:rounded-xl transition-all text-sm md:text-base"
                     >
-                      <span className="text-lg md:text-xl">✏️</span>
+                      <Edit className="w-5 h-5 md:w-6 md:h-6" />
                       <span className="whitespace-nowrap">{t('edit')}</span>
                     </button>
                     <button
@@ -296,7 +313,7 @@ export const PortalList: React.FC = () => {
                       onClick={(e) => { e.stopPropagation(); handleDelete(portal); setActiveMenuPortal(null); }}
                       className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg md:rounded-xl transition-all text-sm md:text-base"
                     >
-                      <span className="text-lg md:text-xl">🗑️</span>
+                      <Trash2 className="w-5 h-5 md:w-6 md:h-6" />
                       <span className="whitespace-nowrap">{t('delete')}</span>
                     </button>
                     <button
@@ -308,7 +325,7 @@ export const PortalList: React.FC = () => {
                       onClick={(e) => { e.stopPropagation(); setActiveMenuPortal(null); }}
                       className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 rounded-lg md:rounded-xl transition-all mt-1 md:mt-2 text-sm md:text-base"
                     >
-                      <span className="text-lg md:text-xl">✕</span>
+                      <X className="w-5 h-5 md:w-6 md:h-6" />
                       <span className="whitespace-nowrap">{t('cancel')}</span>
                     </button>
                   </div>
@@ -319,19 +336,19 @@ export const PortalList: React.FC = () => {
             {/* Portal Info */}
             <div className="space-y-3 md:space-y-4">
               <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                <span className="dark:text-slate-400 text-slate-600 flex-shrink-0 text-base md:text-lg">🌐</span>
+                <Globe className="dark:text-slate-400 text-slate-600 flex-shrink-0 w-4 h-4 md:w-5 md:h-5" />
                 <span className="text-xs md:text-sm font-mono dark:bg-slate-900/50 bg-gray-100/50 px-2 md:px-3 py-1.5 md:py-2 rounded-lg md:rounded-xl dark:text-slate-300 text-slate-700 break-all dark:border border-slate-700/50 border-gray-300/50">
                   {portal.portalUrl}
                 </span>
               </div>
 
               <div className="flex items-center gap-2 md:gap-3">
-                <span className="dark:text-slate-400 text-slate-600 text-base md:text-lg">👤</span>
+                <User className="dark:text-slate-400 text-slate-600 w-4 h-4 md:w-5 md:h-5" />
                 <span className="text-xs md:text-sm dark:text-slate-300 text-slate-700 font-medium truncate">{portal.login}</span>
               </div>
 
               <div className="flex items-center gap-2 md:gap-3">
-                <span className="dark:text-slate-400 text-slate-600 text-base md:text-lg">🖥️</span>
+                <Monitor className="dark:text-slate-400 text-slate-600 w-4 h-4 md:w-5 md:h-5" />
                 <span className="text-xs md:text-sm font-mono dark:text-slate-300 text-slate-700 dark:bg-slate-900/50 bg-gray-100/50 px-2 md:px-3 py-1.5 md:py-2 rounded-lg md:rounded-xl dark:border border-slate-700/50 border-gray-300/50 break-all">{portal.mac}</span>
               </div>
 
@@ -380,8 +397,8 @@ export const PortalList: React.FC = () => {
       {/* Empty State */}
       {portals.length === 0 && (
         <div className="max-w-2xl mx-auto text-center py-12 md:py-20">
-          <div className="w-16 h-16 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 rounded-2xl md:rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center text-4xl md:text-5xl backdrop-blur-sm border border-emerald-400/20 shadow-xl shadow-emerald-500/10">
-            🌐
+          <div className="w-16 h-16 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 rounded-2xl md:rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center backdrop-blur-sm border border-emerald-400/20 shadow-xl shadow-emerald-500/10">
+            <Globe className="w-8 h-8 md:w-12 md:h-12 text-emerald-400" />
           </div>
           <h3 className="text-xl md:text-2xl font-bold dark:text-white text-slate-900 mb-2 md:mb-3">
             {t('noResults')}
@@ -424,8 +441,8 @@ export const PortalList: React.FC = () => {
             {/* Header */}
             <div className="p-4 md:p-6 border-b border-slate-700/50 bg-gradient-to-r from-red-500/10 to-orange-500/10">
               <div className="flex items-center gap-3 md:gap-4">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-red-500/20 flex items-center justify-center text-xl md:text-2xl backdrop-blur-sm border border-red-400/20 flex-shrink-0">
-                  🗑️
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-red-500/20 flex items-center justify-center backdrop-blur-sm border border-red-400/20 flex-shrink-0">
+                  <Trash2 className="w-5 h-5 md:w-6 md:h-6 text-red-400" />
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-lg md:text-xl font-bold text-white">
@@ -469,7 +486,7 @@ export const PortalList: React.FC = () => {
                 onClick={confirmDelete}
                 className="w-full sm:w-auto px-4 md:px-6 py-2 md:py-2.5 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg md:rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-300 transform hover:scale-105 hover:-translate-y-0.5 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 text-sm md:text-base"
               >
-                <span>🗑️</span>
+                <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
                 {t('delete')}
               </button>
             </div>
