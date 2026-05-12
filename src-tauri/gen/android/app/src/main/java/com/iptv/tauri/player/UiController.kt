@@ -46,6 +46,7 @@ class UiController(
     }
 
     private var hideJob: Job? = null
+    private var autoHidePaused = false
 
     var showControls = true
         private set
@@ -303,6 +304,19 @@ class UiController(
     fun stopHideTimer() {
         hideJob?.cancel()
         hideJob = null
+    }
+
+    fun pauseAutoHide() {
+        autoHidePaused = true
+        hideJob?.cancel()
+        hideJob = null
+    }
+
+    fun resumeAutoHide() {
+        if (autoHidePaused) {
+            autoHidePaused = false
+            resetHideTimer()
+        }
     }
 
     fun focusPlayPauseButton(): Boolean {

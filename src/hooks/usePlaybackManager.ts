@@ -95,6 +95,8 @@ export const usePlaybackManager = ({
         }
       }
 
+      const genreId = (channel.tv_genre_id || (channel as any).genreId)?.toString();
+
       player.setMedia({
         url,
         name: channel.name,
@@ -104,7 +106,8 @@ export const usePlaybackManager = ({
         resumePosition: resumePos,
         portalUrl: cleanPortalUrl,
         mac: client.getAccount()?.mac || '',
-        token: client.token || ''
+        token: client.token || '',
+        genreId,
       });
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
@@ -119,10 +122,12 @@ export const usePlaybackManager = ({
     if (client && activePortal) {
       player.setContentType('tv');
       play(channel, false);
+      const genreId = (channel.tv_genre_id || (channel as any).genreId)?.toString();
       addRecentViewed(activePortal.id, 'live', String(channel.id), {
         name: channel.name,
         poster: client.resolveLogoUrl(channel.logo),
         cmd: channel.cmd,
+        genre_id: genreId,
       });
       // Invalidate recent viewed queries to update ForYouSection
       queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });

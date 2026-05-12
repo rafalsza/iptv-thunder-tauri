@@ -154,6 +154,7 @@ function AppInner({ }: AppProps) {
       setIsSettingsOpen={setIsSettingsOpen}
       setSearch={setSearch}
       handleEpisodeEnded={handleEpisodeEnded}
+      handleChannelSelect={handleChannelSelect}
     >
       <AppContent
         route={route}

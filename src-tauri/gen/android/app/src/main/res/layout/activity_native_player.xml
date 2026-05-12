@@ -185,7 +185,38 @@
                 app:icon="@drawable/ic_audiotrack"
                 app:iconSize="28dp"
                 android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/channel_carousel_button"
+                style="@style/PlayerControlButton"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginStart="24dp"
+                app:icon="@drawable/ic_grid_view"
+                app:iconSize="28dp"
+                android:visibility="gone" />
         </LinearLayout>
+
+        <!-- Channel Carousel Container -->
+        <HorizontalScrollView
+            android:id="@+id/channel_carousel_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:visibility="gone"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:descendantFocusability="afterDescendants">
+
+            <LinearLayout
+                android:id="@+id/channel_carousel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:focusable="false" />
+        </HorizontalScrollView>
     </LinearLayout>
 
     <!-- Centralny loading -->

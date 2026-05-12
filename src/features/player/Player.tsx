@@ -20,13 +20,15 @@ interface PlayerProps {
   isVod?: boolean;
   movieId?: string;
   resumePosition?: number;
+  genreId?: string;
   onClose: () => void;
   onEnded?: () => void;
+  onChannelChange?: (channel: any) => void;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const Player: React.FC<PlayerProps> = ({
-  url, fallbackUrls = [], name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, onClose, onEnded,
+  url, fallbackUrls = [], name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, genreId, onClose, onEnded, onChannelChange,
 }) => {
   const { setPosition } = useResumeStore();
   const [currentPlatform, setCurrentPlatform] = useState<string>('desktop');
@@ -72,6 +74,8 @@ export const Player: React.FC<PlayerProps> = ({
         movieId={movieId}
         resumePosition={resumePosition}
         setPosition={setPosition}
+        genreId={genreId}
+        onChannelChange={onChannelChange}
         onClose={onClose}
         onEnded={onEnded}
       />
@@ -89,6 +93,8 @@ export const Player: React.FC<PlayerProps> = ({
       isVod={isVod}
       movieId={movieId}
       resumePosition={resumePosition}
+      genreId={genreId}
+      onChannelChange={onChannelChange}
       onClose={onClose}
       onEnded={onEnded}
     />

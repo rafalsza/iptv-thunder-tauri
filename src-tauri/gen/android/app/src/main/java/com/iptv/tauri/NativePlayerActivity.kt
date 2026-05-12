@@ -29,6 +29,9 @@ class NativePlayerActivity : AppCompatActivity() {
     // Views
     private var playerView: PlayerView? = null
     private var progressBar: ProgressBar? = null
+    private var channelCarouselButton: com.google.android.material.button.MaterialButton? = null
+    private var channelCarouselContainer: android.widget.HorizontalScrollView? = null
+    private var channelCarousel: android.widget.LinearLayout? = null
 
     // State
     private var isVod = false
@@ -48,12 +51,25 @@ class NativePlayerActivity : AppCompatActivity() {
     private var epgNextStart = ""
     private var epgNextEnd = ""
 
+    // Channel data for carousel
+    private var categoryChannels: List<ChannelInfo> = emptyList()
+    private var currentChannelId: String = ""
+    private var isCarouselVisible = false
+
     data class EpisodeInfo(
         val id: String,
         val url: String,
         val name: String,
         val season: String?,
         val episode: String?,
+        val cmd: String?
+    )
+
+    data class ChannelInfo(
+        val id: String,
+        val name: String,
+        val logo: String?,
+        val stream_url: String?,
         val cmd: String?
     )
 
@@ -67,6 +83,7 @@ class NativePlayerActivity : AppCompatActivity() {
 
         currentUrl = intent.getStringExtra("url") ?: ""
         val channelName = intent.getStringExtra("channelName") ?: "Unknown Channel"
+        currentChannelId = intent.getStringExtra("channelId") ?: ""
         isVod = intent.getBooleanExtra("isVod", false)
         portalIdentifier = intent.getStringExtra("mac") ?: ""
 
@@ -76,6 +93,12 @@ class NativePlayerActivity : AppCompatActivity() {
         val episodesJson = intent.getStringExtra("episodesJson") ?: "[]"
         episodes = parseEpisodesJson(episodesJson)
         android.util.Log.d("NativePlayerActivity", "Episodes loaded: ${episodes.size}, currentIndex: $currentEpisodeIndex, autoPlay: $autoPlayEpisodes")
+
+        // Parse category channels for carousel
+        val channelsJson = intent.getStringExtra("channelsJson") ?: "[]"
+        android.util.Log.d("NativePlayerActivity", "channelsJson length: ${channelsJson.length}")
+        categoryChannels = parseChannelsJson(channelsJson)
+        android.util.Log.d("NativePlayerActivity", "Category channels loaded: ${categoryChannels.size}, isVod: $isVod")
 
         // Parse EPG data
         epgTitle = intent.getStringExtra("epgTitle") ?: ""
@@ -94,6 +117,29 @@ class NativePlayerActivity : AppCompatActivity() {
     private fun initializeViews() {
         playerView = findViewById(R.id.player_view)
         progressBar = findViewById(R.id.loading_spinner)
+        channelCarouselButton = findViewById(R.id.channel_carousel_button)
+        channelCarouselContainer = findViewById(R.id.channel_carousel_container)
+        channelCarousel = findViewById(R.id.channel_carousel)
+
+        channelCarousel?.descendantFocusability = android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS
+        channelCarousel?.isFocusable = false
+        channelCarousel?.isFocusableInTouchMode = false
+        channelCarouselContainer?.isFocusable = false
+        channelCarouselContainer?.isFocusableInTouchMode = false
+        channelCarouselContainer?.isSmoothScrollingEnabled = true
+
+        android.util.Log.d("NativePlayerActivity", "initializeViews: isVod=$isVod, channelsCount=${categoryChannels.size}")
+
+        // Show channel carousel button for live TV with available channels
+        if (!isVod && categoryChannels.isNotEmpty()) {
+            android.util.Log.d("NativePlayerActivity", "Showing channel carousel button")
+            channelCarouselButton?.visibility = android.view.View.VISIBLE
+            channelCarouselButton?.setOnClickListener {
+                toggleChannelCarousel()
+            }
+        } else {
+            android.util.Log.d("NativePlayerActivity", "NOT showing channel carousel button - isVod=$isVod, channelsCount=${categoryChannels.size}")
+        }
     }
 
     private fun initializeControllers(channelName: String) {
@@ -306,7 +352,23 @@ class NativePlayerActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        android.util.Log.d("NativePlayerActivity", "dispatchKeyEvent: keyCode=${event.keyCode}")
+        android.util.Log.d("NativePlayerActivity", "dispatchKeyEvent: keyCode=${event.keyCode}, action=${event.action}, isCarouselVisible=$isCarouselVisible")
+
+        if (isCarouselVisible) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                uiController.showControls()
+                uiController.resetHideTimer()
+
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_BACK -> {
+                        toggleChannelCarousel()
+                        return true
+                    }
+                }
+            }
+            return super.dispatchKeyEvent(event)
+        }
+
         return remoteController.handleKeyEvent(event) || super.dispatchKeyEvent(event)
     }
 
@@ -358,6 +420,318 @@ class NativePlayerActivity : AppCompatActivity() {
         } catch (e: Exception) {
             android.util.Log.e("NativePlayerActivity", "Failed to parse episodes JSON: ${e.message}")
             emptyList()
+        }
+    }
+
+    private fun parseChannelsJson(json: String): List<ChannelInfo> {
+        return try {
+            val jsonArray = org.json.JSONArray(json)
+            val list = mutableListOf<ChannelInfo>()
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                list.add(ChannelInfo(
+                    id = obj.optString("id", ""),
+                    name = obj.optString("name", ""),
+                    logo = obj.optString("logo", ""),
+                    stream_url = obj.optString("stream_url", ""),
+                    cmd = obj.optString("cmd", "")
+                ))
+            }
+            list
+        } catch (e: Exception) {
+            android.util.Log.e("NativePlayerActivity", "Failed to parse channels JSON: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private fun toggleChannelCarousel() {
+        isCarouselVisible = !isCarouselVisible
+
+        if (isCarouselVisible) {
+            uiController.showControls()
+            uiController.pauseAutoHide()
+
+            channelCarouselContainer?.visibility = android.view.View.VISIBLE
+            populateChannelCarousel()
+
+            channelCarouselButton?.setBackgroundTintList(
+                android.content.res.ColorStateList.valueOf(
+                    android.graphics.Color.parseColor("#4CAF50")
+                )
+            )
+        } else {
+            channelCarouselContainer?.visibility = android.view.View.GONE
+
+            uiController.resumeAutoHide()
+
+            channelCarouselButton?.setBackgroundTintList(
+                android.content.res.ColorStateList.valueOf(
+                    android.graphics.Color.parseColor("#40FFFFFF")
+                )
+            )
+        }
+    }
+
+    private fun populateChannelCarousel() {
+        channelCarousel?.removeAllViews()
+
+        var currentChannelView: android.view.View? = null
+
+        for (channel in categoryChannels) {
+            val channelView = createChannelItem(channel)
+
+            if (channel.id == currentChannelId) {
+                currentChannelView = channelView
+            }
+
+            channelCarousel?.addView(channelView)
+        }
+
+        channelCarousel?.post {
+            currentChannelView?.let { view ->
+                view.requestFocus()
+
+                val scrollView = channelCarouselContainer ?: return@post
+
+                val targetScroll =
+                    view.left - (scrollView.width / 2) + (view.width / 2)
+
+                scrollView.scrollTo(
+                    targetScroll.coerceAtLeast(0),
+                    0
+                )
+            }
+        }
+    }
+
+    private fun createChannelItem(channel: ChannelInfo): android.view.View {
+        val density = resources.displayMetrics.density
+        val screenWidth = resources.displayMetrics.widthPixels
+
+        val cardWidth = (screenWidth * 0.14f).toInt()
+        val cardHeight = (cardWidth * 1.1f).toInt()
+
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+
+            setPadding(
+                (16 * density).toInt(),
+                (16 * density).toInt(),
+                (16 * density).toInt(),
+                (16 * density).toInt()
+            )
+
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                cardWidth,
+                cardHeight
+            ).apply {
+                setMargins(
+                    (10 * density).toInt(),
+                    (10 * density).toInt(),
+                    (10 * density).toInt(),
+                    (10 * density).toInt()
+                )
+            }
+
+            gravity = android.view.Gravity.CENTER
+
+            background = getRoundedDrawable(
+                if (channel.id == currentChannelId)
+                    android.graphics.Color.parseColor("#1F3D2A")
+                else
+                    android.graphics.Color.parseColor("#1E1E1E"),
+
+                if (channel.id == currentChannelId)
+                    android.graphics.Color.parseColor("#4CAF50")
+                else
+                    android.graphics.Color.parseColor("#2E2E2E"),
+
+                22f
+            )
+
+            elevation = 4f
+
+            id = android.view.View.generateViewId()
+
+            isClickable = true
+            isFocusable = true
+            isFocusableInTouchMode = true
+
+            descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        }
+
+        val logoSize = (72 * density).toInt()
+
+        val logoContainer = android.widget.FrameLayout(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+
+            foregroundGravity = android.view.Gravity.CENTER
+        }
+
+        val logoView = android.widget.ImageView(this).apply {
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                logoSize,
+                logoSize,
+                android.view.Gravity.CENTER
+            )
+
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+            isFocusable = false
+        }
+
+        if (!channel.logo.isNullOrEmpty()) {
+            com.bumptech.glide.Glide.with(this@NativePlayerActivity)
+                .load(channel.logo)
+                .placeholder(android.R.drawable.ic_menu_gallery)
+                .error(android.R.drawable.ic_menu_gallery)
+                .into(logoView)
+        } else {
+            logoView.setImageResource(android.R.drawable.ic_menu_gallery)
+            logoView.setColorFilter(android.graphics.Color.WHITE)
+        }
+
+        logoContainer.addView(logoView)
+
+        val nameView = android.widget.TextView(this).apply {
+            text = channel.name
+
+            textSize = 14f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+
+            setTextColor(
+                if (channel.id == currentChannelId)
+                    android.graphics.Color.parseColor("#7CFF8A")
+                else
+                    android.graphics.Color.WHITE
+            )
+
+            gravity = android.view.Gravity.CENTER
+
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = (12 * density).toInt()
+            }
+        }
+
+        container.addView(logoContainer)
+        container.addView(nameView)
+
+        container.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                container.animate()
+                    .scaleX(1.08f)
+                    .scaleY(1.08f)
+                    .setDuration(140)
+                    .start()
+
+                container.elevation = 18f
+
+                container.background = getRoundedDrawable(
+                    android.graphics.Color.parseColor("#2A4735"),
+                    android.graphics.Color.parseColor("#7CFF8A"),
+                    22f
+                )
+
+                nameView.setTextColor(
+                    android.graphics.Color.parseColor("#FFFFFF")
+                )
+
+                container.post {
+                    val scrollView = channelCarouselContainer ?: return@post
+
+                    val targetScroll =
+                        container.left - (scrollView.width / 2) + (container.width / 2)
+
+                    scrollView.smoothScrollTo(
+                        targetScroll.coerceAtLeast(0),
+                        0
+                    )
+                }
+            } else {
+                container.animate()
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setDuration(140)
+                    .start()
+
+                container.elevation = 4f
+
+                container.background = getRoundedDrawable(
+                    if (channel.id == currentChannelId)
+                        android.graphics.Color.parseColor("#1F3D2A")
+                    else
+                        android.graphics.Color.parseColor("#1E1E1E"),
+
+                    if (channel.id == currentChannelId)
+                        android.graphics.Color.parseColor("#4CAF50")
+                    else
+                        android.graphics.Color.parseColor("#2E2E2E"),
+
+                    22f
+                )
+
+                nameView.setTextColor(
+                    if (channel.id == currentChannelId)
+                        android.graphics.Color.parseColor("#7CFF8A")
+                    else
+                        android.graphics.Color.WHITE
+                )
+            }
+        }
+
+        container.setOnClickListener {
+            if (channel.id != currentChannelId) {
+                handleChannelSelect(channel)
+            }
+        }
+
+        return container
+    }
+
+    private fun handleChannelSelect(channel: ChannelInfo) {
+        android.util.Log.d("NativePlayerActivity", "Channel selected: ${channel.name} (id: ${channel.id})")
+        android.util.Log.d("NativePlayerActivity", "  cmd: ${channel.cmd}")
+        android.util.Log.d("NativePlayerActivity", "  stream_url: ${channel.stream_url}")
+
+        // Since URLs are resolved in React, use stream_url directly
+        val url = channel.stream_url
+
+        android.util.Log.d("NativePlayerActivity", "  Using URL: $url")
+
+        if (url != null && url.isNotEmpty()) {
+            android.util.Log.d("NativePlayerActivity", "  Calling changeChannel with URL")
+            currentChannelId = channel.id
+            changeChannel(url, channel.name, isVod = false)
+            toggleChannelCarousel()
+        } else {
+            android.util.Log.w("NativePlayerActivity", "Channel has no stream URL - cannot change channel")
+        }
+    }
+
+    private fun getRoundedDrawable(
+        backgroundColor: Int,
+        borderColor: Int,
+        cornerRadius: Float
+    ): android.graphics.drawable.Drawable {
+
+        return android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+
+            setColor(backgroundColor)
+
+            setStroke(3, borderColor)
+
+            this.cornerRadius = cornerRadius
         }
     }
 

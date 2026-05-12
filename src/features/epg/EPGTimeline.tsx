@@ -98,30 +98,30 @@ export const EPGTimeline: React.FC<EPGTimelineProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full">
       {/* Header */}
-      <div className="p-4 border-b bg-gray-50">
+      <div className="p-4 lg:p-6 border-b bg-gray-50">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Electronic Program Guide</h2>
+          <h2 className="text-xl lg:text-2xl xl:text-3xl font-bold">Electronic Program Guide</h2>
           
           {/* Date Navigation */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 lg:gap-4">
             <button
               onClick={() => handleDateChange(-1)}
-              className="p-2 hover:bg-gray-200 rounded"
+              className="p-2 lg:p-3 hover:bg-gray-200 rounded text-lg lg:text-xl"
             >
               ←
             </button>
-            <span className="font-medium">
+            <span className="font-medium text-base lg:text-lg">
               {formatEPGDate(selectedDate.getTime() / 1000)}
             </span>
             <button
               onClick={() => handleDateChange(1)}
-              className="p-2 hover:bg-gray-200 rounded"
+              className="p-2 lg:p-3 hover:bg-gray-200 rounded text-lg lg:text-xl"
             >
               →
             </button>
             <button
               onClick={() => setSelectedDate(new Date())}
-              className="px-3 py-1 bg-green-700 text-white rounded text-sm"
+              className="px-3 py-1 lg:px-4 lg:py-2 bg-green-700 text-white rounded text-sm lg:text-base"
             >
               Today
             </button>
@@ -129,13 +129,13 @@ export const EPGTimeline: React.FC<EPGTimelineProps> = ({
         </div>
 
         {/* View Controls */}
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2">
+        <div className="flex items-center gap-4 lg:gap-6">
+          <label className="flex items-center gap-2 text-sm lg:text-base">
             <span>View:</span>
             <select
               value={viewHours}
               onChange={(e) => setViewHours(Number(e.target.value))}
-              className="border rounded px-2 py-1"
+              className="border rounded px-2 py-1 lg:px-3 lg:py-2 text-sm lg:text-base"
             >
               <option value={2}>2 hours</option>
               <option value={4}>4 hours</option>
@@ -153,12 +153,12 @@ export const EPGTimeline: React.FC<EPGTimelineProps> = ({
           {/* Time Header */}
           <div className="sticky top-0 z-20 bg-white border-b">
             <div className="flex">
-              <div className="w-48 p-2 border-r font-medium">Channel</div>
+              <div className="w-48 lg:w-64 xl:w-80 p-2 lg:p-3 border-r font-medium text-sm lg:text-base xl:text-lg">Channel</div>
               <div className="flex-1 flex">
                 {timeSlots.map((time, index) => (
                   <div
                     key={index}
-                    className="flex-1 text-center p-2 border-r text-sm"
+                    className="flex-1 text-center p-2 lg:p-3 border-r text-sm lg:text-base xl:text-lg"
                   >
                     {formatEPGTime(time.getTime() / 1000)}
                   </div>
@@ -176,28 +176,27 @@ export const EPGTimeline: React.FC<EPGTimelineProps> = ({
               return (
                 <div
                   key={channel.id}
-                  className="flex border-b hover:bg-gray-50"
-                  style={{ minHeight: '80px' }}
+                  className="flex border-b hover:bg-gray-50 min-h-[80px] lg:min-h-[100px] xl:min-h-[120px]"
                 >
                   {/* Channel Info */}
                   <div 
-                    className="w-48 p-2 border-r flex items-center gap-2 cursor-pointer"
+                    className="w-48 lg:w-64 xl:w-80 p-2 lg:p-3 border-r flex items-center gap-2 lg:gap-3 cursor-pointer"
                     onClick={() => onChannelSelect(channel)}
                   >
                     {channel.logo && (
                       <img 
                         src={channel.logo} 
                         alt={channel.name}
-                        className="w-8 h-8 object-contain"
+                        className="w-8 h-8 lg:w-12 lg:h-12 xl:w-14 xl:h-14 object-contain"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none';
                         }}
                       />
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{channel.name}</div>
+                      <div className="font-medium text-sm lg:text-base xl:text-lg truncate">{channel.name}</div>
                       {currentProgram && (
-                        <div className="text-xs text-gray-600 truncate">
+                        <div className="text-xs lg:text-sm xl:text-base text-gray-600 truncate">
                           {currentProgram.name}
                         </div>
                       )}
@@ -213,7 +212,7 @@ export const EPGTimeline: React.FC<EPGTimelineProps> = ({
                       return (
                         <div
                           key={programIndex}
-                          className={`absolute top-1 bottom-1 p-1 rounded cursor-pointer transition-colors ${
+                          className={`absolute top-1 bottom-1 lg:top-2 lg:bottom-2 p-1 lg:p-2 rounded cursor-pointer transition-colors min-w-[60px] lg:min-w-[80px] xl:min-w-[100px] ${
                             isCurrent 
                               ? 'bg-green-700 text-white z-10' 
                               : 'bg-gray-100 hover:bg-gray-200'
@@ -221,15 +220,14 @@ export const EPGTimeline: React.FC<EPGTimelineProps> = ({
                           style={{
                             left: position.left,
                             width: position.width,
-                            minWidth: '60px',
                           }}
                           title={`${program.name}\n${formatEPGTime(program.start_time)} - ${formatEPGTime(program.end_time)}`}
                         >
-                          <div className="text-xs font-medium truncate">
+                          <div className="text-xs lg:text-sm xl:text-base font-medium truncate">
                             {program.name}
                           </div>
                           {isCurrent && (
-                            <div className="text-xs opacity-90">
+                            <div className="text-xs lg:text-sm xl:text-base opacity-90">
                               {formatEPGTime(program.start_time)} - {formatEPGTime(program.end_time)}
                             </div>
                           )}

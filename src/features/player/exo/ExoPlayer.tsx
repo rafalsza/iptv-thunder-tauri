@@ -9,6 +9,7 @@ import { usePlaybackStore } from '@/store/playback.store';
 import { usePortalsStore } from '@/store/portals.store';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { getChannelEPG, getCurrentProgram, getNextProgram, formatEPGTime } from '@/features/epg/epg.api';
+import { useChannels } from '@/features/tv/tv.hooks';
 
 const logger = createLogger('ExoPlayer');
 
@@ -92,6 +93,8 @@ export interface ExoPlayerProps {
   movieId?: string;
   resumePosition?: number;
   setPosition: (id: string, pos: number, duration?: number) => void;
+  genreId?: string;
+  onChannelChange?: (channel: any) => void;
   onClose: () => void;
   onEnded?: () => void;
 }
@@ -101,9 +104,17 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   name = 'Unknown Channel',
   channelId,
   isVod,
+  genreId,
+  client,
   onClose,
   onEnded: _onEnded
 }) => {
+  // Fetch channels from the same category/genre for carousel
+  const { data: categoryChannels, isLoading: channelsLoading } = useChannels(
+    client!,
+    !isVod && genreId ? genreId : undefined
+  );
+
   React.useEffect(() => {
     const openNativePlayer = async () => {
       if (!isAndroid()) {
@@ -135,6 +146,34 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
 
       const epgData = await fetchEPGData(channelId || 0, isVod || false);
 
+      // Filter channels for carousel (exclude hidden channels starting with #####)
+      const filteredChannels = categoryChannels?.filter((channel: any) => !channel.name.startsWith('#####')) || [];
+
+      // Resolve stream URLs for channels (convert ffmpeg commands to actual URLs)
+      const channelsWithUrls = await Promise.all(
+        filteredChannels.map(async (channel: any) => {
+          let streamUrl = channel.cmd;
+          // If cmd is a ffmpeg/vlc command, try to resolve it
+          if (streamUrl && (streamUrl.startsWith('ffmpeg ') || streamUrl.startsWith('vlc ') || streamUrl.startsWith('ffplay '))) {
+            try {
+              streamUrl = await client.getStreamUrl(streamUrl);
+            } catch (e) {
+              logger.warn('[ExoPlayer] Failed to resolve stream URL for channel:', channel.name, e);
+              streamUrl = ''; // Mark as unavailable
+            }
+          }
+          return {
+            ...channel,
+            stream_url: streamUrl
+          };
+        })
+      );
+
+      // Filter out channels that couldn't be resolved
+      const resolvedChannels = channelsWithUrls.filter((ch: any) => ch.stream_url && ch.stream_url.length > 0);
+
+      logger.info('[ExoPlayer] Channel data: isVod=' + isVod + ', genreId=' + genreId + ', channelsLoading=' + channelsLoading + ', categoryChannels count=' + (categoryChannels?.length || 0) + ', filtered count=' + filteredChannels.length + ', resolved count=' + resolvedChannels.length);
+
       const exoPlayer = (globalThis.window as any).ExoPlayer;
       if (!exoPlayer || typeof exoPlayer.open_compose_player !== 'function') {
         logger.error('ExoPlayer.open_compose_player method not available');
@@ -151,6 +190,7 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         episodesJson: JSON.stringify(episodes),
         currentEpisodeIndex,
         autoPlayEpisodes,
+        channelsJson: JSON.stringify(resolvedChannels),
         ...epgData
       };
 
@@ -171,6 +211,7 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
           params.episodesJson,
           params.currentEpisodeIndex,
           params.autoPlayEpisodes,
+          params.channelsJson,
           params.epgTitle || '',
           params.epgStart || '',
           params.epgEnd || '',
@@ -185,11 +226,12 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
       }
     };
 
-    openNativePlayer();
-
-    // Close immediately since native activity handles everything
-    onClose();
-  }, [url, name, channelId, isVod, onClose]);
+    // Wait for channels to load before opening player
+    if (!channelsLoading) {
+      openNativePlayer();
+      onClose();
+    }
+  }, [url, name, channelId, isVod, genreId, client, categoryChannels, channelsLoading, onClose]);
 
   return null;
 };

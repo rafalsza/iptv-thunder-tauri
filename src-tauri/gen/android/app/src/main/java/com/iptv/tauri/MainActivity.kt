@@ -3,7 +3,6 @@ package com.iptv.tauri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.view.KeyEvent
@@ -18,6 +17,7 @@ data class PlayerParams(
     val episodesJson: String,
     val currentEpisodeIndex: Int,
     val autoPlayEpisodes: Boolean,
+    val channelsJson: String,
     val epgTitle: String,
     val epgStart: String,
     val epgEnd: String,
@@ -46,30 +46,23 @@ class MainActivity : TauriActivity() {
 
     // Single long press handler that's reused
     private val longPressRunnable = Runnable {
-        webView?.evaluateJavascript("console.log('[MainActivity] Long press handler fired, longPressEventSent=$longPressEventSent')", null)
         if (!longPressEventSent) {
             webView?.evaluateJavascript(
                 "window.dispatchEvent(new CustomEvent('tvlongpress', { bubbles: true, cancelable: true }))",
                 null
             )
-            webView?.evaluateJavascript("console.log('[MainActivity] Long press detected on Enter/OK - sending tvlongpress event')", null)
             longPressTriggered = true
             longPressEventSent = true
-            webView?.evaluateJavascript("console.log('[MainActivity] Set longPressTriggered=true')", null)
-        } else {
-            webView?.evaluateJavascript("console.log('[MainActivity] Long press already sent, skipping')", null)
         }
     }
 
     init {
-        Log.d("MainActivity", "MainActivity constructor called - MainActivity class loaded")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         currentInstance = this
-        Log.d("MainActivity", "onCreate called - MainActivity initialized")
 
         // Set up key listener after view is created
         window.decorView.postDelayed({
@@ -130,9 +123,6 @@ class MainActivity : TauriActivity() {
                     // Cancel any existing handler before posting new one
                     handler.removeCallbacks(longPressRunnable)
                     handler.postDelayed(longPressRunnable, LONG_PRESS_DELAY)
-                    webView?.evaluateJavascript("console.log('[MainActivity] Long press timer posted')", null)
-                } else {
-                    webView?.evaluateJavascript("console.log('[MainActivity] Repeat keydown, skipping timer')", null)
                 }
 
                 // Send regular keydown event
@@ -145,17 +135,13 @@ class MainActivity : TauriActivity() {
                 // Cancel long press if key is released before delay
                 handler.removeCallbacks(longPressRunnable)
 
-                webView?.evaluateJavascript("console.log('[MainActivity] ACTION_UP received, longPressTriggered=$longPressTriggered')", null)
-
                 // Only send keyup event if long press was NOT triggered
                 if (!longPressTriggered) {
-                    webView?.evaluateJavascript("console.log('[MainActivity] Sending keyup event')", null)
                     webView?.evaluateJavascript(
                         "window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', cancelable: true }))",
                         null
                     )
                 } else {
-                    webView?.evaluateJavascript("console.log('[MainActivity] Skipping keyup event - long press was triggered')", null)
                     // Reset native flags after a short delay
                     handler.postDelayed({
                         longPressTriggered = false
@@ -205,7 +191,6 @@ class MainActivity : TauriActivity() {
         val metrics = resources.displayMetrics
         val density = metrics.density
         val densityDpi = metrics.densityDpi
-        Log.d("MainActivity", "Display density: $density, densityDpi: $densityDpi")
 
         // Adjust text zoom based on screen density for 4K TVs
         webView.settings.apply {
@@ -219,20 +204,15 @@ class MainActivity : TauriActivity() {
             when {
                 densityDpi >= 480 -> { // 4K/XXHDPI
                     textZoom = 80
-                    Log.d("MainActivity", "Setting textZoom to 80 for 4K display")
                 }
                 densityDpi >= 320 -> { // 2K/XHDPI
                     textZoom = 90
-                    Log.d("MainActivity", "Setting textZoom to 90 for 2K display")
                 }
                 else -> {
                     textZoom = 100
-                    Log.d("MainActivity", "Setting textZoom to 100 for standard display")
                 }
             }
         }
-
-        Log.d("MainActivity", "onWebViewCreate called - adding ExoPlayer JavascriptInterface")
 
         webView.addJavascriptInterface(object {
             @JavascriptInterface
@@ -247,6 +227,7 @@ class MainActivity : TauriActivity() {
                 episodesJson: String?,
                 currentEpisodeIndex: Int?,
                 autoPlayEpisodes: Boolean?,
+                channelsJson: String?,
                 epgTitle: String?,
                 epgStart: String?,
                 epgEnd: String?,
@@ -254,38 +235,39 @@ class MainActivity : TauriActivity() {
                 epgNextStart: String?,
                 epgNextEnd: String?
             ) {
-                Log.e("MainActivity", "=== open_compose_player ENTRY POINT ===")
-                Log.d("MainActivity", "open_compose_player called with: channelId=$channelId, portalUrl=$portalUrl, mac=$mac, token=${if(!token.isNullOrEmpty()) "SET" else "EMPTY"}, isVod=$isVod, currentEpisodeIndex=$currentEpisodeIndex, autoPlayEpisodes=$autoPlayEpisodes")
+                android.util.Log.d("MainActivity", "open_compose_player called with channel: $channelName, channelsJson length: ${channelsJson?.length ?: 0}")
                 runOnUiThread {
-                    Log.d("MainActivity", "Starting NativePlayerActivity intent")
-                    val intent = android.content.Intent(this@MainActivity, NativePlayerActivity::class.java)
-                    intent.putExtra("url", url)
-                    intent.putExtra("channelName", channelName)
-                    intent.putExtra("channelId", channelId)
-                    intent.putExtra("portalUrl", portalUrl)
-                    intent.putExtra("mac", mac)
-                    intent.putExtra("token", token)
-                    intent.putExtra("isVod", isVod)
-                    intent.putExtra("episodesJson", episodesJson)
-                    intent.putExtra("currentEpisodeIndex", currentEpisodeIndex)
-                    intent.putExtra("autoPlayEpisodes", autoPlayEpisodes)
-                    intent.putExtra("epgTitle", epgTitle)
-                    intent.putExtra("epgStart", epgStart)
-                    intent.putExtra("epgEnd", epgEnd)
-                    intent.putExtra("epgNextTitle", epgNextTitle)
-                    intent.putExtra("epgNextStart", epgNextStart)
-                    intent.putExtra("epgNextEnd", epgNextEnd)
-                    startActivity(intent)
-                    Log.e("MainActivity", "NativePlayerActivity intent started")
+                    try {
+                        val intent = android.content.Intent(this@MainActivity, NativePlayerActivity::class.java)
+                        intent.putExtra("url", url)
+                        intent.putExtra("channelName", channelName)
+                        intent.putExtra("channelId", channelId)
+                        intent.putExtra("portalUrl", portalUrl)
+                        intent.putExtra("mac", mac)
+                        intent.putExtra("token", token)
+                        intent.putExtra("isVod", isVod)
+                        intent.putExtra("episodesJson", episodesJson)
+                        intent.putExtra("currentEpisodeIndex", currentEpisodeIndex)
+                        intent.putExtra("autoPlayEpisodes", autoPlayEpisodes)
+                        intent.putExtra("channelsJson", channelsJson)
+                        intent.putExtra("epgTitle", epgTitle)
+                        intent.putExtra("epgStart", epgStart)
+                        intent.putExtra("epgEnd", epgEnd)
+                        intent.putExtra("epgNextTitle", epgNextTitle)
+                        intent.putExtra("epgNextStart", epgNextStart)
+                        intent.putExtra("epgNextEnd", epgNextEnd)
+                        android.util.Log.d("MainActivity", "Starting NativePlayerActivity")
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        android.util.Log.e("MainActivity", "Failed to start NativePlayerActivity", e)
+                    }
                 }
             }
 
             @JavascriptInterface
             fun change_channel(url: String, channelName: String) {
-                Log.d("MainActivity", "change_channel called with url=$url, channelName=$channelName")
                 val instance = NativePlayerActivity.currentInstance
                 if (instance == null) {
-                    Log.d("MainActivity", "No active NativePlayerActivity instance, opening new one")
                     runOnUiThread {
                         val intent = android.content.Intent(this@MainActivity, NativePlayerActivity::class.java)
                         intent.putExtra("url", url)
@@ -293,7 +275,6 @@ class MainActivity : TauriActivity() {
                         startActivity(intent)
                     }
                 } else {
-                    Log.d("MainActivity", "Changing channel in existing instance")
                     runOnUiThread {
                         instance.changeChannel(url, channelName, isVod = false) // Channels are never VOD
                     }
@@ -304,7 +285,6 @@ class MainActivity : TauriActivity() {
 
     // Public methods for channel up/down events (called from NativePlayerActivity)
     fun emitChannelUp() {
-        Log.d("MainActivity", "emitChannelUp called")
         runOnUiThread {
             webView?.evaluateJavascript(
                 "window.dispatchEvent(new CustomEvent('channelUp'))",
@@ -314,7 +294,6 @@ class MainActivity : TauriActivity() {
     }
 
     fun emitChannelDown() {
-        Log.d("MainActivity", "emitChannelDown called")
         runOnUiThread {
             webView?.evaluateJavascript(
                 "window.dispatchEvent(new CustomEvent('channelDown'))",

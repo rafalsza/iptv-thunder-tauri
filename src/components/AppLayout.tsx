@@ -22,6 +22,7 @@ interface AppLayoutProps {
   setIsSettingsOpen: (open: boolean) => void;
   setSearch: (search: string) => void;
   handleEpisodeEnded: () => void;
+  handleChannelSelect: (channel: any) => void;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
@@ -38,6 +39,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   setIsSettingsOpen,
   setSearch,
   handleEpisodeEnded,
+  handleChannelSelect,
 }) => {
   const [currentPlatform, setCurrentPlatform] = useState<string>('desktop');
   const isPip = useAppStore(state => state.isPip);
@@ -109,6 +111,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               isVod={player.current.isVod}
               movieId={player.current.movieId}
               resumePosition={player.current.resumePosition}
+              genreId={player.current.genreId}
+              onChannelChange={handleChannelSelect}
               onClose={closePlayer}
               onEnded={handleEpisodeEnded}
             />

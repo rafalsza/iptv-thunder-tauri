@@ -18,6 +18,7 @@ export interface RecentItem {
   season?: number;
   episode?: number;
   extra?: string;
+  genre_id?: string;
   viewed_at: number;
 }
 
@@ -65,6 +66,7 @@ export async function initRecentViewedTable(): Promise<void> {
           season INTEGER,
           episode INTEGER,
           extra JSON,
+          genre_id TEXT,
           viewed_at INTEGER NOT NULL,
           UNIQUE(account_id, type, item_id)
         )
@@ -73,6 +75,11 @@ export async function initRecentViewedTable(): Promise<void> {
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_recent_account ON recently_viewed(account_id)`);
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_recent_type ON recently_viewed(type)`);
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_recent_viewed ON recently_viewed(viewed_at)`);
+
+      // Add genre_id column for existing databases
+      await db.execute(`ALTER TABLE recently_viewed ADD COLUMN genre_id TEXT`).catch(() => {
+        // Column might already exist, ignore error
+      });
 
       isTableReady = true;
     } catch (error) {
@@ -114,7 +121,7 @@ export async function addRecentViewed(
   accountId: string,
   type: 'live' | 'vod' | 'series',
   itemId: string,
-  metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }
+  metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any; genre_id?: string }
 ): Promise<void> {
   try {
     const db = await getDB();
@@ -122,8 +129,8 @@ export async function addRecentViewed(
     const extraJson = metadata?.extra ? JSON.stringify(metadata.extra) : null;
     
     await db.execute(
-      `INSERT INTO recently_viewed (account_id, type, item_id, name, poster, cmd, parent_id, season, episode, extra, viewed_at) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO recently_viewed (account_id, type, item_id, name, poster, cmd, parent_id, season, episode, extra, genre_id, viewed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(account_id, type, item_id)
        DO UPDATE SET
          name=excluded.name,
@@ -133,8 +140,9 @@ export async function addRecentViewed(
          season=excluded.season,
          episode=excluded.episode,
          extra=excluded.extra,
+         genre_id=excluded.genre_id,
          viewed_at=excluded.viewed_at`,
-      [accountId, type, itemId, metadata?.name || 'Unknown', metadata?.poster || null, metadata?.cmd || null, metadata?.parent_id || null, metadata?.season || null, metadata?.episode || null, extraJson, now]
+      [accountId, type, itemId, metadata?.name || 'Unknown', metadata?.poster || null, metadata?.cmd || null, metadata?.parent_id || null, metadata?.season || null, metadata?.episode || null, extraJson, metadata?.genre_id || null, now]
     );
     
     // Keep only last 100 items per account

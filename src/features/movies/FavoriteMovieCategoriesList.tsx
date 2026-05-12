@@ -53,7 +53,23 @@ export const FavoriteMovieCategoriesList: React.FC<FavoriteMovieCategoriesListPr
   const handleToggleFavorite = (e: React.MouseEvent, categoryId: string) => {
     e.stopPropagation();
     e.preventDefault();
+    
+    // Save current focused element and its index for focus restoration
+    const activeElement = document.activeElement as HTMLElement;
+    const currentIndex = activeElement?.dataset.tvIndex ? Number.parseInt(activeElement.dataset.tvIndex) : -1;
+    const groupId = activeElement?.dataset.tvGroup || 'favorite-movie-categories';
+    
     toggleCategory(categoryId);
+    
+    // Restore focus to next available item after removal
+    setTimeout(() => {
+      const focusableElements = document.querySelectorAll(`[data-tv-group="${groupId}"][data-tv-focusable]`);
+      const newIndex = currentIndex >= focusableElements.length ? Math.max(0, focusableElements.length - 1) : currentIndex;
+      const nextElement = focusableElements[newIndex] as HTMLElement;
+      if (nextElement) {
+        nextElement.focus({ preventScroll: true });
+      }
+    }, 100);
   };
 
   const handleLongPress = (category: StalkerGenre) => {

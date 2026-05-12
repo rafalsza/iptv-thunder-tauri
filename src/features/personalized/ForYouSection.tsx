@@ -228,6 +228,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
     logo: item.poster,
     number: 0,
     censored: false,
+    tv_genre_id: item.genre_id ? Number.parseInt(item.genre_id) : undefined,
   });
 
   const mapToVOD = (item: RecentItem): StalkerVOD => ({

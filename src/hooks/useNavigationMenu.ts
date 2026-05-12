@@ -17,7 +17,7 @@ export const useNavigationMenu = ({
 }: UseNavigationMenuProps) => {
   const { t } = useTranslation();
 
-  const navigationItems = useMemo(() => [
+  return useMemo(() => [
     {
       id: 'portals',
       label: t('managePortals'),
@@ -124,6 +124,4 @@ export const useNavigationMenu = ({
       onClick: () => setIsSettingsOpen(true),
     },
   ], [activeView, activePortal, navigate, setIsSettingsOpen, t]);
-
-  return navigationItems;
 };
