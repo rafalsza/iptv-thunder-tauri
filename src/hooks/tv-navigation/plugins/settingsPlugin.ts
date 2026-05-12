@@ -32,6 +32,10 @@ const settingsConfig: NavigationConfig = {
     {
       when: { group: 'settings-tabs', direction: 'down', last: true },
       goTo: { group: 'settings-footer', first: true }
+    },
+    {
+      when: { group: 'settings-header', direction: 'down' },
+      goTo: { group: 'settings-tabs', first: true }
     }
   ]
 };
@@ -95,15 +99,32 @@ export const settingsPlugin: NavigationPlugin = {
     const current = state.nodes.find(n => n.id === state.currentId);
     if (!current) return null;
 
+    // Only handle if in settings-modal container or settings groups
+    const isInSettings = current.containerId === 'settings-modal' ||
+                        current.groupId?.startsWith('settings');
+    if (!isInSettings) return null;
+
     // Handle special case for settings tabs navigation
     const tabsResult = handleSettingsTabsNavigation(state, current, direction);
     if (tabsResult) return tabsResult;
+
+    // Handle tab to content navigation (right from tabs should go to content of current tab)
+    if (current.groupId === 'settings-tabs' && direction === 'right') {
+      const tabId = current.id.replace('settings-tab-', '');
+      
+      // Find the first focusable element inside the current tab's content container
+      const tabContentEl = document.querySelector(`[data-tv-tab="${tabId}"] [data-tv-focusable]`);
+      if (tabContentEl) {
+        const targetId = (tabContentEl as HTMLElement).dataset.tvId || (tabContentEl as HTMLElement).id;
+        return targetId || null;
+      }
+    }
 
     // Handle settings content navigation (index-based, not spatial)
     const contentResult = handleSettingsContentNavigation(state, current, direction);
     if (contentResult) return contentResult;
 
-    // Default to rule engine
+    // Default to rule engine (only for other cases)
     const ruleEngine = createRuleEnginePlugin(settingsConfig);
     return ruleEngine.findNext(state, direction);
   },

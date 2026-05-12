@@ -33,8 +33,9 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
     refetch
   } = useSeriesCategories(client);
 
-  // Filtrowanie kategorii na podstawie wyszukiwania
-  const filteredCategories = useMemo(() =>
+  // Note: "All" category is NOT added for series because there are too many (42000+)
+  // Loading all series would be extremely slow
+  const finalCategories = useMemo(() =>
     categories.filter(category =>
       category.title.toLowerCase().includes(search.toLowerCase())
     ),
@@ -111,7 +112,7 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
     );
   }
 
-  if (filteredCategories.length === 0) {
+  if (finalCategories.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center dark:text-white text-slate-900">
@@ -120,7 +121,7 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
             {search ? 'Nie znaleziono kategorii' : 'Brak kategorii'}
           </h3>
           <p className="dark:text-slate-400 text-slate-600">
-            {search 
+            {search
               ? `Nie znaleziono kategorii seriali pasujących do "${search}"`
               : 'Ten portal nie ma zdefiniowanych kategorii seriali'
             }
@@ -138,7 +139,7 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
           <h1 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{t('seriesCategories')}</h1>
         </div>
         <p className="text-sm dark:text-slate-400 text-slate-600">
-          {t('selectSeriesCategory')} ({filteredCategories.length} kategorii)
+          {t('selectSeriesCategory')} ({finalCategories.length} kategorii)
         </p>
         {search && (
           <p className="text-green-700 text-sm mt-2">
@@ -150,7 +151,7 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
       {/* Series Categories Grid */}
       <div className="flex-1 overflow-y-auto p-2 sm:p-3 md:p-4">
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2 sm:gap-3">
-          {filteredCategories.map((category, categoryIndex) => (
+          {finalCategories.map((category, categoryIndex) => (
             <CategoryCard
               key={category.id}
               category={category}

@@ -133,18 +133,23 @@ function hasAnyContent(elements: ContentElements): boolean {
          elements.tvChannelElements.length > 0;
 }
 
-function shouldFocusOnContent(activeElement: HTMLElement | null, initialFocusElement: HTMLElement | null, initialFocusApplied: boolean): boolean {
+function shouldFocusOnContent(activeElement: HTMLElement | null, _initialFocusElement: HTMLElement | null, initialFocusApplied: boolean): boolean {
   const categoryGroups = '[data-tv-group="movie-categories"], [data-tv-group="series-categories"], [data-tv-group="favorite-movie-categories"], [data-tv-group="favorite-series-categories"], [data-tv-group="category-cards"]';
   const contentGroups = '[data-tv-group="movies"], [data-tv-group="series"], [data-tv-group="favorite-movies"], [data-tv-group="favorite-series"], [data-tv-group="tv-channels"]';
 
   const isInNavigation = activeElement?.closest('[data-tv-container="navigation"]') !== null;
-  const isOnInitialFocus = initialFocusElement !== null && activeElement === initialFocusElement;
   const isFocusLost = initialFocusApplied && (!activeElement || activeElement === document.body);
 
+  // Don't auto-focus to content if focus is already in navigation (navbar)
+  // This prevents double focus when App.tsx has already restored focus to a navbar element
+  if (isInNavigation) {
+    return false;
+  }
+
+  // Don't auto-focus to content if user is actively navigating in navbar
+  // Only auto-focus if user is on a category group or focus is lost
   const shouldFocus = (activeElement?.matches(categoryGroups) ||
-                       (isInNavigation && !isOnInitialFocus) ||
-                       isFocusLost ||
-                       (activeElement?.matches('[data-tv-group="navbar"]'))) &&
+                       isFocusLost) &&
                        !activeElement?.matches('[data-tv-group="movie-details"]') &&
                        !(activeElement?.matches(contentGroups) && activeElement?.dataset.tvInitial === 'true');
 
@@ -255,7 +260,7 @@ export function initAutoFocus(): () => void {
 
     const hadMovieDetails = hadMovieDetailsPreviously(lastContainerIds, containers);
     const hasMovieDetailsNow = movieDetailsElements.length > 0;
-    
+
     const movieDetailsCtx: MovieDetailsContext = {
       movieDetailsElements,
       activeElement,

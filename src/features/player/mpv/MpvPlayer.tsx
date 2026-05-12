@@ -889,7 +889,6 @@ interface UsePlayerControlsReturn {
   showUi: boolean;
   handleMouseMove: () => void;
   handlePlayPause: () => Promise<void>;
-  handleStop: (onClose: () => void) => Promise<void>;
   handleFullscreen: () => Promise<void>;
   handlePip: () => Promise<void>;
   handleClose: (onClose: () => void) => Promise<void>;
@@ -996,16 +995,6 @@ function usePlayerControls(): UsePlayerControlsReturn {
     } catch (e) { console.error('Play/Pause failed:', e); }
   }, []);
 
-  const handleStop = useCallback(async (
-    onClose: () => void
-  ) => {
-    try {
-      await command('stop', []);
-      await exitFullscreen();
-      onClose();
-    } catch (e) { console.error('Stop failed:', e); }
-  }, [exitFullscreen]);
-
   const handleVolumeChange = useCallback(async (newVol: number) => {
     try {
       await setProperty('volume', newVol);
@@ -1033,7 +1022,6 @@ function usePlayerControls(): UsePlayerControlsReturn {
     showUi,
     handleMouseMove,
     handlePlayPause,
-    handleStop,
     handleFullscreen,
     handlePip,
     handleClose,
@@ -1222,7 +1210,6 @@ interface PlayerControlsProps {
   currentAudioId: string | null;
   currentSubId: string | null;
   onPlayPause: () => void;
-  onStop: () => void;
   onFullscreen: () => void;
   onPip: () => void;
   onClose: () => void;
@@ -1236,7 +1223,7 @@ interface PlayerControlsProps {
 const PlayerControls = React.memo<PlayerControlsProps>(({
   isVod, streamState, isFullscreen, isPip, showUi, isPaused, volume,
   currentTime, duration, tracks, currentAudioId, currentSubId,
-  onPlayPause, onStop, onFullscreen, onPip, onClose,
+  onPlayPause, onFullscreen, onPip, onClose,
   onVolumeChange, onProgressClick, onShowEPG, onSetAudioTrack, onSetSubTrack
 }) => {
   const { t } = useTranslation();
@@ -1254,7 +1241,7 @@ const PlayerControls = React.memo<PlayerControlsProps>(({
         padding: '16px 20px 20px',
       }}>
       <div className="flex items-center justify-between">
-        {/* Left: Play/Pause & Stop */}
+        {/* Left: Play/Pause */}
         <div className="flex items-center gap-3">
           <button
             data-tv-focusable
@@ -1268,15 +1255,6 @@ const PlayerControls = React.memo<PlayerControlsProps>(({
             ) : (
               <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
             )}
-          </button>
-          <button
-            data-tv-focusable
-            tabIndex={0}
-            onClick={onStop}
-            className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
-            title="Stop"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><rect x="6" y="6" width="12" height="12"/></svg>
           </button>
 
           {/* EPG Button - Live TV only */}
@@ -1719,10 +1697,6 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
     void controls.seekTo(targetTime, mpv.duration);
   }, [isVod, mpv.duration, controls.seekTo]);
 
-  const handleStop = useCallback(() => {
-    void controls.handleStop(onClose);
-  }, [controls.handleStop, onClose]);
-
   const handleShowEPG = useCallback(() => {
     setShowEPGModal(true);
   }, []);
@@ -1805,7 +1779,6 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
           currentAudioId={mpv.currentAudioId}
           currentSubId={mpv.currentSubId}
           onPlayPause={handlePlayPause}
-          onStop={handleStop}
           onFullscreen={handleFullscreen}
           onPip={handlePip}
           onClose={handleClosePlayer}

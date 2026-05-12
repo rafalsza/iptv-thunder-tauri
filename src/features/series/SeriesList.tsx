@@ -18,11 +18,11 @@ import { StalkerVOD, StalkerGenre } from '@/types';
 
 // Responsive row height based on screen size (calculated dynamically)
 const getRowHeight = () => {
-  if (globalThis.window === undefined) return 240;
+  if (globalThis.window === undefined) return 360;
   const width = globalThis.window.innerWidth;
-  if (width > 3000) return 280;
-  if (width > 2000) return 240;
-  return 200;
+  if (width > 3000) return 440;
+  if (width > 2000) return 320;
+  return 280;
 };
 const IMAGE_CACHE_LIMIT = 500;
 
@@ -61,7 +61,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   const isFavorite = favoriteIds.has(String(series.id));
   const seriesName = String(series.series || series.name || '');
 
-  const { isLongPress, ref, ...longPressHandlers } = useLongPress({
+  const { isLongPress, ref, isLongPressRef, ...longPressHandlers } = useLongPress({
     onLongPress: () => onLongPress(series),
     delay: 500,
   });
@@ -69,7 +69,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   const handleKeyUp = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
       // Check if long press was triggered - if so, don't call onSelect
-      if (!(window as any).__tvLongPressPreventClick) {
+      if (!(globalThis as any).__tvLongPressPreventClick) {
         e.preventDefault();
         onSelect(String(series.id));
       }
@@ -78,7 +78,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
 
   const handleClick = () => {
     // For mouse/touch, let useLongPress handle it
-    if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
+    if (!isLongPress && !(globalThis as any).__tvLongPressPreventClick) {
       onSelect(String(series.id));
     }
   };
@@ -341,7 +341,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
                 📺
               </div>
               <div className="flex-1">
-                <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+                <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.id === '*' ? t('all') : selectedCategory.title}</h2>
                 <p className="text-xs dark:text-slate-400 text-slate-600">
                   {filteredSeries.length} {(() => {
                     const count = filteredSeries.length;

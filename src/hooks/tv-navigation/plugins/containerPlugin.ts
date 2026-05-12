@@ -25,6 +25,17 @@ const rules: Rule[] = [
   { match: (d, c, _) => d === 'up' && c.groupId === 'portal-form' && c.containerId === 'modal', handler: findPrevByIndex, log: 'up from portal-form by index' },
   { match: (d, c, _) => d === 'right' && c.groupId === 'portal-form' && c.containerId === 'modal', handler: findNextByIndex, log: 'right from portal-form by index' },
   { match: (d, c, _) => d === 'left' && c.groupId === 'portal-form' && c.containerId === 'modal', handler: findPrevByIndex, log: 'left from portal-form by index' },
+  // Settings modal navigation - sequential by index
+  { match: (d, c, _) => d === 'down' && c.containerId === 'settings-modal', handler: findNextByIndex, log: 'down from settings-modal by index' },
+  { match: (d, c, _) => d === 'up' && c.containerId === 'settings-modal', handler: findPrevByIndex, log: 'up from settings-modal by index' },
+  { match: (d, c, _) => d === 'right' && c.containerId === 'settings-modal', handler: findNextByIndex, log: 'right from settings-modal by index' },
+  { match: (d, c, _) => d === 'left' && c.containerId === 'settings-modal', handler: findPrevByIndex, log: 'left from settings-modal by index' },
+  // Settings modal specific groups
+  { match: (d, c, _) => d === 'down' && c.groupId === 'settings-header', handler: findNextByIndex, log: 'down from settings-header' },
+  { match: (d, c, _) => d === 'down' && c.groupId === 'settings-tabs', handler: findNextByIndex, log: 'down from settings-tabs' },
+  { match: (d, c, _) => d === 'down' && c.groupId === 'settings-content', handler: findNextByIndex, log: 'down from settings-content' },
+  { match: (d, c, _) => d === 'up' && c.groupId === 'settings-content', handler: findPrevByIndex, log: 'up from settings-content' },
+  { match: (d, c, _) => d === 'up' && c.groupId === 'settings-tabs', handler: findPrevByIndex, log: 'up from settings-tabs' },
   // General navigation rules
   { match: (d, c, _) => d === 'left' && c.containerId === 'main' && !GRID_GROUPS.has(c.groupId || '') && c.groupId !== 'movie-actions', handler: findNavigationActive, log: 'left from main (non-grid, non-movie-actions)' },
   { match: (d, c, _) => d === 'right' && c.groupId === 'movie-categories', handler: findGridInitial, log: 'right from movie-categories to first movie' },

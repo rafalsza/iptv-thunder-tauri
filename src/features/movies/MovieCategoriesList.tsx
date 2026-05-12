@@ -25,18 +25,26 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
   const accountId = client?.getAccount?.()?.id || 'default';
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'vod');
 
-  const { 
-    data: categories = [], 
-    isLoading, 
-    error, 
-    refetch 
+  const {
+    data: categories = [],
+    isLoading,
+    error,
+    refetch
   } = useMovieCategories(client);
 
-  const filteredCategories = useMemo(() =>
-    categories.filter(category =>
+  // Ensure "All" category is always present at component level
+  const categoriesWithAll = useMemo(() => {
+    const allCategory = { id: '*', title: t('all'), alias: 'all', parent_id: 0 };
+    // Always add "All" at the beginning, remove any existing "All" to avoid duplicates
+    const withoutAll = categories.filter(cat => cat.id !== '*');
+    return [allCategory, ...withoutAll];
+  }, [categories, t]);
+
+  const finalCategories = useMemo(() =>
+    categoriesWithAll.filter(category =>
       category.title.toLowerCase().includes(search.toLowerCase())
     ),
-  [categories, search]);
+  [categoriesWithAll, search]);
 
   const handleCategoryClick = (category: StalkerGenre) => {
     setSelectedCategory(category);
@@ -104,7 +112,7 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
     );
   }
 
-  if (filteredCategories.length === 0) {
+  if (finalCategories.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center dark:text-white text-slate-900">
@@ -113,7 +121,7 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
             {search ? 'Nie znaleziono kategorii' : 'Brak kategorii'}
           </h3>
           <p className="dark:text-slate-400 text-slate-600">
-            {search 
+            {search
               ? `Nie znaleziono kategorii filmów pasujących do "${search}"`
               : 'Ten portal nie ma zdefiniowanych kategorii filmów'
             }
@@ -131,7 +139,7 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
           <h1 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{t('movieCategories')}</h1>
         </div>
         <p className="text-sm dark:text-slate-400 text-slate-600">
-          {t('selectMovieCategory')} ({filteredCategories.length} kategorii)
+          {t('selectMovieCategory')} ({finalCategories.length} kategorii)
         </p>
         {search && (
           <p className="text-green-700 text-sm mt-2">
@@ -143,7 +151,7 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
       {/* Movie Categories Grid */}
       <div className="flex-1 overflow-y-auto p-2 sm:p-3 md:p-4">
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2 sm:gap-3">
-          {filteredCategories.map((category, categoryIndex) => (
+          {finalCategories.map((category, categoryIndex) => (
             <CategoryCard
               key={category.id}
               category={category}

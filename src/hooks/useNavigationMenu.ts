@@ -23,7 +23,9 @@ export const useNavigationMenu = ({
       label: t('managePortals'),
       icon: '🌐',
       active: activeView === 'portals',
-      onClick: () => navigate({ type: 'portals' }),
+      onClick: () => {
+        navigate({ type: 'portals' });
+      },
     },
     {
       id: 'for-you',

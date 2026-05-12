@@ -99,6 +99,48 @@ export async function getChannels(portalId: string, genreId?: string, limit?: nu
   }));
 }
 
+export async function upsertChannels(channels: Channel[], portalId: string): Promise<void> {
+  if (channels.length === 0) return;
+  const now = Date.now();
+
+  await withTransaction(async (db) => {
+    for (let i = 0; i < channels.length; i += BATCH_SIZE) {
+      const chunk = channels.slice(i, i + BATCH_SIZE);
+      const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+
+      const query = `
+        INSERT INTO channels
+          (id, portal_id, name, stream_url, icon_url, genre_id, genre_name, epg_channel_id, order_num, updated_at)
+        VALUES ${placeholders}
+        ON CONFLICT(id, portal_id) DO UPDATE SET
+          name = excluded.name,
+          stream_url = excluded.stream_url,
+          icon_url = excluded.icon_url,
+          genre_id = excluded.genre_id,
+          genre_name = excluded.genre_name,
+          epg_channel_id = excluded.epg_channel_id,
+          order_num = excluded.order_num,
+          updated_at = excluded.updated_at
+      `;
+
+      const params = chunk.flatMap(ch => [
+        Number(ch.id) || 0,
+        portalId,
+        ch.name,
+        ch.streamUrl || null,
+        ch.iconUrl || null,
+        ch.genreId || null,
+        ch.genreName || null,
+        ch.epgChannelId || null,
+        ch.orderNum || 0,
+        now
+      ]);
+
+      await db.execute(query, params);
+    }
+  });
+}
+
 export async function getChannelCount(portalId: string, genreId?: string): Promise<number> {
   const db = await getDb();
   let query = 'SELECT COUNT(*) as count FROM channels WHERE portal_id = ?';
@@ -818,6 +860,7 @@ export function useDatabase() {
   return {
     // Channels
     saveChannels,
+    upsertChannels,
     getChannels,
     getChannelCount,
     searchChannels,

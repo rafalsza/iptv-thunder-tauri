@@ -89,7 +89,7 @@ export const getSeriesWithPagination = async (
     hd: '0',
     mac: account.mac,
     JsHttpRequest: '1-xml',
-    max_page_items: '30',
+    max_page_items: '100',
   };
 
   if (categoryId && categoryId !== '*' && categoryId !== '') {

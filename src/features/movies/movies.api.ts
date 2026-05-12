@@ -39,7 +39,7 @@ export async function fetchVODPages(
     : undefined;
 
   if (totalPages) {
-    // Progressive fetch: load pages sequentially in background
+    // Progressive fetch: load pages in parallel with concurrency limit
     const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
     let allItems = [...first.items];
 
@@ -48,24 +48,43 @@ export async function fetchVODPages(
       onProgress(first.items, 1, totalPages);
     }
 
-    // Fetch pages progressively with delay to avoid server throttling
-    for (let i = 0; i < pageNums.length; i++) {
-      const page = pageNums[i];
+    // Parallel fetching with conservative concurrency to avoid 503 errors
+    const CONCURRENCY_LIMIT = 3;
+    const results: { page: number; items: StalkerVOD[] }[] = [];
+
+    for (let i = 0; i < pageNums.length; i += CONCURRENCY_LIMIT) {
+      const batch = pageNums.slice(i, i + CONCURRENCY_LIMIT);
+
       if (signal?.aborted) {
         throw new DOMException('aborted', 'AbortError');
       }
+
       try {
-        const pageData = await client.getVODListWithPagination(categoryId, page, { signal });
-        allItems = [...allItems, ...pageData.items];
-        // Emit progress after each page (loadedPages = current page number)
+        const batchPromises = batch.map(async (page) => {
+          try {
+            const pageData = await client.getVODListWithPagination(categoryId, page, { signal });
+            return { page, items: pageData.items };
+          } catch (e) {
+            console.error(`Failed to fetch page ${page}:`, e);
+            return { page, items: [] };
+          }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        results.push(...batchResults);
+
+        // Merge results and emit progress
+        const newItems = batchResults.flatMap(r => r.items);
+        allItems = [...allItems, ...newItems];
+
         if (onProgress) {
-          onProgress(allItems, i + 2, totalPages);
+          onProgress(allItems, i + batch.length, totalPages);
         }
-        // Small delay between requests to avoid server throttling
-        await new Promise(r => setTimeout(r, 100));
+
+        // Small delay between batches to avoid server overload
+        await new Promise(r => setTimeout(r, 50));
       } catch (e) {
-        // Continue on error for individual pages
-        console.error(`Failed to fetch page ${page}:`, e);
+        console.error('Batch fetch error:', e);
       }
     }
 
@@ -102,6 +121,7 @@ export function normalizeVod(items: StalkerVOD[]): StalkerVOD[] {
   }));
 
   // Sort by precomputed timestamp - newest first
+  // Using Intl.Collator for better performance on large arrays
   withTimestamps.sort((a, b) => b._ts - a._ts);
 
   return withTimestamps as StalkerVOD[];

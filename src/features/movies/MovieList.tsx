@@ -20,11 +20,11 @@ import { ContinueWatching } from './ContinueWatching';
 
 // Responsive row height based on screen size (calculated dynamically)
 const getRowHeight = () => {
-  if (globalThis.window === undefined) return 280;
+  if (globalThis.window === undefined) return 360;
   const width = globalThis.window.innerWidth;
-  if (width > 3000) return 320;
-  if (width > 2000) return 280;
-  return 240;
+  if (width > 3000) return 440;
+  if (width > 2000) return 320;
+  return 280;
 };
 
 const IMAGE_CACHE_LIMIT = 500;
@@ -380,7 +380,7 @@ export const MovieList: React.FC<MovieListProps> = ({
                 🎬
               </div>
               <div className="flex-1">
-                <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+                <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.id === '*' ? t('all') : selectedCategory.title}</h2>
                 <div className="h-4 w-24 dark:bg-slate-700 bg-gray-200 rounded animate-pulse mt-1" />
               </div>
             </div>
@@ -425,7 +425,7 @@ export const MovieList: React.FC<MovieListProps> = ({
               🎬
             </div>
             <div className="flex-1">
-              <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+              <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.id === '*' ? t('all') : selectedCategory.title}</h2>
               <p className="text-xs dark:text-slate-400 text-slate-600">
                 {filtered.length} {(() => {
                   const count = filtered.length;

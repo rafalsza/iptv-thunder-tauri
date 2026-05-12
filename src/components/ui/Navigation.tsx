@@ -1,8 +1,8 @@
 // =========================
 // 🧭 NAVIGATION COMPONENT
 // =========================
-import React, { useState } from 'react';
-import { ChevronDown, Power } from 'lucide-react';
+import React, { useState, memo } from 'react';
+import { ChevronDown, Power, Lock } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { exit } from '@tauri-apps/plugin-process';
 import { invoke } from '@tauri-apps/api/core';
@@ -11,14 +11,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 export type NavigationItem = {
   id: string;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   active?: boolean;
   disabled?: boolean;
   onClick?: () => void;
   subItems?: Array<{
     id: string;
     label: string;
-    onClick: () => void;
+    onClick?: () => void;
     active?: boolean;
   }>;
 };
@@ -27,24 +27,23 @@ interface NavigationProps {
   items: NavigationItem[];
 }
 
-export const Navigation: React.FC<NavigationProps> = ({ items }) => {
+export const Navigation: React.FC<NavigationProps> = memo(({ items }) => {
   const { t } = useTranslation();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [manuallyInteracted, setManuallyInteracted] = useState<Set<string>>(new Set());
 
   const toggleSubmenu = (itemId: string) => {
+    setManuallyInteracted(prev => new Set(prev).add(itemId));
     setExpandedItem(expandedItem === itemId ? null : itemId);
   };
 
   const handleCloseApp = async () => {
     try {
-      // Try desktop exit first
       await exit(0);
     } catch {
       try {
-        // Try Android exit via invoke
         await invoke('exit_app');
       } catch {
-        // Final fallback
         window.close();
       }
     }
@@ -67,7 +66,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
       <nav className="flex-1 p-2 md:p-3 lg:p-4 gap-2 md:gap-3 space-y-2 md:space-y-3 overflow-y-auto scrollbar-hide">
         {items.map((item, index) => {
           const hasSubItems = item.subItems && item.subItems.length > 0;
-          const isExpanded = hasSubItems && (expandedItem === item.id || (!expandedItem && item.subItems?.some((sub) => sub.active)));
+          const isExpanded = hasSubItems && (expandedItem === item.id || (!expandedItem && !manuallyInteracted.has(item.id) && item.subItems?.some((sub) => sub.active)));
           const baseIndex = index * 10;
 
           let buttonClass;
@@ -82,6 +81,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
           return (
             <div key={item.id} className="relative group">
               <motion.button
+                data-tv-id={item.id}
                 data-tv-focusable
                 data-tv-index={baseIndex}
                 data-tv-group="navbar"
@@ -129,9 +129,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
                 )}
                 
                 {item.disabled && (
-                  <span className="ml-auto text-sm dark:bg-slate-600 bg-gray-400 px-2 py-0.5 rounded-full">
-                    🔒
-                  </span>
+                  <Lock className="ml-auto w-4 h-4 dark:text-slate-500 text-slate-500" />
                 )}
                 
                 {/* Active indicator */}
@@ -155,6 +153,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
                     {item.subItems.map((subItem, subIndex) => (
                       <motion.button
                         key={subItem.id}
+                        data-tv-id={subItem.id}
                         data-tv-focusable
                         data-tv-group={subItem.id}
                         data-tv-index={baseIndex + subIndex + 1}
@@ -181,6 +180,7 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
       <div className="p-2 md:p-3 lg:p-4 gap-2 md:gap-3 lg:gap-4 border-t dark:border-slate-700/30 border-gray-200/30 space-y-2 md:space-y-3 lg:space-y-4">
         {/* Close App Button - subtle style */}
         <motion.button
+          data-tv-id="close-app"
           data-tv-focusable
           data-tv-index={60}
           tabIndex={0}
@@ -199,4 +199,4 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
       </div>
     </div>
   );
-};
+});

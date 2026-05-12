@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { StalkerGenre, StalkerVOD } from '@/types';
 
 // =========================
@@ -87,6 +87,82 @@ export const useTypedRouter = () => {
       setSelectedCategory(null);
     }
     setRoute(targetRoute);
+  }, [route]);
+
+  // Focus management - save/restore focus on route changes
+  const lastFocusRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    const currentRouteType = route.type;
+    const previousRouteType = previousRouteRef.current.type;
+
+    if (previousRouteType && currentRouteType !== previousRouteType) {
+      // Save focus for previous route
+      const focusedElement = document.activeElement as HTMLElement;
+      const focusedGroup = focusedElement?.dataset.tvGroup;
+
+      // Don't save navbar element as focus for main content routes
+      const isPreviousNavbarRoute = previousRouteType === 'portals' || previousRouteType === 'for-you' ||
+                                    previousRouteType === 'tv' || previousRouteType === 'movies' ||
+                                    previousRouteType === 'series';
+      const isNavbarElement = focusedGroup === 'navbar';
+
+      // Only save focus if:
+      // 1. Previous route is NOT a navbar route, OR
+      // 2. The focused element is NOT a navbar element
+      // 3. Current route is NOT a navbar route (don't save navbar focus when going to main content)
+      const isCurrentNavbarRoute = currentRouteType === 'portals' || currentRouteType === 'for-you' ||
+                                   currentRouteType === 'tv' || currentRouteType === 'movies' ||
+                                   currentRouteType === 'series';
+
+      if ((!isPreviousNavbarRoute || !isNavbarElement) && !isCurrentNavbarRoute && focusedElement?.dataset.tvFocusable) {
+        lastFocusRef.current[previousRouteType] = focusedElement.id || focusedElement.dataset.tvId || '';
+      }
+
+      // Restore focus for current route
+      const savedFocusId = lastFocusRef.current[currentRouteType];
+      const isNavbarRoute = currentRouteType === 'portals' || currentRouteType === 'for-you' ||
+                           currentRouteType === 'tv' || currentRouteType === 'movies' ||
+                           currentRouteType === 'series';
+
+      if (savedFocusId) {
+        setTimeout(() => {
+          const savedElement = document.getElementById(savedFocusId) || document.querySelector(`[data-tv-id="${savedFocusId}"]`);
+          // Don't restore to submenu items when going to navbar routes
+          const isSubmenuItem = savedElement && (savedElement as HTMLElement).dataset.tvGroup &&
+                               (savedElement as HTMLElement).dataset.tvGroup !== 'navbar' &&
+                               (savedElement as HTMLElement).dataset.tvGroup !== 'portals-content';
+          // Also check if it's a navbar element
+          const isSavedNavbarElement = savedElement && (savedElement as HTMLElement).dataset.tvGroup === 'navbar';
+
+          if (isNavbarRoute && isSubmenuItem) {
+            // Focus navbar element instead
+            const navbarElement = document.querySelector(`[data-tv-id="${currentRouteType}"]`) as HTMLElement;
+            if (navbarElement) {
+              navbarElement.focus();
+            }
+            return;
+          }
+
+          // Don't restore to navbar elements when going to main content routes
+          if (!isNavbarRoute && (isSavedNavbarElement || isSubmenuItem)) {
+            return;
+          }
+
+          if (savedElement && 'focus' in savedElement) {
+            savedElement.focus();
+          }
+        }, 50);
+      } else if (isNavbarRoute) {
+        // Focus navbar element for navbar routes with no saved focus
+        setTimeout(() => {
+          const navbarElement = document.querySelector(`[data-tv-id="${currentRouteType}"]`) as HTMLElement;
+          if (navbarElement) {
+            navbarElement.focus();
+          }
+        }, 50);
+      }
+    }
   }, [route]);
 
   // Handle category selection with context-aware navigation

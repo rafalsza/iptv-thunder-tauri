@@ -1,6 +1,7 @@
 import React from 'react';
 import { StalkerGenre } from '@/types';
 import { useLongPress } from '@/hooks/useLongPress';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface CategoryCardProps {
   category: StalkerGenre;
@@ -28,19 +29,21 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
     delay: 500,
   });
 
+  const { t } = useTranslation();
   const isFavorite = isCategoryFavorite?.(String(category.id));
-  const categoryName = category.name || category.title || '';
+  const rawName = category.name || category.title || '';
+  const categoryName = category.id === '*' ? t('all') : rawName;
   const categoryId = String(category.id);
 
   const handleClick = (e: React.MouseEvent) => {
     // Immediate check for long press flag
-    if ((window as any).__tvLongPressPreventClick) {
+    if ((globalThis as any).__tvLongPressPreventClick) {
       e.preventDefault();
       e.stopPropagation();
       return;
     }
     // For mouse/touch, let useLongPress handle it
-    if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
+    if (!isLongPress && !(globalThis as any).__tvLongPressPreventClick) {
       onSelect(category);
     }
   };

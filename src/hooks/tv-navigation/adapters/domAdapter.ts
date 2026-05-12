@@ -10,18 +10,22 @@ export function buildNavigationState(
   lastPositionByAxis?: { x: number; y: number }
 ): NavigationState {
   // Generate IDs for all elements first to ensure consistency
-  const nodes = elements.map(el => ({
-    id: el.dataset.tvId || el.id || generateId(el),
-    el,
-    rect: el.getBoundingClientRect(),
-    disabled: el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true' || el.dataset.tvDisabled !== undefined,
-    containerId: (el.closest('[data-tv-container]') as HTMLElement | null)?.dataset.tvContainer,
-    groupId: (el.closest('[data-tv-group]') as HTMLElement | null)?.dataset.tvGroup,
-    index: el.dataset.tvIndex ? Number.parseInt(el.dataset.tvIndex) : undefined,
-    isSearch: el.dataset.tvSearch !== undefined,
-    isInitial: el.dataset.tvInitial !== undefined,
-    isActive: el.dataset.tvActive === 'true',
-  }));
+  const nodes = elements.map(el => {
+    const groupId = (el.closest('[data-tv-group]') as HTMLElement | null)?.dataset.tvGroup;
+    const containerId = (el.closest('[data-tv-container]') as HTMLElement | null)?.dataset.tvContainer;
+    return {
+      id: el.dataset.tvId || el.id || generateId(el),
+      el,
+      rect: el.getBoundingClientRect(),
+      disabled: el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true' || el.dataset.tvDisabled !== undefined,
+      containerId: containerId,
+      groupId: groupId,
+      index: el.dataset.tvIndex ? Number.parseInt(el.dataset.tvIndex) : undefined,
+      isSearch: el.dataset.tvSearch !== undefined,
+      isInitial: el.dataset.tvInitial !== undefined,
+      isActive: el.dataset.tvActive === 'true',
+    };
+  });
 
   // Determine currentId: use provided, fallback to active element's generated ID
   let resolvedCurrentId = currentId;

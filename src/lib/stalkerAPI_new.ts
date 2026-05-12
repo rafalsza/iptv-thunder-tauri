@@ -279,7 +279,7 @@ export class StalkerClient {
       hd: '0',
       mac: this.account.mac,
       JsHttpRequest: '1-xml',
-      max_page_items: '30',
+      max_page_items: '100',
     };
 
     if (categoryId && categoryId !== '*' && categoryId !== '') {

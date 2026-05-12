@@ -2,7 +2,7 @@
 // 📺 TV LIST (UI)
 // =========================
 import React, { useMemo, useRef, useCallback, useEffect } from 'react';
-import { useLazyChannels, usePrefetchStream } from './tv.hooks';
+import { useLazyChannels, usePrefetchStream, useChannelSearch } from './tv.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useLongPress } from '@/hooks/useLongPress';
@@ -138,6 +138,7 @@ export const TVList: React.FC<TVListProps> = ({
   selectedCategory
 }) => {
   const { t } = useTranslation();
+  const isAllCategory = !selectedCategory?.id || selectedCategory.id === '*';
   const {
     channels: allChannels = [],
     isLoading,
@@ -145,6 +146,11 @@ export const TVList: React.FC<TVListProps> = ({
     loadMore,
     error
   } = useLazyChannels(client, selectedCategory?.id);
+  const { results: searchResults, isSearching } = useChannelSearch(
+    accountId,
+    isAllCategory && search.length >= 2 ? search : '',
+    isAllCategory && hasMore
+  );
   const preload = usePrefetchStream(client);
   const { isItemFavorite, toggleItemFavorite } = useFavorites(accountId);
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'live');
@@ -217,13 +223,16 @@ export const TVList: React.FC<TVListProps> = ({
     }, 300));
   }, [preload]);
 
-  const filtered = useMemo(() =>
-    allChannels.filter((c: StalkerChannel) => {
-      // Filter out separator channels (names starting with ####)
+  const filtered = useMemo(() => {
+    // When searching in 'All' category with 2+ chars, use SQLite results (covers all 17k+ channels)
+    if (isAllCategory && search.length >= 2) {
+      return searchResults.filter(c => !c.name.startsWith('####'));
+    }
+    return allChannels.filter((c: StalkerChannel) => {
       if (c.name.startsWith('####')) return false;
-      return c.name.toLowerCase().includes(search.toLowerCase());
-    }),
-  [allChannels, search]);
+      return search ? c.name.toLowerCase().includes(search.toLowerCase()) : true;
+    });
+  }, [allChannels, searchResults, search, isAllCategory]);
 
   const handleLongPress = useCallback((channel: StalkerChannel) => {
     toggleItemFavorite('live', String(channel.id), {
@@ -282,9 +291,9 @@ export const TVList: React.FC<TVListProps> = ({
                 {selectedCategory.id === '*' ? '🌍' : '📺'}
               </motion.div>
               <div className="flex-1">
-                <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.title}</h2>
+                <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.id === '*' ? t('all') : selectedCategory.title}</h2>
                 <p className="text-sm dark:text-slate-400 text-slate-600">
-                  {allChannels.length} {t('channels').toLowerCase()}
+                  {allChannels.length} {t('channels')}
                 </p>
               </div>
               {/* Favorite Category Button */}
@@ -340,7 +349,7 @@ export const TVList: React.FC<TVListProps> = ({
         </motion.div>
         
         {/* Infinite scroll trigger and loading state */}
-        {isLoading && (
+        {(isLoading || isSearching) && (
           <div className="flex justify-center py-4">
             <div className="dark:text-white text-slate-900">{t('loading')}...</div>
           </div>
@@ -353,17 +362,17 @@ export const TVList: React.FC<TVListProps> = ({
         )}
 
         {/* No search results */}
-        {!isLoading && search && filtered.length === 0 && (
+        {!isLoading && !isSearching && search && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 dark:text-slate-400 text-slate-600">
             <div className="text-4xl mb-3">🔍</div>
-            <p className="text-lg dark:text-white text-slate-900">Nie znaleziono kanałów</p>
-            <p className="text-sm dark:text-slate-500 text-slate-500">Brak wyników dla "{search}"</p>
+            <p className="text-lg dark:text-white text-slate-900">{t('noChannelsFound')}</p>
+            <p className="text-sm dark:text-slate-500 text-slate-500">{t('noResultsFor', { search })}</p>
           </div>
         )}
 
         {!isLoading && !hasMore && filtered.length > 0 && (
           <div className="text-center py-4 dark:text-slate-500 text-slate-500">
-            {filtered.length} z {allChannels.length} {t('channels').toLowerCase()}
+            {filtered.length} z {allChannels.length} {t('channels')}
           </div>
         )}
       </div>

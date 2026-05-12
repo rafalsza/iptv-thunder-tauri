@@ -31,21 +31,96 @@ async function fetchAllSeriesSilent(
   const allItems = [...first.items];
   const totalPages = Math.ceil(first.totalItems / first.maxPageItems) || 1;
 
-  for (let p = 2; p <= totalPages; p++) {
-    if (signal?.aborted) break;
+  if (totalPages > 1) {
+    // Parallel fetching with concurrency limit
+    const CONCURRENCY_LIMIT = 3;
+    const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
 
-    const result = await getSeriesWithPagination(client, categoryId, p, signal);
-    if (result.items.length === 0) break;
+    for (let i = 0; i < pageNums.length; i += CONCURRENCY_LIMIT) {
+      if (signal?.aborted) break;
 
-    allItems.push(...result.items);
-    if (!result.hasMore) break;
+      const batch = pageNums.slice(i, i + CONCURRENCY_LIMIT);
+      const batchPromises = batch.map(async (page) => {
+        try {
+          const result = await getSeriesWithPagination(client, categoryId, page, signal);
+          return result.items;
+        } catch (e) {
+          console.error(`Failed to fetch series page ${page}:`, e);
+          return [];
+        }
+      });
 
-    const delay = p < 5 ? 50 : 100;
-    await new Promise(r => setTimeout(r, delay));
+      const batchResults = await Promise.all(batchPromises);
+      allItems.push(...batchResults.flat());
+
+      // Small delay between batches
+      await new Promise(r => setTimeout(r, 50));
+    }
   }
 
   return sortAndDedupe(allItems);
 }
+async function fetchBatch(
+  client: StalkerClient,
+  categoryId: string,
+  pageNums: number[],
+  signal?: AbortSignal,
+): Promise<StalkerVOD[]> {
+  const batchPromises = pageNums.map(async (page) => {
+    try {
+      const result = await getSeriesWithPagination(client, categoryId, page, signal);
+      return result.items;
+    } catch (e) {
+      console.error(`Failed to fetch series page ${page}:`, e);
+      return [];
+    }
+  });
+
+  const batchResults = await Promise.all(batchPromises);
+  return batchResults.flat();
+}
+
+async function fetchRemainingBatches(
+  client: StalkerClient,
+  categoryId: string,
+  queryKey: string[],
+  allItems: StalkerVOD[],
+  totalPages: number,
+  queryClient: ReturnType<typeof useQueryClient>,
+  signal?: AbortSignal,
+): Promise<void> {
+  const CONCURRENCY_LIMIT = 3;
+  const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+
+  for (let i = 0; i < pageNums.length; i += CONCURRENCY_LIMIT) {
+    if (signal?.aborted) return;
+
+    const batch = pageNums.slice(i, i + CONCURRENCY_LIMIT);
+    const newItems = await fetchBatch(client, categoryId, batch, signal);
+
+    if (newItems.length === 0) return;
+
+    allItems.push(...newItems);
+
+    if (!shouldUpdateCache(signal, queryClient, queryKey)) return;
+
+    queryClient.setQueryData(queryKey, sortAndDedupe(allItems));
+
+    await new Promise(r => setTimeout(r, 50));
+  }
+}
+
+function shouldUpdateCache(
+  signal?: AbortSignal,
+  queryClient?: ReturnType<typeof useQueryClient>,
+  queryKey?: string[],
+): boolean {
+  if (signal?.aborted) return false;
+  if (!queryClient || !queryKey) return false;
+  const currentData = queryClient.getQueryData(queryKey);
+  return !!currentData;
+}
+
 async function fetchAllSeriesProgressive(
   client: StalkerClient,
   categoryId: string,
@@ -60,33 +135,21 @@ async function fetchAllSeriesProgressive(
     return first.items;
   }
 
-  // 🔥 Emit first page IMMEDIATELY (fast initial load)
   const allItems = [...first.items];
   queryClient.setQueryData(queryKey, sortAndDedupe(allItems));
 
   const totalPages = Math.ceil(first.totalItems / first.maxPageItems) || 1;
 
-  // Fetch remaining pages in background
-  for (let p = 2; p <= totalPages; p++) {
-    if (signal?.aborted) break;
-
-    const result = await getSeriesWithPagination(client, categoryId, p, signal);
-    if (result.items.length === 0) break;
-
-    allItems.push(...result.items);
-
-    // 🛡️ Guard: only update if query still active (race condition protection)
-    if (signal?.aborted) break;
-    const currentData = queryClient.getQueryData(queryKey);
-    if (!currentData) break;
-
-    // 🔥 Update cache progressively (UI updates as new pages arrive)
-    queryClient.setQueryData(queryKey, sortAndDedupe(allItems));
-
-    if (!result.hasMore) break;
-
-    const delay = p < 5 ? 50 : 100;
-    await new Promise(r => setTimeout(r, delay));
+  if (totalPages > 1) {
+    await fetchRemainingBatches(
+      client,
+      categoryId,
+      queryKey,
+      allItems,
+      totalPages,
+      queryClient,
+      signal,
+    );
   }
 
   return sortAndDedupe(allItems);
@@ -112,32 +175,33 @@ export const useSeriesAll = (client: StalkerClient, categoryId?: string) => {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
+  // Treat undefined, empty, or '*' as "all series" - use consistent cache key
+  const effectiveCategoryId = (!categoryId || categoryId === '*') ? '' : categoryId;
+
   const query = useQuery({
     queryKey: ['series-all', accountId, categoryId],
     queryFn: async ({ signal }) => {
-      if (!categoryId) return [];
-
-      // 1. First, try to load from SQLite (fast, offline-friendly) - LIMIT 1000 for performance
-      const cachedItems = await getSeries(accountId, categoryId, 1000);
+      // 1. First, try to load from SQLite (fast, offline-friendly)
+      const cachedItems = await getSeries(accountId, effectiveCategoryId);
       const hasCache = cachedItems.length > 0;
 
       if (hasCache) {
         // 🔥 Background refresh (SWR) - silent, no progressive UI updates
         // Only run once per day (24 hours)
-        const needsRefresh = shouldBackgroundRefresh(accountId, categoryId);
-        const queryKey = ['series-all', accountId, categoryId];
+        const needsRefresh = shouldBackgroundRefresh(accountId, effectiveCategoryId);
+        const queryKey = ['series-all', accountId, effectiveCategoryId];
 
         if (needsRefresh) {
           setIsRefreshing(true);
-          fetchAllSeriesSilent(client, categoryId, signal)
+          fetchAllSeriesSilent(client, effectiveCategoryId, signal)
             .then(items => {
               // 🛡️ Guard: don't update if user switched category (race condition)
               if (signal?.aborted) return;
               const currentData = queryClient.getQueryData(queryKey);
               if (!currentData) return;
-              saveSeriesToDb(items, categoryId, accountId);
+              saveSeriesToDb(items, effectiveCategoryId, accountId);
               queryClient.setQueryData(queryKey, items);
-              setLastFetchTime(accountId, categoryId);
+              setLastFetchTime(accountId, effectiveCategoryId);
             })
             .catch(() => {})
             .finally(() => setIsRefreshing(false));
@@ -161,12 +225,12 @@ export const useSeriesAll = (client: StalkerClient, categoryId?: string) => {
       }
 
       // 2. No cache - fetch with PROGRESSIVE loading (first page shows immediately)
-      const items = await fetchAllSeriesProgressive(client, categoryId, accountId, queryClient, signal);
-      saveSeriesToDb(items, categoryId, accountId);
-      setLastFetchTime(accountId, categoryId);
+      const items = await fetchAllSeriesProgressive(client, effectiveCategoryId, accountId, queryClient, signal);
+      saveSeriesToDb(items, effectiveCategoryId, accountId);
+      setLastFetchTime(accountId, effectiveCategoryId);
       return items;
     },
-    enabled: !!categoryId && !!accountId && accountId !== 'default',
+    enabled: !!accountId && accountId !== 'default',
     staleTime: 0,
     gcTime:    30 * 60 * 1000,
     placeholderData: (previousData) => previousData,

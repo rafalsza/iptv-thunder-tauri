@@ -207,7 +207,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
               {/* Content Area */}
               <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
                 {activeTab === 'general' && (
-                  <div className="max-w-md space-y-8">
+                  <div className="max-w-md space-y-8" data-tv-tab="general">
                     <div>
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('theme')}</label>
                       <select
@@ -283,7 +283,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 )}
 
                 {activeTab === 'player' && (
-                  <div className="max-w-md space-y-8">
+                  <div className="max-w-md space-y-8" data-tv-tab="player">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium dark:text-white text-slate-900">{t('autoPlay')}</p>
@@ -378,7 +378,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 )}
 
                 {activeTab === 'epg' && (
-                  <div className="max-w-lg space-y-8">
+                  <div className="max-w-lg space-y-8" data-tv-tab="epg">
                     <div>
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('epgSource')}</label>
                       <select
@@ -451,7 +451,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 )}
 
                 {activeTab === 'advanced' && (
-                  <div className="max-w-md space-y-8">
+                  <div className="max-w-md space-y-8" data-tv-tab="advanced">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium dark:text-white text-slate-900">{t('debugMode')}</p>
@@ -493,7 +493,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 )}
 
                 {activeTab === 'about' && (
-                  <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+                  <div className="flex flex-col items-center justify-center h-full py-12 text-center" data-tv-tab="about">
                     <div className="w-24 h-24 bg-gradient-to-br from-green-700 to-green-800 rounded-3xl flex items-center justify-center text-6xl mb-6 shadow-xl">
                       📺
                     </div>

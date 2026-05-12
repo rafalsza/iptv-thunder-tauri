@@ -93,6 +93,7 @@ export interface ExoPlayerProps {
   resumePosition?: number;
   setPosition: (id: string, pos: number, duration?: number) => void;
   onClose: () => void;
+  onEnded?: () => void;
 }
 
 export const ExoPlayer: React.FC<ExoPlayerProps> = ({
@@ -100,7 +101,8 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   name = 'Unknown Channel',
   channelId,
   isVod,
-  onClose
+  onClose,
+  onEnded: _onEnded
 }) => {
   React.useEffect(() => {
     const openNativePlayer = async () => {

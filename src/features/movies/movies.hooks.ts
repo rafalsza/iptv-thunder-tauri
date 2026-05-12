@@ -27,8 +27,8 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
   const query = useQuery({
     queryKey: ['movies-all', accountId, categoryId],
     queryFn: async ({ signal }) => {
-      // Treat undefined categoryId as empty string to load all movies
-      const effectiveCategoryId = categoryId || '';
+      // Treat undefined, empty, or '*' as "all movies" - use consistent cache key
+      const effectiveCategoryId = (!categoryId || categoryId === '*') ? '' : categoryId;
 
       // Try SQLite cache first
       const cached = await getVod(accountId, effectiveCategoryId);

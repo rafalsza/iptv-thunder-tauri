@@ -108,6 +108,7 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
             <button
               data-tv-focusable
               data-tv-group="portal-test"
+              data-tv-id="portal-test-close-x"
               data-tv-index={0}
               tabIndex={0}
               onClick={onClose}
@@ -141,6 +142,7 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
               ref={testButtonRef}
               data-tv-focusable
               data-tv-group="portal-test"
+              data-tv-id="portal-test-button"
               data-tv-index={1}
               data-tv-initial
               tabIndex={0}
@@ -236,6 +238,7 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
             <button
               data-tv-focusable
               data-tv-group="portal-test"
+              data-tv-id="portal-test-close-footer"
               data-tv-index={2}
               tabIndex={0}
               onClick={onClose}

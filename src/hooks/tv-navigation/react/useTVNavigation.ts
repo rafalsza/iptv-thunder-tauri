@@ -18,11 +18,11 @@ interface TVNavigationOptions {
 }
 
 export function useTVNavigation(options: TVNavigationOptions = {}) {
-  const { 
-    selector = '[data-tv-focusable]', 
-    elements: externalElements, 
-    onBack, 
-    onEnter, 
+  const {
+    selector = '[data-tv-focusable]',
+    elements: externalElements,
+    onBack,
+    onEnter,
     onTVFocus,
     plugins: customPlugins = []
   } = options;
@@ -169,7 +169,11 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     const elementsChanged = prevElements.length !== visibleElements.length ||
       prevElements.some((el, i) => el !== visibleElements[i]);
 
-    if (!elementsChanged) {
+    // Always rebuild if currentId needs to be updated (focus changed)
+    const newCurrentId = currentElementRef.current?.dataset.tvId || currentElementRef.current?.id || null;
+    const currentIdChanged = stateRef.current?.currentId !== newCurrentId;
+
+    if (!elementsChanged && !currentIdChanged) {
       return; // Skip rebuild if nothing changed
     }
 
@@ -189,12 +193,23 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
   const focusElement = useCallback((el: HTMLElement | null) => {
     if (!el) return;
-    if (currentElementRef.current === el) return;
 
-    // Remove .tv-focused from previous element
+    // Check if already focused in DOM (not just in ref)
+    if (document.activeElement === el) {
+      return;
+    }
+
+    if (currentElementRef.current === el) {
+      return;
+    }
+
+    // Remove .tv-focused from previous element BEFORE setting new ref
     if (currentElementRef.current) {
       currentElementRef.current.classList.remove('tv-focused');
     }
+
+    // Set ref IMMEDIATELY to prevent any race conditions
+    currentElementRef.current = el;
 
     el.focus({ preventScroll: true });
     el.classList.add('tv-focused');
@@ -251,6 +266,20 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   const move = useCallback((direction: Direction) => {
     if (!stateRef.current) return;
 
+    // Sync state with actual DOM focus before navigating
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (activeEl) {
+      const focusableEl = activeEl.matches('[data-tv-focusable]') ? activeEl : activeEl.closest('[data-tv-focusable]') as HTMLElement | null;
+      if (focusableEl) {
+        const activeId = focusableEl.dataset.tvId || focusableEl.id;
+        if (activeId && stateRef.current.currentId !== activeId) {
+          // Rebuild state with fresh elements from DOM
+          updateState();
+          currentElementRef.current = focusableEl;
+        }
+      }
+    }
+
     const result = findNextNode(stateRef.current, direction, allPlugins, pluginContext);
     if (!result || (!result.targetId && !result.action)) return;
 
@@ -265,6 +294,12 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       const el = findElementById(elementsRef.current, result.targetId);
       if (el) {
         focusElement(el);
+      } else {
+        // Fallback: find in DOM if not in cached elements
+        const domEl = document.querySelector(`[data-tv-id="${result.targetId}"]`) as HTMLElement;
+        if (domEl) {
+          focusElement(domEl);
+        }
       }
     }
   }, [allPlugins, focusElement, pluginContext]);
@@ -360,10 +395,18 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       // If not, sync our state to match the actual DOM focus
       const activeEl = document.activeElement as HTMLElement | null;
       if (activeEl && activeEl !== currentElementRef.current) {
+        const htmlEl = activeEl as HTMLElement;
         if (activeEl.matches('[data-tv-focusable]') || activeEl.closest('[data-tv-focusable]')) {
-          currentElementRef.current = activeEl;
+          currentElementRef.current = htmlEl;
           updateState();
         }
+      }
+
+      // Also check if activeElement is in a different container than currentElementRef
+      const activeContainer = activeEl?.closest('[data-tv-container]')?.getAttribute('data-tv-container');
+      const currentContainer = currentElementRef.current?.closest('[data-tv-container]')?.getAttribute('data-tv-container');
+      if (activeContainer && activeContainer !== currentContainer) {
+        updateState();
       }
 
       // Check if Radix Select/Dropdown is open - let Radix handle navigation
@@ -528,14 +571,29 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
       // Check if this is a TV focusable element
       if (target.matches('[data-tv-focusable]') || target.closest('[data-tv-focusable]')) {
-        const focusableEl = target.matches('[data-tv-focusable]') ? target : target.closest('[data-tv-focusable]');
+        const focusableEl = target.matches('[data-tv-focusable]') ? target as HTMLElement : target.closest('[data-tv-focusable]') as HTMLElement;
+
+        // Check current state before updating
+        const focusedId = focusableEl?.dataset.tvId || focusableEl?.id;
+        const previousId = currentElementRef.current?.dataset.tvId || currentElementRef.current?.id;
+
+        // Don't update state if focus moved to a different element without focusElement being called
+        // This prevents navigation plugins from being triggered unexpectedly
+        if (focusedId !== previousId) {
+          // Still update the ref to track the actual focused element
+          currentElementRef.current = focusableEl as HTMLElement;
+          return;
+        }
+
+        // Always update currentElementRef to track actual focused element
+        currentElementRef.current = focusableEl as HTMLElement;
 
         // If Radix is opening, save this element
         if (isRadixOpen && !lastFocusBeforeDropdownRef.current) {
           lastFocusBeforeDropdownRef.current = focusableEl as HTMLElement;
         }
 
-        currentElementRef.current = focusableEl as HTMLElement;
+        // Update state so navigation plugins use the correct current element
         updateState();
       }
     };
@@ -545,7 +603,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   useEffect(() => {
     const keyHandler = (e: KeyboardEvent) => {
       const targetEl = e.target as HTMLElement;
-      
+
       // Check if Radix dropdown is open - let it handle navigation naturally
       const isRadixOpen = document.querySelector('[data-radix-select-viewport]') !== null ||
                           document.querySelector('[data-radix-popper-content-wrapper]') !== null ||
@@ -554,7 +612,13 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         // Don't block - let Radix handle the event
         return;
       }
-      
+
+      // Track element on keyDown to detect if focus changed before keyUp
+      if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+        const currentEl = currentElementRef.current;
+        (window as any).__tvEnterDownElement = currentEl?.dataset?.tvId || currentEl?.id;
+      }
+
       // If Enter is pressed on a Radix Select trigger, save focus before dropdown opens
       if (e.key === 'Enter' && targetEl?.dataset?.tvId === 'series-season-select') {
         lastFocusBeforeDropdownRef.current = targetEl;
@@ -576,6 +640,15 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         // Only click if long press was NOT triggered
         if (!(window as any).__tvLongPressPreventClick) {
           const current = currentElementRef.current;
+          const currentId = current?.dataset?.tvId || current?.id;
+          const downElementId = (window as any).__tvEnterDownElement;
+          
+          // Skip if element changed between keyDown and keyUp (navigation happened)
+          if (downElementId && downElementId !== currentId) {
+            (window as any).__tvEnterDownElement = null;
+            return;
+          }
+          
           if (current) {
             onEnterRef.current?.(current);
             if (current instanceof HTMLSelectElement) {
@@ -590,6 +663,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
               current.click();
             }
           }
+          (window as any).__tvEnterDownElement = null;
         }
       }
     };

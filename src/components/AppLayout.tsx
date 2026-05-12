@@ -6,6 +6,7 @@ import { Settings } from '@/features/settings/Settings';
 import { Player } from '@/features/player/Player';
 import { platform } from '@tauri-apps/plugin-os';
 import { useAppStore } from '@/store/app.store';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface AppLayoutProps {
   activeView: string;
@@ -40,6 +41,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 }) => {
   const [currentPlatform, setCurrentPlatform] = useState<string>('desktop');
   const isPip = useAppStore(state => state.isPip);
+  const { t } = useTranslation();
 
   // Detect platform using OS plugin
   useEffect(() => {
@@ -79,7 +81,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               <div className="px-4 pt-4 pb-0">
                 <input
                   type="text"
-                  placeholder="Search..."
+                  placeholder={t('search')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   data-tv-focusable

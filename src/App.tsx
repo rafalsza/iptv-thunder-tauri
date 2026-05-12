@@ -76,47 +76,18 @@ function AppInner({ }: AppProps) {
     activeView,
   } = useTypedRouter();
 
-  // Track last focused element per route for Smart TV navigation
-  const lastFocusRef = useRef<Record<string, string>>({});
-  const previousRouteRef = useRef<string>('');
-
-  // Save current focus when route changes
-  useEffect(() => {
-    const currentRouteType = route.type;
-    const previousRouteType = previousRouteRef.current;
-
-    if (previousRouteType && currentRouteType !== previousRouteType) {
-      // Save the current focused element for the previous route
-      const focusedElement = document.activeElement as HTMLElement;
-      if (focusedElement?.dataset.tvFocusable) {
-        lastFocusRef.current[previousRouteType] = focusedElement.id || focusedElement.dataset.tvId || '';
+  // TV Navigation (D-pad support for Android TV)
+  useTVNavigation({
+    selector: '[data-tv-focusable]',
+    onBack: () => {
+      if ((isMovieDetails(route) && selectedMovie) || (isSeriesDetails(route) && selectedSeries) || route.type === 'tv' || route.type === 'movies' || route.type === 'series') {
+        goBack();
       }
-
-      // Restore focus for the current route if we have a saved element
-      const savedFocusId = lastFocusRef.current[currentRouteType];
-      if (savedFocusId) {
-        setTimeout(() => {
-          const savedElement = document.getElementById(savedFocusId) || document.querySelector(`[data-tv-id="${savedFocusId}"]`);
-          if (savedElement && 'focus' in savedElement) {
-            savedElement.focus();
-          }
-        }, 50);
-      } else {
-        // No saved focus - set focus to main content area first element
-        setTimeout(() => {
-          const mainContent = document.querySelector('[data-tv-container="main"]');
-          if (mainContent) {
-            const firstFocusable = mainContent.querySelector('[data-tv-initial]') as HTMLElement;
-            if (firstFocusable) {
-              firstFocusable.focus();
-            }
-          }
-        }, 100);
-      }
-    }
-
-    previousRouteRef.current = currentRouteType;
-  }, [route.type]);
+    },
+    onEnter: (_element) => {
+      // Element click is handled by the hook, this is for additional logic if needed
+    },
+  });
 
   // Create client only when we have an active portal (memoized to avoid recreation on every render)
   const client = useMemo(() => 
@@ -147,18 +118,6 @@ function AppInner({ }: AppProps) {
     setIsSettingsOpen,
   });
 
-  // TV Navigation (D-pad support for Android TV)
-  useTVNavigation({
-    selector: '[data-tv-focusable]',
-    onBack: () => {
-      if ((isMovieDetails(route) && selectedMovie) || (isSeriesDetails(route) && selectedSeries) || route.type === 'tv' || route.type === 'movies' || route.type === 'series') {
-        goBack();
-      }
-    },
-    onEnter: (_element) => {
-      // Element click is handled by the hook, this is for additional logic if needed
-    },
-  });
   // Set active container based on current view
   // Note: We don't set active container for main layout to allow free navigation
   // between sidebar and main content. Container system is only for modals/popups.

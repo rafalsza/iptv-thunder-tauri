@@ -96,7 +96,7 @@ export async function saveCategories(
 
     // Pre-filter and validate categories
     const validCategories = categories.filter(cat => {
-      if (cat.id === '*') return false; // Skip "All" category
+      if (cat.id === '*') return false; // Skip "All" category (string id, can't save to INTEGER column)
       const id = Number(cat.id);
       if (Number.isNaN(id) || id <= 0) {
         console.warn('[Categories] Skipping invalid category ID:', cat.id, cat.title);
@@ -185,19 +185,27 @@ export function useCategories(
       if (!portalId) {
         console.warn('[Categories] No portalId provided');
       }
-      
+
       // Try SQLite first with cache TTL
       const cached = await loadCategories(type, portalId, CACHE_TTL);
       if (cached.length > 0) {
         console.log('[Categories] Loaded from SQLite:', cached.length, type, 'for portal', portalId);
-        return cached;
+        // Add "All" category for all types (title key 'all' — translated in UI via t('all'))
+        const allCategory = { id: '*', title: 'all', alias: 'all', parent_id: 0 };
+        return [allCategory, ...cached];
       }
-      
+
       // If no cache and fetchFn provided, fetch from API
       if (fetchFn) {
         console.log('[Categories] Cache miss, fetching from API...');
         const fresh = await fetchFn();
         await saveCategories(type, portalId, fresh);
+        // Add "All" category if not present
+        const hasAllCategory = fresh.some(cat => cat.id === '*');
+        if (!hasAllCategory) {
+          const allCategory = { id: '*', title: 'all', alias: 'all', parent_id: 0 };
+          return [allCategory, ...fresh];
+        }
         return fresh;
       }
       return [];

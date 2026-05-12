@@ -40,6 +40,11 @@ export const PortalList: React.FC = () => {
         const firstButton = menuRef.current?.querySelector('[data-tv-initial]') as HTMLElement;
         if (firstButton) {
           firstButton.focus();
+        } else {
+          const firstButtonAny = menuRef.current?.querySelector('button') as HTMLElement;
+          if (firstButtonAny) {
+            firstButtonAny.focus();
+          }
         }
       }, 200);
 
@@ -106,7 +111,7 @@ export const PortalList: React.FC = () => {
     if (deletingPortal) {
       deletePortal(deletingPortal.id);
       setDeletingPortal(null);
-      
+
       // Restore focus after delete modal closes
       setTimeout(() => {
         // If there are still portals, focus the first one
@@ -131,7 +136,7 @@ export const PortalList: React.FC = () => {
 
   const cancelDelete = () => {
     setDeletingPortal(null);
-    
+
     // Restore focus to the portal card after canceling delete
     if (deletingPortal) {
       setTimeout(() => {
@@ -197,6 +202,7 @@ export const PortalList: React.FC = () => {
           {portals.map((portal, portalIndex) => (
             <div
               key={portal.id}
+              data-tv-id={portal.id}
               data-portal-id={portal.id}
               data-tv-focusable
               data-tv-index={portalIndex}
@@ -243,6 +249,7 @@ export const PortalList: React.FC = () => {
                   <div className="flex flex-col gap-2 w-full max-w-[180px] md:max-w-[200px]">
                     {portal.id !== activePortalId && (
                       <button
+                        data-tv-id={`${portal.id}-set-active`}
                         data-tv-focusable
                         data-tv-group="portal-actions"
                         data-tv-index={0}
@@ -256,9 +263,11 @@ export const PortalList: React.FC = () => {
                       </button>
                     )}
                     <button
+                      data-tv-id={`${portal.id}-test`}
                       data-tv-focusable
                       data-tv-group="portal-actions"
-                      data-tv-index={1}
+                      data-tv-index={portal.id !== activePortalId ? 1 : 0}
+                      data-tv-initial={portal.id === activePortalId ? true : undefined}
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); setTestingPortal(portal.id); setActiveMenuPortal(null); }}
                       className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg md:rounded-xl transition-all text-sm md:text-base"
@@ -267,9 +276,10 @@ export const PortalList: React.FC = () => {
                       <span className="whitespace-nowrap">{t('testConnection')}</span>
                     </button>
                     <button
+                      data-tv-id={`${portal.id}-edit`}
                       data-tv-focusable
                       data-tv-group="portal-actions"
-                      data-tv-index={2}
+                      data-tv-index={portal.id !== activePortalId ? 2 : 1}
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); handleEdit(portal); setActiveMenuPortal(null); }}
                       className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg md:rounded-xl transition-all text-sm md:text-base"
@@ -278,9 +288,10 @@ export const PortalList: React.FC = () => {
                       <span className="whitespace-nowrap">{t('edit')}</span>
                     </button>
                     <button
+                      data-tv-id={`${portal.id}-delete`}
                       data-tv-focusable
                       data-tv-group="portal-actions"
-                      data-tv-index={3}
+                      data-tv-index={portal.id !== activePortalId ? 3 : 2}
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); handleDelete(portal); setActiveMenuPortal(null); }}
                       className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg md:rounded-xl transition-all text-sm md:text-base"

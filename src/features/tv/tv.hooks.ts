@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel } from '@/types';
 import { usePortalCacheStore } from '@/store/portalCache.store';
-import { saveChannels, getChannels as getChannelsFromDB } from '@/hooks/useDatabase';
+import { saveChannels, upsertChannels, getChannels as getChannelsFromDB, searchChannels } from '@/hooks/useDatabase';
 import { getChannelEPG, getEPGTimeRange } from '@/features/epg/epg.api';
 import { getGenres, getChannels } from './tv.api';
 
@@ -226,7 +226,11 @@ export const useChannelCategories = (client: StalkerClient) => {
 };
 
 // Lazy loading hook - fetches pages on demand for infinite scroll
+// For genreId='*' (All), caps at MAX_ALL_CHANNELS to prevent thousands of API requests
+const MAX_ALL_CHANNELS = 1000;
+
 export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
+  const isAllCategory = !genreId || genreId === '*';
   const accountId = client?.['account']?.id || 'default';
   const [allChannels, setAllChannels] = React.useState<StalkerChannel[]>([]);
   const [hasMore, setHasMore] = React.useState(true);
@@ -261,6 +265,10 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
       const cacheKey = `iptv-channels-total-${accountId}-${genreId || '*'}`;
       localStorage.setItem(cacheKey, String(result.totalItems));
     }
+    if (result.maxPageItems > 0) {
+      const pageSizeKey = `iptv-channels-pagesize-${accountId}-${genreId || '*'}`;
+      localStorage.setItem(pageSizeKey, String(result.maxPageItems));
+    }
 
     loadedPagesRef.current.add(pageToLoad);
     pageRef.current = pageToLoad + 1;
@@ -269,13 +277,31 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
       const newChannels = [...prev, ...result.channels];
       const unique = new Map<string, StalkerChannel>();
       newChannels.forEach(ch => unique.set(String(ch.id), ch));
-      return Array.from(unique.values());
+      const arr = Array.from(unique.values());
+      // For 'All' category, cap at MAX_ALL_CHANNELS to avoid RAM overload
+      return isAllCategory ? arr.slice(0, MAX_ALL_CHANNELS) : arr;
     });
 
-    hasMoreRef.current = result.hasMore;
-    setHasMore(result.hasMore);
+    // For 'All' category: upsert each batch to SQLite immediately
+    // so search can find channels even before loading is complete
+    if (isAllCategory && result.channels.length > 0) {
+      upsertChannels(result.channels.map((ch: StalkerChannel) => ({
+        id: ch.id?.toString() || '',
+        name: ch.name || '',
+        streamUrl: ch.cmd || '',
+        iconUrl: ch.logo_url || ch.logo || '',
+        genreId: ch.tv_genre_id?.toString(),
+        orderNum: ch.number || 0,
+      })), accountId).catch(err => console.error('[DB] Failed to upsert channels:', err));
+    }
 
-    if (!result.hasMore) {
+    // Stop loading when API says no more, or when 'All' cap is reached
+    const capReached = isAllCategory && (loadedPagesRef.current.size * (result.maxPageItems || 14)) >= MAX_ALL_CHANNELS;
+    const shouldStop = !result.hasMore || capReached;
+    hasMoreRef.current = !shouldStop;
+    setHasMore(!shouldStop);
+
+    if (shouldStop) {
       const savedSignatureKey = `iptv-channels-saved-${accountId}-${genreId || '*'}`;
       localStorage.removeItem(savedSignatureKey);
     }
@@ -303,11 +329,13 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
     }
   };
 
+  const LOAD_BATCH = 5; // pages fetched in parallel per loadMore call
+
   const loadMore = React.useCallback(async () => {
     if (shouldSkipLoad()) return;
 
-    const pageToLoad = pageRef.current;
-    if (isPageAlreadyLoaded(pageToLoad)) return;
+    const startPage = pageRef.current;
+    if (isPageAlreadyLoaded(startPage)) return;
 
     const currentGen = generationRef.current;
     loadingRef.current = true;
@@ -315,22 +343,38 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
     setError(null);
 
     try {
-      const result = await getChannels(client, {
-        genre: genreId || '*',
-        page: pageToLoad,
-        sortby: 'number'
-      });
+      // Fetch up to LOAD_BATCH pages in parallel
+      const pagesToFetch: number[] = [];
+      for (let p = startPage; p < startPage + LOAD_BATCH; p++) {
+        if (!isPageAlreadyLoaded(p)) pagesToFetch.push(p);
+      }
+
+      const results = await Promise.allSettled(
+        pagesToFetch.map(page =>
+          getChannels(client, {
+            genre: genreId || '*',
+            page,
+            sortby: 'number'
+          })
+        )
+      );
 
       if (isStaleRequest(currentGen)) return;
 
-      handleChannelData(result, pageToLoad);
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled') {
+          handleChannelData(res.value, pagesToFetch[idx]);
+        } else {
+          console.warn('[useLazyChannels] Failed to load page', pagesToFetch[idx], res.reason);
+        }
+      });
 
-      if (result.hasMore) {
+      if (hasMoreRef.current) {
         scheduleAutoLoad();
       }
     } catch (err) {
       if (isStaleRequest(currentGen)) return;
-      console.error('[useLazyChannels] Failed to load page', pageToLoad, err);
+      console.error('[useLazyChannels] Failed to load pages starting at', startPage, err);
       setError(err instanceof Error ? err : new Error('Failed to load channels'));
     } finally {
       resetLoadingState(currentGen);
@@ -391,8 +435,9 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
           const totalExpected = localStorage.getItem(cacheKey);
           const expectedCount = totalExpected ? Number.parseInt(totalExpected, 10) : 0;
 
-          // If we have complete data (cached >= expected), skip API call
-          if (expectedCount > 0 && channels.length >= expectedCount) {
+          // If we have complete data (cached >= expected), or 'All' cap reached, skip API call
+          const allCapReached = isAllCategory && channels.length >= MAX_ALL_CHANNELS;
+          if (allCapReached || (expectedCount > 0 && channels.length >= expectedCount)) {
             hasMoreRef.current = false;
             setHasMore(false);
             return;
@@ -401,8 +446,10 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
           // Otherwise, continue loading from API to get remaining channels
           setHasMore(true);
           // Calculate which page to load next based on cached channels count
-          // Portal returns ~14 channels per page
-          pageRef.current = Math.ceil(channels.length / 14) + 1;
+          // Use stored page size if available, otherwise fall back to 14
+          const pageSizeKey = `iptv-channels-pagesize-${accountId}-${genreId || '*'}`;
+          const storedPageSize = parseInt(localStorage.getItem(pageSizeKey) || '14', 10);
+          pageRef.current = Math.ceil(channels.length / storedPageSize) + 1;
           setTimeout(async () => {
             if (!loadingRef.current && mountedRef.current) {
               await loadMore();
@@ -426,8 +473,10 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
   }, [genreId, accountId, client]);
 
   // Save channels to SQLite only when fully loaded (avoid spamming DB during pagination)
+  // For 'All' category, upsertChannels handles incremental saves per batch — skip the DELETE+INSERT here
   useEffect(() => {
     if (!allChannels || allChannels.length === 0) return;
+    if (isAllCategory) return; // All category uses upsertChannels per batch instead
     // Only save when we have all channels (hasMore is false)
     // This prevents saving on every page during background loading
     if (hasMoreRef.current) return;
@@ -464,6 +513,75 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
     loadMore,
     error,
   };
+};
+
+// SQLite-backed search across ALL channels (bypasses the 1000-channel 'All' cap)
+// backgroundLoading: when true, re-runs search every 2s so results update as new channels arrive
+export const useChannelSearch = (accountId: string, query: string, backgroundLoading = false) => {
+  const [results, setResults] = React.useState<StalkerChannel[]>([]);
+  const [isSearching, setIsSearching] = React.useState(false);
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const runSearch = React.useCallback(async (q: string) => {
+    if (!q || q.length < 2) {
+      setResults([]);
+      return;
+    }
+    try {
+      const rows = await searchChannels(q, accountId, 200);
+      setResults(rows.map(ch => ({
+        id: ch.id,
+        name: ch.name,
+        cmd: ch.streamUrl ?? '',
+        logo: ch.iconUrl,
+        tv_genre_id: ch.genreId ? Number.parseInt(ch.genreId) : undefined,
+        number: ch.orderNum ?? 0,
+        censored: false,
+      })));
+    } catch (err) {
+      console.error('[useChannelSearch] SQLite search failed', err);
+    }
+  }, [accountId]);
+
+  React.useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+
+    if (!query || query.length < 2) {
+      setResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      await runSearch(query);
+      setIsSearching(false);
+
+      // While background loading is active, refresh results every 2s
+      if (backgroundLoading) {
+        intervalRef.current = setInterval(() => {
+          runSearch(query);
+        }, 2000);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [query, accountId, backgroundLoading, runSearch]);
+
+  // Stop interval when background loading finishes
+  React.useEffect(() => {
+    if (!backgroundLoading && intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, [backgroundLoading]);
+
+  return { results, isSearching };
 };
 
 // Prefetch stream URL

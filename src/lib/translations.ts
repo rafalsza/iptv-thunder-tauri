@@ -87,6 +87,8 @@ export const translations = {
     retry: 'Spróbuj ponownie',
     search: 'Szukaj',
     noResults: 'Brak wyników',
+    noChannelsFound: 'Nie znaleziono kanałów',
+    noResultsFor: 'Brak wyników dla "{{search}}"',
     confirm: 'Potwierdź',
     back: 'Wstecz',
     next: 'Dalej',
@@ -363,6 +365,8 @@ export const translations = {
     retry: 'Retry',
     search: 'Search',
     noResults: 'No results',
+    noChannelsFound: 'No channels found',
+    noResultsFor: 'No results for "{{search}}"',
     confirm: 'Confirm',
     back: 'Back',
     next: 'Next',
@@ -420,6 +424,7 @@ export const translations = {
     // TV Channels
     channels: 'Channels',
     channelsCount: '{{count}} channels',
+    all: 'All',
     allChannels: 'All channels',
     favoriteChannels: 'Favorite channels',
     favoriteChannelsCount: '{{current}} of {{total}} channels',
@@ -490,7 +495,6 @@ export const translations = {
     opening: 'Opening...',
 
     // Categories
-    all: 'All',
     categories: 'Categories',
     channelCategories: 'Channel categories',
     selectChannelCategory: 'Select a category to see available channels',
