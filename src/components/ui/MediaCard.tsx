@@ -107,6 +107,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       onClick={onSelect}
       onKeyDown={handleKeyDown}
       onFocus={handleFocus}
+      data-tv-id={id}
       data-tv-focusable
       data-tv-group={tvGroup}
       data-tv-index={index}

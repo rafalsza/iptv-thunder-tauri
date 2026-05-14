@@ -59,14 +59,13 @@ const CAROUSEL_ORDER = ['for-you-live', 'for-you-movies', 'for-you-series'] as c
 function getCarouselGroupNodes(
   state: NavigationState,
   groupId: string,
-  containerId: string | undefined
 ) {
-  const cacheKey = `carousel-${groupId}-${containerId}`;
+  const cacheKey = `carousel-${groupId}`;
   const cached = nodesCache.get(cacheKey);
   if (cached) return cached;
 
   const filtered = state.nodes.filter(
-    n => n.groupId === groupId && n.containerId === containerId && !n.disabled
+    n => n.groupId === groupId && !n.disabled
   );
   nodesCache.set(cacheKey, filtered);
   return filtered;
@@ -83,11 +82,10 @@ function hasCarouselNext(currentGroupIndex: number): boolean {
 function navigateToNextCarouselGroup(
   state: NavigationState,
   currentGroupIndex: number,
-  containerId: string | undefined,
   col: number
 ): string | null {
   const nextGroupId = CAROUSEL_ORDER[currentGroupIndex + 1];
-  const nextGroupNodes = getCarouselGroupNodes(state, nextGroupId, containerId);
+  const nextGroupNodes = getCarouselGroupNodes(state, nextGroupId);
   const targetCol = Math.min(col, nextGroupNodes.length - 1);
   const nextGroupTarget = nextGroupNodes[targetCol] ?? nextGroupNodes[0];
   return nextGroupTarget?.id ?? null;
@@ -96,7 +94,6 @@ function navigateToNextCarouselGroup(
 function navigateCarouselDown(
   state: NavigationState,
   currentGroupId: string | undefined,
-  containerId: string | undefined,
   col: number,
   currentId: string | undefined
 ): string | null {
@@ -104,7 +101,7 @@ function navigateCarouselDown(
   if (currentGroupIndex < 0) return null;
 
   if (hasCarouselNext(currentGroupIndex)) {
-    return navigateToNextCarouselGroup(state, currentGroupIndex, containerId, col);
+    return navigateToNextCarouselGroup(state, currentGroupIndex, col);
   }
 
   return currentId ?? null;
@@ -117,11 +114,10 @@ function hasCarouselPrev(currentGroupIndex: number): boolean {
 function navigateToPrevCarouselGroup(
   state: NavigationState,
   currentGroupIndex: number,
-  containerId: string | undefined,
   col: number
 ): string | null {
   const prevGroupId = CAROUSEL_ORDER[currentGroupIndex - 1];
-  const prevGroupNodes = getCarouselGroupNodes(state, prevGroupId, containerId);
+  const prevGroupNodes = getCarouselGroupNodes(state, prevGroupId);
   const targetCol = Math.min(col, prevGroupNodes.length - 1);
   const prevGroupTarget = prevGroupNodes[targetCol] ?? prevGroupNodes[0];
   return prevGroupTarget?.id ?? null;
@@ -130,14 +126,13 @@ function navigateToPrevCarouselGroup(
 function navigateCarouselUp(
   state: NavigationState,
   currentGroupId: string | undefined,
-  containerId: string | undefined,
   col: number
 ): string | null {
   const currentGroupIndex = getCarouselGroupIndex(currentGroupId);
   if (currentGroupIndex < 0) return null;
 
   if (hasCarouselPrev(currentGroupIndex)) {
-    return navigateToPrevCarouselGroup(state, currentGroupIndex, containerId, col);
+    return navigateToPrevCarouselGroup(state, currentGroupIndex, col);
   }
 
   return getSearchNode(state);
@@ -182,10 +177,9 @@ function navigateDown(
   col: number,
   state: NavigationState,
   currentGroupId: string | undefined,
-  containerId: string | undefined,
   currentId: string | undefined
 ): NavigationTarget {
-  const carouselResult = navigateCarouselDown(state, currentGroupId, containerId, col, currentId);
+  const carouselResult = navigateCarouselDown(state, currentGroupId, col, currentId);
   if (carouselResult !== null) return carouselResult;
 
   const nextRowTarget = tryNavigateToNextRow(grid, row, col);
@@ -322,7 +316,7 @@ function navigateUp(
   currentIndex?: number
 ): NavigationTarget {
   const currentGroupId = currentNode.groupId;
-  const carouselResult = navigateCarouselUp(state, currentGroupId, grid.rows[0]?.[0]?.containerId, col);
+  const carouselResult = navigateCarouselUp(state, currentGroupId, col);
   if (carouselResult !== null) return carouselResult;
 
   const searchNode = getSearchNode(state);
@@ -465,7 +459,7 @@ function isInVisualTopRow(
   state: NavigationState,
   current: { groupId?: string; containerId?: string; rect: DOMRect }
 ): boolean {
-  const THRESHOLD = 16; // px tolerance for same-row detection
+  const THRESHOLD = 4; // px tolerance for same-row detection (reduced from 16 to prevent row skipping)
   const cacheKey = `visual-top-${current.groupId}-${current.containerId}`;
   const cached = nodesCache.get(cacheKey);
   const groupNodes = cached || state.nodes.filter((n) =>
@@ -514,6 +508,12 @@ function handleRightNavigation(
 ): string | null {
   const rightInRow = tryNavigateRightInRow(grid, row, col);
   if (rightInRow) return rightInRow;
+
+  // Block right navigation when at the last element in a row
+  const currentRow = grid.rows[row];
+  if (currentRow && col === currentRow.length - 1) {
+    return current.id ?? null;
+  }
 
   const fallbackNode = getFallbackRightNode(state, current, grid);
   if (fallbackNode) return fallbackNode;
@@ -611,7 +611,7 @@ function navigateByDirection(
 ): NavigationTarget {
   switch (direction) {
     case 'down':
-      return navigateDown(grid, row, col, state, current.groupId, current.containerId, current.id);
+      return navigateDown(grid, row, col, state, current.groupId, current.id);
     case 'up':
       return navigateUp(grid, row, col, state, current, current.index);
     case 'right':

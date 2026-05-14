@@ -9,8 +9,17 @@ export function buildNavigationState(
   lastXByRow?: Map<number, number>,
   lastPositionByAxis?: { x: number; y: number }
 ): NavigationState {
+  
+  // Filter out elements with data-tv-skip attribute (check for presence, not undefined)
+  // Also filter out elements with tv-div-* IDs (wrapper elements from virtualization)
+  const filteredElements = elements.filter(el => {
+    const hasSkip = 'tvSkip' in el.dataset;
+    const hasTvDivId = el.dataset.tvId?.startsWith('tv-div-') || el.id?.startsWith('tv-div-');
+    return !hasSkip && !hasTvDivId;
+  });
+  
   // Generate IDs for all elements first to ensure consistency
-  const nodes = elements.map(el => {
+  const nodes = filteredElements.map(el => {
     const groupId = (el.closest('[data-tv-group]') as HTMLElement | null)?.dataset.tvGroup;
     const containerId = (el.closest('[data-tv-container]') as HTMLElement | null)?.dataset.tvContainer;
     return {
@@ -97,11 +106,80 @@ function buildIndexMap(groupNodes: NavNode[]): Map<number, NavNode> {
   return indexMap;
 }
 
+// Carousel groups - horizontal single row navigation
+const CAROUSEL_GROUPS = new Set(['for-you-live', 'for-you-movies', 'for-you-series']);
+
+// Virtualized grid groups - use index-based grid calculation instead of position-based
+const VIRTUALIZED_GRID_GROUPS = new Set(['favorite-series', 'favorite-movies', 'series', 'movies']);
+
+// Category grid groups - use index-based calculation with detected column count
+const CATEGORY_GRID_GROUPS = new Set(['favorite-series-categories', 'favorite-movie-categories', 'series-categories', 'movie-categories']);
+
+function buildCarouselRows(groupNodes: NavNode[]): NavNode[][] {
+  const sortedByIndex = [...groupNodes].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  return [sortedByIndex];
+}
+
+function buildVirtualizedGridRows(groupNodes: NavNode[]): NavNode[][] {
+  const sortedByIndex = [...groupNodes].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  const columnCount = 9;
+  const rowGroups: NavNode[][] = [];
+  for (let i = 0; i < sortedByIndex.length; i += columnCount) {
+    rowGroups.push(sortedByIndex.slice(i, i + columnCount));
+  }
+  return rowGroups;
+}
+
+function buildCategoryGridRows(groupNodes: NavNode[]): NavNode[][] {
+  const sortedByIndex = [...groupNodes].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  const uniqueLefts = new Set(sortedByIndex.map(n => Math.round(n.rect.left)));
+  const columnCount = Math.max(1, uniqueLefts.size);
+  const rowGroups: NavNode[][] = [];
+  for (let i = 0; i < sortedByIndex.length; i += columnCount) {
+    rowGroups.push(sortedByIndex.slice(i, i + columnCount));
+  }
+  return rowGroups;
+}
+
+function buildPositionBasedRows(groupNodes: NavNode[], threshold: number): NavNode[][] {
+  const sortedNodes = [...groupNodes].sort((a, b) => a.rect.top - b.rect.top);
+  const uniqueTops = new Set(sortedNodes.map(n => Math.round(n.rect.top)));
+  const isVerticalList = uniqueTops.size === 1 && sortedNodes.length > 1;
+
+  if (isVerticalList) {
+    return sortedNodes.map(node => [node]);
+  }
+  return clusterNodesIntoRows(sortedNodes, threshold);
+}
+
+function getRowGroupsForGroup(groupId: string, groupNodes: NavNode[], threshold: number): NavNode[][] {
+  if (CAROUSEL_GROUPS.has(groupId)) {
+    return buildCarouselRows(groupNodes);
+  }
+  if (VIRTUALIZED_GRID_GROUPS.has(groupId)) {
+    return buildVirtualizedGridRows(groupNodes);
+  }
+  if (CATEGORY_GRID_GROUPS.has(groupId)) {
+    return buildCategoryGridRows(groupNodes);
+  }
+  return buildPositionBasedRows(groupNodes, threshold);
+}
+
+function copyGridPositionsToOriginalNodes(rowGroups: NavNode[][], groupNodes: NavNode[]): void {
+  for (const row of rowGroups) {
+    for (const node of row) {
+      const originalNode = groupNodes.find(n => n.id === node.id);
+      if (originalNode && node.gridPosition) {
+        originalNode.gridPosition = node.gridPosition;
+      }
+    }
+  }
+}
+
 function computeGridData(nodes: NavNode[]): Map<string, GridData> {
   const gridMap = new Map<string, GridData>();
-  const ROW_THRESHOLD = 20; // pixels - elements within this distance are considered same row
+  const ROW_THRESHOLD = 20;
 
-  // Group nodes by groupId and containerId
   const groupKeys = new Set<string>();
   for (const node of nodes) {
     if (node.groupId && node.containerId && node.index !== undefined) {
@@ -112,7 +190,6 @@ function computeGridData(nodes: NavNode[]): Map<string, GridData> {
   for (const groupKey of groupKeys) {
     const [groupId, containerId] = groupKey.split('|');
     
-    // Filter nodes for this group
     const groupNodes = nodes.filter(n =>
       n.index !== undefined &&
       n.groupId === groupId &&
@@ -121,30 +198,10 @@ function computeGridData(nodes: NavNode[]): Map<string, GridData> {
 
     if (groupNodes.length === 0) continue;
 
-    // Sort by top position
-    const sortedNodes = [...groupNodes].sort((a, b) => a.rect.top - b.rect.top);
-
-    // Check if this is a vertical list (all elements at same top position, like episodes)
-    // or a horizontal grid (elements at different tops)
-    const uniqueTops = new Set(sortedNodes.map(n => Math.round(n.rect.top)));
-    const isVerticalList = uniqueTops.size === 1 && sortedNodes.length > 1;
-
-    let rowGroups: NavNode[][];
-    if (isVerticalList) {
-      // For vertical lists (like episodes), create one row per element based on index
-      rowGroups = sortedNodes.map(node => [node]);
-    } else {
-      // For horizontal grids, cluster by position
-      rowGroups = clusterNodesIntoRows(sortedNodes, ROW_THRESHOLD);
-    }
-
-    // Sort each row by left position and assign row/col positions
+    const rowGroups = getRowGroupsForGroup(groupId, groupNodes, ROW_THRESHOLD);
     assignGridPositions(rowGroups);
-
-    // Calculate column count
+    copyGridPositionsToOriginalNodes(rowGroups, groupNodes);
     const columnCount = calculateColumnCount(rowGroups);
-
-    // Build index map for O(1) lookup
     const indexMap = buildIndexMap(groupNodes);
 
     gridMap.set(groupKey, {

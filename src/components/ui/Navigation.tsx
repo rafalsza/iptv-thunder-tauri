@@ -95,9 +95,10 @@ export const Navigation: React.FC<NavigationProps> = memo(({ items }) => {
                     item.onClick();
                   }
                 }}
+                onFocus={() => {
+                  // Focus handler
+                }}
                 disabled={item.disabled}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
                 className={`w-full text-left px-3 md:px-4 py-2.5 md:py-3 rounded-xl md:rounded-2xl flex items-center gap-3 md:gap-4 transition-all duration-200 relative overflow-hidden group ${buttonClass}`}
               >
                 {/* Active state gradient overlay */}

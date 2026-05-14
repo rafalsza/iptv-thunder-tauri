@@ -128,15 +128,12 @@ export const useTypedRouter = () => {
       if (savedFocusId) {
         setTimeout(() => {
           const savedElement = document.getElementById(savedFocusId) || document.querySelector(`[data-tv-id="${savedFocusId}"]`);
-          // Don't restore to submenu items when going to navbar routes
           const isSubmenuItem = savedElement && (savedElement as HTMLElement).dataset.tvGroup &&
                                (savedElement as HTMLElement).dataset.tvGroup !== 'navbar' &&
                                (savedElement as HTMLElement).dataset.tvGroup !== 'portals-content';
-          // Also check if it's a navbar element
           const isSavedNavbarElement = savedElement && (savedElement as HTMLElement).dataset.tvGroup === 'navbar';
 
           if (isNavbarRoute && isSubmenuItem) {
-            // Focus navbar element instead
             const navbarElement = document.querySelector(`[data-tv-id="${currentRouteType}"]`) as HTMLElement;
             if (navbarElement) {
               navbarElement.focus();
@@ -144,18 +141,23 @@ export const useTypedRouter = () => {
             return;
           }
 
-          // Don't restore to navbar elements when going to main content routes
           if (!isNavbarRoute && (isSavedNavbarElement || isSubmenuItem)) {
             return;
           }
 
           if (savedElement && 'focus' in savedElement) {
             savedElement.focus();
+          } else {
           }
         }, 50);
       } else if (isNavbarRoute) {
-        // Focus navbar element for navbar routes with no saved focus
         setTimeout(() => {
+          // Don't focus if user already has focus in sidebar
+          const activeElement = document.activeElement as HTMLElement;
+          const isInSidebar = activeElement?.closest('[data-tv-container="navigation"]') !== null;
+          if (isInSidebar) {
+            return;
+          }
           const navbarElement = document.querySelector(`[data-tv-id="${currentRouteType}"]`) as HTMLElement;
           if (navbarElement) {
             navbarElement.focus();

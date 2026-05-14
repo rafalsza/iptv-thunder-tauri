@@ -52,7 +52,7 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
     getCardWidth,
   } = useCarousel({
     items,
-    virtualization: true,
+    virtualization: false,
   });
 
   if (items.length === 0) return null;
@@ -80,6 +80,8 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
         {/* Scrollable Content */}
         <div
           ref={scrollRef}
+          data-tv-container={tvGroup}
+          data-tv-carousel-container={tvGroup}
           className="flex gap-0 overflow-x-auto px-[calc(1.5rem*var(--ui-scale))] pt-[calc(1.5rem*var(--ui-scale))] pb-[calc(0.5rem*var(--ui-scale))] scroll-smooth snap-x snap-mandatory"
           style={{
             scrollbarWidth: 'none',
@@ -97,6 +99,7 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
                 minWidth: `${visibleRange.start * getCardWidth()}px`,
               }}
               aria-hidden="true"
+              data-tv-skip
             />
           )}
           
@@ -131,6 +134,7 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
                 minWidth: `${(items.length - visibleRange.end) * getCardWidth()}px`,
               }}
               aria-hidden="true"
+              data-tv-skip
             />
           )}
         </div>
@@ -266,8 +270,8 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
           <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{t('forYou')}</h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-[calc(1rem*var(--ui-scale))]">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-[calc(8rem*var(--ui-scale))] dark:bg-slate-800/50 bg-gray-100/50 rounded-lg animate-pulse" />
+          {Array.from({ length: 6 }, (_, i) => `skeleton-${i}`).map((id) => (
+            <div key={id} className="h-[calc(8rem*var(--ui-scale))] dark:bg-slate-800/50 bg-gray-100/50 rounded-lg animate-pulse" />
           ))}
         </div>
       </div>

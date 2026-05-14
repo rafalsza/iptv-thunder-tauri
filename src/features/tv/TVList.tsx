@@ -74,6 +74,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
     <motion.div
       key={channel.id}
       data-tv-focusable
+      data-tv-id={`tv-channel-${channel.id}`}
       data-tv-group="tv-channels"
       data-tv-index={index}
       data-tv-initial={index === 0}

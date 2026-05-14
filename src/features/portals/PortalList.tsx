@@ -78,22 +78,6 @@ export const PortalList: React.FC = () => {
     }
   }, [activeMenuPortal, focusMenuButton, focusPortalCard]);
 
-  // Restore focus to portal card after test closes
-  useEffect(() => {
-    if (!testingPortal && testingPortalRef.current) {
-      focusPortalCard(testingPortalRef.current);
-      testingPortalRef.current = null;
-    }
-  }, [testingPortal, focusPortalCard]);
-
-  // Restore focus to portal card after edit form closes
-  useEffect(() => {
-    if (!showForm && editingPortalRef.current) {
-      focusPortalCard(editingPortalRef.current);
-      editingPortalRef.current = null;
-    }
-  }, [showForm, focusPortalCard]);
-
   // Close menu when clicking outside or pressing Escape
   useEffect(() => {
     if (!activeMenuPortal) return;
@@ -197,7 +181,9 @@ export const PortalList: React.FC = () => {
           </div>
           <button
             ref={addButtonRef}
+            id="add-portal-btn"
             data-tv-focusable
+            data-tv-id="add-portal-btn"
             data-tv-index={100}
             data-tv-group="portals-content"
             data-tv-initial

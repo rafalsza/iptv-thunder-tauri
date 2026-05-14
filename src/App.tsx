@@ -129,7 +129,7 @@ function AppInner({ }: AppProps) {
       setTimeout(() => {
         (document.activeElement as HTMLElement)?.blur();
         setTimeout(() => {
-          const settingsButton = document.querySelector('[data-tv-index="40"]') as HTMLElement;
+          const settingsButton = document.querySelector('[data-tv-id="settings"]') as HTMLElement;
           if (settingsButton) {
             settingsButton.focus();
           }

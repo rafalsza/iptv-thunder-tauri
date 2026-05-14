@@ -68,6 +68,12 @@ const SeriesCard = React.memo<SeriesCardProps>(({
 
   const handleKeyUp = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+      // Save focus before navigation for restoration when closing details
+      const focusedEl = document.activeElement as HTMLElement;
+      if (focusedEl?.dataset.tvId) {
+        (globalThis as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
+        (globalThis as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
+      }
       // Check if long press was triggered - if so, don't call onSelect
       if (!(globalThis as any).__tvLongPressPreventClick) {
         e.preventDefault();
@@ -77,6 +83,12 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   };
 
   const handleClick = () => {
+    // Save focus before navigation for restoration when closing details
+    const focusedEl = document.activeElement as HTMLElement;
+    if (focusedEl?.dataset.tvId) {
+      (globalThis as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
+      (globalThis as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
+    }
     // For mouse/touch, let useLongPress handle it
     if (!isLongPress && !(globalThis as any).__tvLongPressPreventClick) {
       onSelect(String(series.id));
@@ -113,9 +125,9 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   return (
     <div
       data-tv-focusable
+      data-tv-id={`series-${series.id}`}
       data-tv-group="series"
       data-tv-index={seriesIndex}
-      data-tv-initial={seriesIndex === 0}
       tabIndex={0}
       {...longPressHandlers}
       ref={ref}
@@ -234,7 +246,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
     count: rowCount,
     getScrollElement: () => parentRef.current,
     estimateSize: () => getRowHeight(),
-    overscan: 5,
+    overscan: 15,
   });
 
   // ── Prefetch guard ────────────────────────────────────────────────────────────

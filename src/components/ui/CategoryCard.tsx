@@ -53,6 +53,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
       key={category.id}
       ref={ref}
       data-tv-focusable
+      data-tv-id={`category-${category.id}`}
       data-tv-group={groupId}
       data-tv-index={categoryIndex}
       data-tv-initial={categoryIndex === 0}

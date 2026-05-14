@@ -95,6 +95,14 @@ const MovieCard = React.memo<MovieCardProps>(({
 
   const handleKeyUp = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+      // Save focus before navigation for restoration when closing details
+      const focusedEl = document.activeElement as HTMLElement;
+      console.log('[MovieList] handleKeyUp - activeElement:', focusedEl?.dataset?.tvId, 'index:', focusedEl?.dataset?.tvIndex);
+      if (focusedEl?.dataset.tvId) {
+        (window as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
+        (window as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
+        console.log('[MovieList] Saved focus:', focusedEl.dataset.tvId, 'index:', focusedEl.dataset.tvIndex);
+      }
       // Check if long press was triggered - if so, don't call onSelect
       if (!(window as any).__tvLongPressPreventClick) {
         e.preventDefault();
@@ -104,6 +112,14 @@ const MovieCard = React.memo<MovieCardProps>(({
   };
 
   const handleClick = () => {
+    // Save focus before navigation for restoration when closing details
+    const focusedEl = document.activeElement as HTMLElement;
+    console.log('[MovieList] handleClick - activeElement:', focusedEl?.dataset?.tvId, 'index:', focusedEl?.dataset?.tvIndex);
+    if (focusedEl?.dataset.tvId) {
+      (window as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
+      (window as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
+      console.log('[MovieList] Saved focus:', focusedEl.dataset.tvId, 'index:', focusedEl.dataset.tvIndex);
+    }
     // For mouse/touch, let useLongPress handle it
     if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
       onSelect(movie);
@@ -149,9 +165,9 @@ const MovieCard = React.memo<MovieCardProps>(({
   return (
     <div
       data-tv-focusable
+      data-tv-id={`movie-${movie.id}`}
       data-tv-group="movies"
       data-tv-index={moviesIndex}
-      data-tv-initial={moviesIndex === 0}
       tabIndex={0}
       onMouseEnter={() => onPrefetch(movie)}
       onFocus={() => onPrefetch(movie)}
@@ -291,8 +307,20 @@ export const MovieList: React.FC<MovieListProps> = ({
     count: rowCount,
     getScrollElement: () => parentRef.current,
     estimateSize: () => getRowHeight(),
-    overscan: 5,
+    overscan: 15, // Increased to keep more elements in DOM for focus restoration
   });
+
+  // Restore scroll position after MovieDetails closes (handle virtualization)
+  useEffect(() => {
+    const savedIndex = (window as any).__lastFocusedMovieIndex;
+    if (savedIndex && savedIndex !== '0') {
+      const indexNum = Number(savedIndex);
+      console.log('[MovieList] Scrolling to saved index:', indexNum);
+      const rowIndex = Math.floor(indexNum / cols);
+      // Scroll to the row containing the saved movie
+      virtualizer.scrollToIndex(rowIndex, { align: 'center' });
+    }
+  }, []);
 
   // Stable row getter — avoids pre-building a rows array for large datasets
   const getRow = useCallback(
@@ -462,6 +490,8 @@ export const MovieList: React.FC<MovieListProps> = ({
           {virtualizer.getVirtualItems().map(vRow => (
             <div
               key={vRow.key}
+              data-tv-skip
+              tabIndex={-1}
               style={{
                 position: 'absolute',
                 top: 0,

@@ -5,26 +5,93 @@
 interface AutoFocusState {
   lastContainerIds: Set<string>;
   lastFocusedElement: HTMLElement | null;
+  hadMovieDetails: boolean; // Track if we had MovieDetails previously
+  isRestoringFocus: boolean; // Flag to prevent initial focus during restoration
+  restoredElement: HTMLElement | null; // Track which element we restored focus to
 }
 
 const state: AutoFocusState = {
   lastContainerIds: new Set(),
   lastFocusedElement: null,
+  hadMovieDetails: false,
+  isRestoringFocus: false,
+  restoredElement: null,
 };
+
+// Track if we're currently blocking focus events
+let focusBlockActive = false;
+
+// Function to block focus events during restoration
+function blockFocusEvents() {
+  if (focusBlockActive) return;
+  focusBlockActive = true;
+  
+  const focusBlockHandler = (e: FocusEvent) => {
+    if (!state.isRestoringFocus || !state.restoredElement) {
+      focusBlockActive = false;
+      document.removeEventListener('focusin', focusBlockHandler, true);
+      return;
+    }
+    
+    const target = e.target as HTMLElement;
+    
+    // If focus is trying to move somewhere other than our restored element, block it
+    if (target !== state.restoredElement) {
+        e.stopImmediatePropagation();
+      e.preventDefault();
+      state.restoredElement.focus();
+      return false;
+    }
+  };
+  
+  document.addEventListener('focusin', focusBlockHandler, true);
+  
+  // Remove blocker after restoration period
+  setTimeout(() => {
+    focusBlockActive = false;
+    document.removeEventListener('focusin', focusBlockHandler, true);
+  }, 1100);
+}
 
 function getContainerId(container: HTMLElement): string {
   return container.id || container.dataset.tvContainer || '';
 }
 
 function findInitialElement(container: HTMLElement): HTMLElement | null {
+  // When restoring focus, ignore data-tv-initial attribute
+  if (state.isRestoringFocus) {
+    return null;
+  }
   const initialElement = container.querySelector('[data-tv-initial]') as HTMLElement;
   if (initialElement) {
+    // Don't auto-focus for-you carousel elements - let containerPlugin handle it based on active nav
+    const tvGroup = initialElement.closest('[data-tv-group]')?.getAttribute('data-tv-group');
+    if (tvGroup?.startsWith('for-you-')) {
+      return null;
+    }
     return initialElement;
   }
-  return container.querySelector('[data-tv-focusable]') as HTMLElement;
+  // Look for movie elements first (prioritize movies over search)
+  const movieElement = container.querySelector('[data-tv-group="movies"][data-tv-focusable], [data-tv-group="favorite-movies"][data-tv-focusable]') as HTMLElement;
+  if (movieElement) {
+    return movieElement;
+  }
+  // Fallback to any focusable (but skip search input)
+  const allFocusable = container.querySelectorAll('[data-tv-focusable]');
+  for (const el of Array.from(allFocusable)) {
+    const htmlEl = el as HTMLElement;
+    if (!htmlEl.dataset.tvSearch) {
+      return htmlEl;
+    }
+  }
+  return null;
 }
 
 function focusInitialInContainer(container: HTMLElement, onFocused?: (el: HTMLElement) => void): void {
+  // Skip initial focus if we're restoring focus (to prevent jumping to idx0)
+  if (state.isRestoringFocus) {
+    return;
+  }
   const initialElement = findInitialElement(container);
   if (initialElement) {
     setTimeout(() => {
@@ -35,6 +102,11 @@ function focusInitialInContainer(container: HTMLElement, onFocused?: (el: HTMLEl
 }
 
 function shouldApplyInitialFocus(activeElement: HTMLElement | null): boolean {
+  // Don't apply initial focus if focus is already on a movie
+  const focusedMovie = document.querySelector('[data-tv-group="movies"]:focus, [data-tv-group="series"]:focus');
+  if (focusedMovie) {
+    return false;
+  }
   return !activeElement || activeElement === document.body;
 }
 
@@ -64,44 +136,164 @@ interface MovieDetailsContext {
 function handleMovieDetailsOpening(ctx: MovieDetailsContext): boolean {
   const { movieDetailsElements, activeElement } = ctx;
   
-  if (movieDetailsElements.length > 0 && activeElement?.matches('[data-tv-group="movies"], [data-tv-group="series"]')) {
+  if (movieDetailsElements.length > 0 && activeElement?.matches('[data-tv-group="movies"], [data-tv-group="series"], [data-tv-group="favorite-movies"], [data-tv-group="favorite-series"]')) {
     state.lastFocusedElement = activeElement;
-    return true;
   }
   
   if (movieDetailsElements.length > 0) {
+    // Focus the X button in MovieDetails
+    const closeButton = document.querySelector('[data-tv-group="movie-details-close"]') as HTMLElement;
+    if (closeButton) {
+      setTimeout(() => closeButton.focus(), 100);
+    }
     return true;
   }
   
   return false;
 }
 
-function handleMovieDetailsClosing(ctx: MovieDetailsContext): boolean {
-  const { hadMovieDetails, hasMovieDetailsNow, modalWasOpen } = ctx;
+function createFocusVerificationInterval(removedInitials: { el: HTMLElement; hadInitial: boolean }[]): void {
+  let checkCount = 0;
+  const maxChecks = 5;
+  const checkInterval = setInterval(() => {
+    checkCount++;
+    // Stop if we're no longer restoring focus (user navigated away)
+    if (!state.isRestoringFocus) {
+      clearInterval(checkInterval);
+      return;
+    }
+    const currentActive = document.activeElement as HTMLElement;
+    if (state.restoredElement && currentActive !== state.restoredElement) {
+      state.restoredElement.focus();
+    } else if (checkCount >= maxChecks) {
+      clearInterval(checkInterval);
+      state.isRestoringFocus = false;
+      state.restoredElement = null;
+      // Restore data-tv-initial attributes
+      removedInitials.forEach(({ el }) => {
+        el.dataset.tvInitial = 'true';
+      });
+    }
+  }, 200);
+}
+
+function focusElementByTvId(tvId: string, removedInitials: { el: HTMLElement; hadInitial: boolean }[]): void {
+  const newEl = document.querySelector(`[data-tv-id="${tvId}"]`) as HTMLElement;
   
-  if (!hadMovieDetails || hasMovieDetailsNow || !modalWasOpen) {
+  if (!newEl) return;
+  
+  const focusElement = () => {
+    newEl.focus();
+    state.restoredElement = newEl;
+    (state as any).currentId = tvId;
+    state.lastFocusedElement = null;
+    (state as any).lastFocusedIndex = null;
+    blockFocusEvents();
+    createFocusVerificationInterval(removedInitials);
+  };
+  
+  setTimeout(() => setTimeout(focusElement, 0), 50);
+}
+
+function focusElementByIndex(idx: string, removedInitials: { el: HTMLElement; hadInitial: boolean }[]): void {
+  const groups = ['movies', 'series', 'favorite-movies', 'favorite-series'];
+  const foundGroup = groups.find(group => {
+    const el = document.querySelector(`[data-tv-group="${group}"][data-tv-index="${idx}"]`) as HTMLElement;
+    return !!el;
+  });
+
+  if (!foundGroup) return;
+
+  const newEl = document.querySelector(`[data-tv-group="${foundGroup}"][data-tv-index="${idx}"]`) as HTMLElement;
+  const tvId = newEl.dataset.tvId;
+  const indexNum = Number(idx);
+  const baseDelay = indexNum > 50 ? 600 : 100;
+  const secondDelay = indexNum > 50 ? 400 : 50;
+  
+  const focusAndVerifyByIndex = () => {
+    newEl.focus();
+    state.restoredElement = newEl;
+    
+    if (tvId) {
+      (state as any).currentId = tvId;
+    }
+    state.lastFocusedElement = null;
+    (state as any).lastFocusedIndex = null;
+    blockFocusEvents();
+    createFocusVerificationInterval(removedInitials);
+  };
+  
+  const scrollThenFocusByIndex = () => {
+    newEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+    setTimeout(focusAndVerifyByIndex, secondDelay);
+  };
+  
+  setTimeout(scrollThenFocusByIndex, baseDelay);
+}
+
+function handleMovieDetailsClosing(ctx: MovieDetailsContext): boolean {
+  const { hadMovieDetails, hasMovieDetailsNow } = ctx;
+  
+  if (!hadMovieDetails || hasMovieDetailsNow) {
     return false;
   }
   
-  if (state.lastFocusedElement && document.contains(state.lastFocusedElement)) {
-    const el = state.lastFocusedElement;
-    setTimeout(() => {
-      if (el.tabIndex === -1) {
-        el.tabIndex = 0;
-      }
-      el.focus({ preventScroll: true });
-    }, 150);
+  // Check if there are too many movies - disable focus restoration for performance
+  const movieCount = document.querySelectorAll('[data-tv-group="movies"]').length;
+  
+  if (movieCount > 500) {
+    state.lastFocusedElement = null;
+    (state as any).lastFocusedIndex = null;
+    return true;
   }
   
-  state.lastFocusedElement = null;
-  return true;
-}
-
-function hadMovieDetailsPreviously(lastContainerIds: Set<string>, containers: HTMLElement[]): boolean {
-  return Array.from(lastContainerIds).some(id => {
-    const prevContainer = containers.find(c => getContainerId(c) === id);
-    return prevContainer?.querySelector('[data-tv-group="movie-actions"][data-tv-initial="true"]');
+  // Restore focus to the previously focused element
+  let idx = state.lastFocusedElement?.dataset.tvIndex;
+  let tvId = state.lastFocusedElement?.dataset.tvId;
+  
+  // Fallback to saved index if no element
+  if (!idx && (state as any).lastFocusedIndex) {
+    idx = (state as any).lastFocusedIndex;
+  }
+  
+  if (!tvId && !idx) {
+    // Nothing to restore, allow initial focus
+    state.isRestoringFocus = false;
+    return true;
+  }
+  
+  // Set flag to prevent initial focus from overriding our restoration
+  state.isRestoringFocus = true;
+  
+  // Temporarily remove data-tv-initial from idx0 to prevent it stealing focus
+  const idx0Elements = document.querySelectorAll('[data-tv-initial="true"]');
+  const removedInitials: { el: HTMLElement; hadInitial: boolean }[] = [];
+  idx0Elements.forEach((el) => {
+    const htmlEl = el as HTMLElement;
+    removedInitials.push({ el: htmlEl, hadInitial: true });
+    delete htmlEl.dataset.tvInitial;
   });
+  
+  let focused = false;
+  
+  // Try to find by data-tv-id first (most reliable, unique)
+  if (tvId) {
+    focusElementByTvId(tvId, removedInitials);
+    focused = true;
+  }
+  
+  // Fallback to index if id not found - try all relevant groups
+  setTimeout(() => {
+    if (!focused && idx) {
+      focusElementByIndex(idx, removedInitials);
+    }
+    
+    if (!focused) {
+      state.isRestoringFocus = false;
+    }
+  }, 100);
+
+  return true;
 }
 
 interface ContentElements {
@@ -140,16 +332,10 @@ function shouldFocusOnContent(activeElement: HTMLElement | null, _initialFocusEl
   const isInNavigation = activeElement?.closest('[data-tv-container="navigation"]') !== null;
   const isFocusLost = initialFocusApplied && (!activeElement || activeElement === document.body);
 
-  // Don't auto-focus to content if focus is already in navigation (navbar)
-  // This prevents double focus when App.tsx has already restored focus to a navbar element
-  if (isInNavigation) {
-    return false;
-  }
-
   // Don't auto-focus to content if user is actively navigating in navbar
-  // Only auto-focus if user is on a category group or focus is lost
   const shouldFocus = (activeElement?.matches(categoryGroups) ||
                        isFocusLost) &&
+                       !isInNavigation &&
                        !activeElement?.matches('[data-tv-group="movie-details"]') &&
                        !(activeElement?.matches(contentGroups) && activeElement?.dataset.tvInitial === 'true');
 
@@ -195,7 +381,35 @@ function getNewModalContainers(modalContainers: HTMLElement[], lastContainerIds:
 function handleModalOpening(newModalContainers: HTMLElement[]): void {
   const activeElement = document.activeElement as HTMLElement;
   if (activeElement?.matches('[data-tv-focusable]')) {
-    state.lastFocusedElement = activeElement;
+    // First try to find portal card by data-portal-id
+    const portalCard = activeElement.closest('[data-portal-id]') as HTMLElement;
+    if (portalCard) {
+      state.lastFocusedElement = portalCard;
+    } else {
+      // Fall back to data-tv-id
+      let closestWithTvId: HTMLElement | null = null;
+      let current: HTMLElement | null = activeElement;
+      
+      while (current && current !== document.body) {
+        if (current.dataset.tvId && current.dataset.tvContainer !== 'main') {
+          closestWithTvId = current;
+          break;
+        }
+        current = current.parentElement;
+      }
+      
+      if (closestWithTvId) {
+        state.lastFocusedElement = closestWithTvId;
+      } else {
+        // Last resort: check if we're inside a portal card by data-portal-id
+        const parentPortalCard = activeElement.closest('[data-portal-id]') as HTMLElement;
+        if (parentPortalCard) {
+          state.lastFocusedElement = parentPortalCard;
+        } else {
+          state.lastFocusedElement = activeElement;
+        }
+      }
+    }
   }
 
   const sortedNew = newModalContainers.slice().sort((a, b) => {
@@ -213,14 +427,50 @@ function handleModalClosing(modalWasOpen: boolean): boolean {
     return false;
   }
 
+  // Check if lastFocusedElement was in navbar - if so, skip focus restoration
+  const lastWasInNavbar = state.lastFocusedElement?.closest('[data-tv-group="navbar"]') !== null;
+  if (lastWasInNavbar) {
+    state.lastFocusedElement = null;
+    return true;
+  }
+
+  let elementToFocus: HTMLElement | null = null;
+
+  // Try direct reference first
   if (state.lastFocusedElement && document.contains(state.lastFocusedElement)) {
-    const el = state.lastFocusedElement;
-    setTimeout(() => {
-      if (el.tabIndex === -1) {
-        el.tabIndex = 0;
+    elementToFocus = state.lastFocusedElement;
+  } else if (state.lastFocusedElement) {
+    // Try to find by data-tv-id first
+    const lastTvId = state.lastFocusedElement.dataset.tvId;
+    if (lastTvId) {
+      elementToFocus = document.querySelector(`[data-tv-id="${lastTvId}"]`) as HTMLElement;
+    }
+    // If not found, try data-portal-id
+    if (!elementToFocus) {
+      const lastPortalId = state.lastFocusedElement.dataset.portalId;
+      if (lastPortalId) {
+        elementToFocus = document.querySelector(`[data-portal-id="${lastPortalId}"]`) as HTMLElement;
       }
-      el.focus({ preventScroll: true });
+    }
+  }
+
+  // Last resort: find any portal card with data-tv-focusable
+  elementToFocus ??= document.querySelector('[data-portal-id][data-tv-focusable]');
+
+  if (elementToFocus) {
+    setTimeout(() => {
+      if (elementToFocus.tabIndex === -1) {
+        elementToFocus.tabIndex = 0;
+      }
+      elementToFocus.focus({ preventScroll: true });
     }, 150);
+  } else {
+    const addButton = document.querySelector('[data-tv-id="add-portal-btn"]') as HTMLElement;
+    if (addButton) {
+      setTimeout(() => {
+        addButton.focus({ preventScroll: true });
+      }, 150);
+    }
   }
 
   state.lastFocusedElement = null;
@@ -245,6 +495,10 @@ export function initAutoFocus(): () => void {
   };
 
   const handleInitialFocus = (containers: HTMLElement[], activeElement: HTMLElement): void => {
+    // Skip initial focus if we're restoring focus (to prevent jumping to idx0)
+    if (state.isRestoringFocus) {
+      return;
+    }
     if (!initialFocusApplied && shouldApplyInitialFocus(activeElement)) {
       initialFocusElement = applyInitialFocus(containers);
       initialFocusApplied = true;
@@ -253,13 +507,66 @@ export function initAutoFocus(): () => void {
 
   const handleMainContainer = (containers: HTMLElement[], activeElement: HTMLElement): void => {
     const mainContainer = containers.find(c => getContainerId(c) === 'main');
-    if (!mainContainer) return;
+    if (!mainContainer) {
+      return;
+    }
 
     const contentElements = getContentElements(mainContainer);
     const movieDetailsElements = mainContainer.querySelectorAll('[data-tv-group="movie-actions"][data-tv-initial="true"]') as NodeListOf<HTMLElement>;
 
-    const hadMovieDetails = hadMovieDetailsPreviously(lastContainerIds, containers);
+    const hadMovieDetails = state.hadMovieDetails;
     const hasMovieDetailsNow = movieDetailsElements.length > 0;
+
+    // If MovieDetails is opening, save the currently focused movie (if any)
+    // Use window.__lastFocusedMovieId which was saved when user clicked/pressed Enter on movie
+    if (!hadMovieDetails && hasMovieDetailsNow) {
+      const savedMovieId = (globalThis as any).__lastFocusedMovieId;
+      
+      // Try to find the element, with retry for virtualization
+      const tryFindElement = (): HTMLElement | null => {
+        if (savedMovieId) {
+          const el = document.querySelector(`[data-tv-id="${savedMovieId}"]`) as HTMLElement;
+          if (el) return el;
+        }
+        
+        const activeEl = document.activeElement as HTMLElement;
+        if (activeEl?.matches('[data-tv-group="movies"], [data-tv-group="series"], [data-tv-group="favorite-movies"], [data-tv-group="favorite-series"]')) {
+          return activeEl;
+        }
+        
+        if ((state as any).currentId) {
+          return document.querySelector(`[data-tv-id="${(state as any).currentId}"]`) as HTMLElement;
+        }
+        
+        return null;
+      };
+      
+      // First try immediately
+      let focusedMovie = tryFindElement();
+      
+      // If not found, retry after delay (for virtualization)
+      if (!focusedMovie && savedMovieId) {
+        const savedIndex = (globalThis as any).__lastFocusedMovieIndex;
+        setTimeout(() => {
+          focusedMovie = tryFindElement();
+          if (focusedMovie) {
+            state.lastFocusedElement = focusedMovie;
+          } else if (savedIndex) {
+            // Even if element not found, try to use index for restoration
+            (state as any).lastFocusedIndex = savedIndex;
+          }
+          (globalThis as any).__lastFocusedMovieId = null;
+          (globalThis as any).__lastFocusedMovieIndex = null;
+        }, 300);
+      } else if (focusedMovie) {
+        state.lastFocusedElement = focusedMovie;
+        (globalThis as any).__lastFocusedMovieId = null;
+        (globalThis as any).__lastFocusedMovieIndex = null;
+      }
+    }
+
+    // Update state
+    state.hadMovieDetails = hasMovieDetailsNow;
 
     const movieDetailsCtx: MovieDetailsContext = {
       movieDetailsElements,
@@ -317,7 +624,10 @@ export function initAutoFocus(): () => void {
   checkContainers();
 
   const observer = new MutationObserver(() => {
-    requestAnimationFrame(checkContainers);
+    // Add delay to allow DOM to settle
+    setTimeout(() => {
+      requestAnimationFrame(checkContainers);
+    }, 50);
   });
 
   observer.observe(document.body, {

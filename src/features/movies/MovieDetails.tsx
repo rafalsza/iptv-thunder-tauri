@@ -197,6 +197,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center transition-all">
                   <button
                     data-tv-focusable
+                    data-tv-id="movie-details-play-overlay"
                     tabIndex={0}
                     onClick={handlePlay}
                     className="w-20 h-20 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center backdrop-blur-sm transition-all"
@@ -218,7 +219,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
               <button
                 data-tv-focusable
                 data-tv-initial
-                data-tv-group="movie-actions"
+                data-tv-group="movie-details-close"
                 tabIndex={0}
                 onClick={onBack}
                 className="flex items-center justify-center w-10 h-10 bg-slate-800/80 hover:bg-slate-700/80 rounded-full text-white transition-all backdrop-blur-sm flex-shrink-0"
@@ -309,9 +310,10 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-3 sm:gap-4" data-tv-group="movie-actions">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4" data-tv-group="movie-actions" data-tv-initial="true">
               <button
                 data-tv-focusable
+                data-tv-id="movie-details-play"
                 tabIndex={0}
                 onClick={handlePlay}
                 className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-white text-slate-900 rounded-lg font-semibold hover:bg-slate-100 transition-colors text-sm sm:text-base"
@@ -324,6 +326,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
 
               <button
                 data-tv-focusable
+                data-tv-id="movie-details-favorite"
                 tabIndex={0}
                 onClick={() => toggleItemFavorite('vod', String(displayMovie.id), {
                   name: displayMovie.name,
@@ -356,6 +359,7 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
 
               <button
                 data-tv-focusable
+                data-tv-id="movie-details-download"
                 tabIndex={0}
                 onClick={handleDownload}
                 disabled={isDownloading}

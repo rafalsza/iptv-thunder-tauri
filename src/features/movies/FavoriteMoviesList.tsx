@@ -63,6 +63,12 @@ const MovieCard = React.memo<MovieCardProps>(({
 
   const handleKeyUp = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+      // Save focus before navigation for restoration when closing details
+      const focusedEl = document.activeElement as HTMLElement;
+      if (focusedEl?.dataset.tvId) {
+        (window as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
+        (window as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
+      }
       // Check if long press was triggered - if so, don't call onSelect
       if (!(window as any).__tvLongPressPreventClick) {
         e.preventDefault();
@@ -72,6 +78,12 @@ const MovieCard = React.memo<MovieCardProps>(({
   };
 
   const handleClick = () => {
+    // Save focus before navigation for restoration when closing details
+    const focusedEl = document.activeElement as HTMLElement;
+    if (focusedEl?.dataset.tvId) {
+      (window as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
+      (window as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
+    }
     // For mouse/touch, let useLongPress handle it
     if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
       onSelect(movie);
@@ -116,9 +128,9 @@ const MovieCard = React.memo<MovieCardProps>(({
   return (
     <div
       data-tv-focusable
+      data-tv-id={`fav-movie-${(movie as any).item_id || movie.id}`}
       data-tv-group="favorite-movies"
       data-tv-index={index}
-      data-tv-initial={index === 0}
       tabIndex={0}
       {...longPressHandlers}
       ref={ref}
@@ -269,7 +281,7 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
     count: rowCount,
     getScrollElement: () => parentRef.current,
     estimateSize: () => getRowHeight(),
-    overscan: 5,
+    overscan: 15,
   });
 
   const getRow = useCallback(

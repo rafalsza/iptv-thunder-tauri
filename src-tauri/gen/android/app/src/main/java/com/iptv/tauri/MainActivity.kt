@@ -56,6 +56,27 @@ class MainActivity : TauriActivity() {
         }
     }
 
+    private fun isInputFocused(callback: (Boolean) -> Unit) {
+        webView?.evaluateJavascript(
+            """
+            (function() {
+                const el = document.activeElement;
+                if (!el) return false;
+
+                const tag = el.tagName?.toLowerCase();
+
+                return (
+                    tag === 'input' ||
+                    tag === 'textarea' ||
+                    el.isContentEditable
+                );
+            })();
+            """.trimIndent()
+        ) { result ->
+            callback(result == "true")
+        }
+    }
+
     init {
     }
 
@@ -63,26 +84,6 @@ class MainActivity : TauriActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         currentInstance = this
-
-        // Set up key listener after view is created
-        window.decorView.postDelayed({
-            window.decorView.isFocusable = true
-            window.decorView.isFocusableInTouchMode = true
-            window.decorView.requestFocus()
-            window.decorView.setOnKeyListener { _, keyCode, event ->
-                if (event.action == KeyEvent.ACTION_DOWN) {
-                    when (keyCode) {
-                        KeyEvent.KEYCODE_DPAD_UP,
-                        KeyEvent.KEYCODE_DPAD_DOWN,
-                        KeyEvent.KEYCODE_DPAD_LEFT,
-                        KeyEvent.KEYCODE_DPAD_RIGHT,
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER -> true
-                        else -> false
-                    }
-                } else false
-            }
-        }, 1000)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -103,8 +104,10 @@ class MainActivity : TauriActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // Handle BACK key - send to WebView for tv-navigation system
-        if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK) {
+        // BACK zawsze własny handler
+        if (event.action == KeyEvent.ACTION_DOWN &&
+            event.keyCode == KeyEvent.KEYCODE_BACK) {
+
             webView?.evaluateJavascript(
                 "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Back', code: 'Back', cancelable: true }))",
                 null
@@ -112,47 +115,57 @@ class MainActivity : TauriActivity() {
             return true
         }
 
-        // Handle D-pad keys - send to WebView for TV navigation
-        if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
+        val isDpadKey = when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER -> true
+            else -> false
+        }
+
+        if (!isDpadKey) {
+            return super.dispatchKeyEvent(event)
+        }
+
+        // Always handle D-pad keys - let JS check if input is focused
+        handleTvNavigation(event)
+        return true
+    }
+
+    private fun handleTvNavigation(event: KeyEvent) {
+        if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+            event.keyCode == KeyEvent.KEYCODE_ENTER) {
+
             if (event.action == KeyEvent.ACTION_DOWN) {
-                // Start long press detection (only on initial keydown, not repeat)
                 if (event.repeatCount == 0) {
                     longPressTriggered = false
                     longPressEventSent = false
-                    keyDownTime = System.currentTimeMillis()
-                    // Cancel any existing handler before posting new one
+
                     handler.removeCallbacks(longPressRunnable)
                     handler.postDelayed(longPressRunnable, LONG_PRESS_DELAY)
                 }
 
-                // Send regular keydown event
                 webView?.evaluateJavascript(
                     "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', cancelable: true }))",
                     null
                 )
-                return true
+
             } else if (event.action == KeyEvent.ACTION_UP) {
-                // Cancel long press if key is released before delay
                 handler.removeCallbacks(longPressRunnable)
 
-                // Only send keyup event if long press was NOT triggered
                 if (!longPressTriggered) {
                     webView?.evaluateJavascript(
                         "window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', cancelable: true }))",
                         null
                     )
-                } else {
-                    // Reset native flags after a short delay
-                    handler.postDelayed({
-                        longPressTriggered = false
-                        longPressEventSent = false
-                    }, 500)
                 }
-                return true
             }
+
+            return
         }
 
-        // Handle other D-pad keys
         if (event.action == KeyEvent.ACTION_DOWN) {
             val keyName = when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP -> "ArrowUp"
@@ -161,16 +174,14 @@ class MainActivity : TauriActivity() {
                 KeyEvent.KEYCODE_DPAD_RIGHT -> "ArrowRight"
                 else -> null
             }
+
             if (keyName != null) {
                 webView?.evaluateJavascript(
                     "window.dispatchEvent(new KeyboardEvent('keydown', { key: '$keyName', code: '$keyName', cancelable: true }))",
                     null
                 )
-                return true
             }
         }
-
-        return super.dispatchKeyEvent(event)
     }
 
     override fun onResume() {
@@ -183,6 +194,11 @@ class MainActivity : TauriActivity() {
     override fun onWebViewCreate(webView: WebView) {
         super.onWebViewCreate(webView)
         this.webView = webView
+
+        // Configure WebView focus for proper input handling
+        webView.isFocusable = true
+        webView.isFocusableInTouchMode = true
+        webView.descendantFocusability = android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS
 
         // Request focus for WebView to receive key events
         webView.requestFocus()

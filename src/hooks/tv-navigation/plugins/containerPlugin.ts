@@ -132,9 +132,10 @@ export const containerPlugin: NavigationPlugin = {
       if (newContainerId && newContainerId !== activeId) {
         setActiveContainerId(context, newContainerId);
         // Try to restore last focus in new container, but only if group HAS changed
-        // (when moving within the same group, use the explicit target from the rule)
+        // AND target is not a carousel group (for-you-*)
         const targetNode = state.nodes.find(n => n.id === targetId);
-        if (targetNode?.groupId !== current.groupId) {
+        const isCarouselGroup = targetNode?.groupId?.startsWith('for-you-');
+        if (targetNode?.groupId !== current.groupId && !isCarouselGroup) {
           const restoredId = restoreLastFocus(context, newContainerId, state);
           if (restoredId && restoredId !== targetId) {
             return restoredId;
@@ -159,10 +160,107 @@ export const containerPlugin: NavigationPlugin = {
 export { getActiveContainerId, setActiveContainerId, saveContainerFocus, getLastFocus, restoreLastFocus };
 
 function findMainInitial(state: NavigationState): string | null {
+  // Check which nav item is active and route to appropriate content
+  const navElements = state.nodes.filter(n => n.containerId === 'navigation');
+  const activeNavItem = navElements.find(n => n.isActive);
+  const activeNavId = activeNavItem?.id;
+
+  // Check if current element is in navigation container but not in navbar - navigate to main content
+  const current = state.nodes.find(n => n.id === state.currentId);
+  const isInNavigationNotNavbar = current?.containerId === 'navigation' && current?.groupId !== 'navbar';
+  
+  if (isInNavigationNotNavbar) {
+    const mainElements = state.nodes.filter(n => n.containerId === 'main' && !n.isSearch);
+    if (mainElements.length > 0) {
+      return mainElements[0].id;
+    }
+  }
+
+  // If current element is in navbar and is one of the main nav items, navigate to main content
+  const isNavbarMainItem = current?.groupId === 'navbar' && (current?.id === 'tv' || current?.id === 'movies' || current?.id === 'series');
+  if (isNavbarMainItem) {
+    const mainElements = state.nodes.filter(n => n.containerId === 'main' && !n.isSearch);
+    if (mainElements.length > 0) {
+      return mainElements[0].id;
+    }
+  }
+
+  // Route to appropriate content based on active nav item
+  if (activeNavId === 'portals') {
+    const portalsContent = state.nodes.filter(n => n.groupId === 'portals-content');
+    if (portalsContent.length > 0) {
+      return portalsContent.find(n => n.isInitial)?.id ?? portalsContent[0]?.id ?? null;
+    }
+    // If portals content not loaded yet, don't fall back to other content
+    return null;
+  }
+
+  if (activeNavId === 'for-you') {
+    // For-you carousel groups
+    const forYouLiveElements = state.nodes.filter(n => n.containerId === 'for-you-live');
+    if (forYouLiveElements.length > 0) {
+      return forYouLiveElements[0].id;
+    }
+  }
+
+  if (activeNavId === 'tv') {
+    const tvCategories = state.nodes.filter(n => n.containerId === 'main' && (n.groupId === 'categories' || n.groupId === 'favorite-categories'));
+    if (tvCategories.length > 0) {
+      return tvCategories[0].id;
+    }
+  }
+
+  if (activeNavId === 'movies') {
+    const movieCategories = state.nodes.filter(n => n.containerId === 'main' && (n.groupId === 'movie-categories' || n.groupId === 'favorite-movie-categories'));
+    if (movieCategories.length > 0) {
+      return movieCategories[0].id;
+    }
+  }
+
+  if (activeNavId === 'series') {
+    const seriesCategories = state.nodes.filter(n => n.containerId === 'main' && (n.groupId === 'series-categories' || n.groupId === 'favorite-series-categories'));
+    if (seriesCategories.length > 0) {
+      return seriesCategories[0].id;
+    }
+  }
+
   const mainElements = state.nodes.filter(n => n.containerId === 'main');
+  // Check for carousel groups (for-you-*) in main container
+  const carouselElements = mainElements.filter(n => n.groupId?.startsWith('for-you-'));
+  if (carouselElements.length > 0) {
+    // Return first carousel element ID instead of groupId
+    return carouselElements[0].id;
+  }
+  // Carousel groups have containerId = groupId, search them separately
+  const forYouLiveElements = state.nodes.filter(n => n.containerId === 'for-you-live');
+  if (forYouLiveElements.length > 0) {
+    return forYouLiveElements[0].id;
+  }
+  const forYouMoviesElements = state.nodes.filter(n => n.containerId === 'for-you-movies');
+  if (forYouMoviesElements.length > 0) {
+    return forYouMoviesElements[0].id;
+  }
+  const forYouSeriesElements = state.nodes.filter(n => n.containerId === 'for-you-series');
+  if (forYouSeriesElements.length > 0) {
+    return forYouSeriesElements[0].id;
+  }
+  // Look for initial element first
   const initialElement = mainElements.find(n => n.isInitial);
-  const result = initialElement?.id ?? mainElements[0]?.id ?? null;
-  return result;
+  if (initialElement) return initialElement.id;
+  // Look for movie elements first (skip search input)
+  const movieElement = mainElements.find(n => n.groupId === 'movies' || n.groupId === 'favorite-movies');
+  if (movieElement) return movieElement.id;
+  // Look for series elements
+  const seriesElement = mainElements.find(n => n.groupId === 'series' || n.groupId === 'favorite-series');
+  if (seriesElement) return seriesElement.id;
+  // Fallback: skip search elements
+  const nonSearchElement = mainElements.find(n => !n.isSearch);
+  // IMPORTANT: If current is search and no main elements found, return current.id to stay on search
+  // This prevents spatial plugin from searching globally and finding sidebar
+  if (current?.isSearch && !nonSearchElement) {
+    return current.id;
+  }
+  return nonSearchElement?.id ?? null;
 }
 
 function findNavigationActive(state: NavigationState): string | null {

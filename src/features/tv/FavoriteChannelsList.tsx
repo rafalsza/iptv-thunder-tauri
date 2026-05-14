@@ -56,6 +56,7 @@ const FavoriteChannelCard: React.FC<FavoriteChannelCardProps> = ({
     <div
       key={channel.id}
       data-tv-focusable
+      data-tv-id={`fav-channel-${channel.id}`}
       data-tv-group="favorite-channels"
       data-tv-index={index}
       data-tv-initial={index === 0}

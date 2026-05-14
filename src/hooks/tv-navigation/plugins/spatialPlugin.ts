@@ -126,7 +126,7 @@ function calculateScore(
   priority = calculateAntiLoopPriority(direction, dy, priority);
 
   const { distance, additionalPriority } = calculateDirectionalScore(direction, {
-    dx, dy, sameRow, sameColumn, overlaps, current,
+    dx, dy, sameRow, sameColumn, overlaps, current, target,
     targetRect: target.rect, targetCenter, state,
   });
 
@@ -161,6 +161,7 @@ interface DirectionalContext {
   sameColumn: boolean;
   overlaps: boolean;
   current: NavNode;
+  target: NavNode;
   targetRect: DOMRect;
   targetCenter: { x: number; y: number };
   state: NavigationState;
@@ -218,8 +219,12 @@ function calculateUpScore(ctx: DirectionalContext): { distance: number; addition
   let priority = 0;
   const distance = Math.abs(ctx.dy) + Math.abs(ctx.dx) * 5;
   if (ctx.sameColumn) priority += 3000;
-  const xDistanceFromMemory = calculateXDistanceFromMemory(ctx.targetRect, ctx.targetCenter, ctx.state);
-  priority -= xDistanceFromMemory * 20;
+  // Only use X memory if not in same group (prevents interference in sidebar navigation)
+  const sameGroup = !!(ctx.current.groupId && ctx.target.groupId && ctx.current.groupId === ctx.target.groupId);
+  if (!sameGroup) {
+    const xDistanceFromMemory = calculateXDistanceFromMemory(ctx.targetRect, ctx.targetCenter, ctx.state);
+    priority -= xDistanceFromMemory * 20;
+  }
   if (ctx.current.groupId === 'series' && Math.abs(ctx.dy) < 10) {
     priority -= 10000;
   }

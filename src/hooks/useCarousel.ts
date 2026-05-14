@@ -4,7 +4,7 @@
 import React, { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 
 // Virtualization constants - tune for TV performance
-const BUFFER_CARDS = 3; // Extra cards to render outside viewport
+const BUFFER_CARDS = 50; // Extra cards to render outside viewport
 const CARD_WIDTH_MD = 140; // 140px default width (matches Movies/Series)
 
 // Scroll constants
