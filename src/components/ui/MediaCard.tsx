@@ -1,7 +1,7 @@
 // =========================
 // 🎬 MEDIA CARD COMPONENT - Universal Card for ForYou, Movies, Series, TV
 // =========================
-import React from 'react';
+import React, { useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Clock, Play, Tv, Film, Star } from 'lucide-react';
 
@@ -45,7 +45,7 @@ const getTypeIcon = (type: MediaCardType) => {
   }
 };
 
-export const MediaCard: React.FC<MediaCardProps> = ({
+export const MediaCard = React.memo<MediaCardProps>(({
   id,
   name,
   poster,
@@ -62,14 +62,14 @@ export const MediaCard: React.FC<MediaCardProps> = ({
 }) => {
   const hasProgress = progressPercentage > 0 && type === 'vod';
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
       e.preventDefault();
       onSelect();
     }
-  };
+  }, [onSelect]);
 
-  const handleFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+  const handleFocus = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
     const card = e.currentTarget;
     const carouselContainer = card.closest('.overflow-x-auto') as HTMLElement | null;
 
@@ -90,12 +90,16 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       const containerCenter = containerRect.left + containerRect.width / 2;
       const scrollDelta = cardCenter - containerCenter;
 
-      carouselContainer.scrollBy({
-        left: scrollDelta,
-        behavior: 'smooth',
-      });
+      // Only scroll if card is not already visible in container
+      const isVisible = cardCenter >= containerRect.left && cardCenter <= containerRect.right;
+      if (!isVisible) {
+        carouselContainer.scrollBy({
+          left: scrollDelta,
+          behavior: 'smooth',
+        });
+      }
     }
-  };
+  }, [index, tvGroup]);
 
   return (
     <motion.div
@@ -111,7 +115,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       data-tv-focusable
       data-tv-group={tvGroup}
       data-tv-index={index}
-      data-tv-initial={tvInitial || undefined}
+      {...(tvInitial && { 'data-tv-initial': true })}
       data-media-card
       tabIndex={0}
       className="relative group/card cursor-pointer flex-shrink-0 w-24 sm:w-28 md:w-32 lg:w-36 xl:w-40 2xl:w-36 3xl:w-32 4ktv:w-28 rounded-lg mr-2 sm:mr-3 last:mr-0 snap-start"
@@ -119,26 +123,30 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       {/* Card container */}
       <div className="dark:bg-slate-800/50 bg-gray-100/50 rounded-lg backdrop-blur-sm border dark:border-slate-700/50 border-gray-200/50 hover:shadow-glow transition-all">
         {/* Poster area - different aspect ratio for live channels */}
-        <div className={`relative bg-slate-700 overflow-hidden ${type === 'live' ? 'aspect-video' : 'aspect-[3/4]'}`}>
+        <div
+          className="relative bg-slate-700 overflow-hidden"
+          style={{ aspectRatio: type === 'live' ? '16 / 9' : '3 / 4' }}
+        >
           {poster ? (
             <img
               src={poster}
               alt={name}
-              className={`w-full h-full group-hover/card:scale-105 transition-transform duration-300 ${type === 'live' ? 'object-contain p-2' : 'object-contain bg-slate-800'}`}
+              loading="lazy"
+              className={`w-full h-full group-hover/card:scale-105 transition-transform duration-300 ${type === 'live' ? 'object-contain p-2' : 'object-cover bg-slate-800'}`}
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = 'none';
+                (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
               }}
             />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center dark:bg-slate-700 bg-gray-300">
-              {type === 'live' && <Tv className="w-8 h-8 text-blue-400" />}
-              {type === 'vod' && <Film className="w-8 h-8 text-purple-400" />}
-              {type === 'series' && <Film className="w-8 h-8 text-orange-400" />}
-            </div>
-          )}
+          ) : null}
+          <div className={`w-full h-full flex items-center justify-center dark:bg-slate-700 bg-gray-300 ${poster ? 'hidden' : ''}`}>
+            {type === 'live' && <Tv className="w-8 h-8 text-blue-400" />}
+            {type === 'vod' && <Film className="w-8 h-8 text-purple-400" />}
+            {type === 'series' && <Film className="w-8 h-8 text-orange-400" />}
+          </div>
 
           {/* Type badge */}
-          {typeLabel && (
+          {typeLabel && typeLabel.trim() !== '' && (
             <div className="absolute top-1.5 left-1.5 dark:bg-black/70 bg-white/80 backdrop-blur-sm px-1.5 py-0.5 rounded flex items-center gap-1">
               {getTypeIcon(type)}
               <span className="text-[10px] font-medium dark:text-white text-slate-900">
@@ -151,7 +159,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           {hasProgress && (
             <>
               <div className="absolute top-1.5 right-1.5 dark:bg-green-700/90 bg-green-600/90 backdrop-blur-sm px-1.5 py-0.5 rounded flex items-center gap-1">
-                <Play className="w-1 h-1 text-white" />
+                <Play className="w-2 h-2 text-white" />
                 <span className="text-[10px] font-medium text-white">
                   {progressPercentage}%
                 </span>
@@ -166,11 +174,15 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           )}
 
           {/* Play button on hover */}
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50 opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center border-0 p-0 cursor-pointer"
+            aria-label={`Play ${name}`}
+          >
             <div className="w-10 h-10 dark:bg-white/90 bg-white/90 rounded-full flex items-center justify-center">
               <Play className="w-5 h-5 text-black fill-current ml-1" />
             </div>
-          </div>
+          </button>
         </div>
 
         {/* Info section */}
@@ -195,4 +207,4 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       </div>
     </motion.div>
   );
-};
+});

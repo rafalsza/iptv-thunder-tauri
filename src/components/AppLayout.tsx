@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState, useMemo } from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { TitleBar } from '@/components/ui/TitleBar';
 import { Navigation } from '@/components/ui/Navigation';
@@ -7,22 +7,40 @@ import { Player } from '@/features/player/Player';
 import { platform } from '@tauri-apps/plugin-os';
 import { useAppStore } from '@/store/app.store';
 import { useTranslation } from '@/hooks/useTranslation';
+import { PortalAccount } from '@/features/portals/portals.types';
+import { StalkerChannel } from '@/types';
+import type { PlaybackState } from '@/store/playback.store';
+
+interface NavigationItem {
+  id: string;
+  label: string;
+  icon: string;
+  active: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  subItems?: Array<{
+    id: string;
+    label: string;
+    onClick: () => void;
+    active: boolean;
+  }>;
+}
 
 interface AppLayoutProps {
   activeView: string;
-  activePortal: any;
+  activePortal: PortalAccount | null;
   client: StalkerClient | null;
   search: string;
   isSettingsOpen: boolean;
   isFullscreen: boolean;
-  player: any;
+  player: PlaybackState;
   closePlayer: () => void;
-  navigationItems: any[];
+  navigationItems: NavigationItem[];
   children: React.ReactNode;
   setIsSettingsOpen: (open: boolean) => void;
   setSearch: (search: string) => void;
   handleEpisodeEnded: () => void;
-  handleChannelSelect: (channel: any) => void;
+  handleChannelSelect: (channel: StalkerChannel) => void;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
@@ -51,8 +69,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       try {
         const osPlatform = platform(); // 'android' | 'ios' | 'windows' | 'macOS' | 'linux'
         setCurrentPlatform(osPlatform);
-      } catch {
+      } catch (error) {
         // Plugin not available - assume desktop
+        console.warn('[AppLayout] Platform detection failed, assuming desktop:', error);
         setCurrentPlatform('desktop');
       }
     };
@@ -61,8 +80,17 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
   const isMobile = currentPlatform === 'android' || currentPlatform === 'ios';
 
+  // Extract complex className logic
+  const containerClassName = useMemo(() => {
+    const baseClasses = 'flex flex-col h-full min-h-screen';
+    if (player.current) {
+      return `${baseClasses} bg-transparent`;
+    }
+    return `${baseClasses} dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 bg-gradient-to-br from-white via-gray-100 to-white`;
+  }, [player.current]);
+
   return (
-    <div className={`flex flex-col h-full min-h-screen ${player.current ? 'bg-transparent' : 'dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 bg-gradient-to-br from-white via-gray-100 to-white'}`}>
+    <div className={containerClassName}>
       {/* Custom TitleBar - hidden on mobile (Android/iOS), when fullscreen, or when PiP is active */}
       {!isFullscreen && !isMobile && !isPip && <TitleBar />}
 
@@ -106,7 +134,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               url={player.current.url}
               name={player.current.name}
               channelId={player.current.channelId}
-              client={client || undefined}
+              client={client ?? undefined}
               buffering={player.buffering}
               isVod={player.current.isVod}
               movieId={player.current.movieId}

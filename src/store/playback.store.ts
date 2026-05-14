@@ -23,7 +23,7 @@ interface PlayerMedia {
   autoPlayEpisodes?: boolean;
 }
 
-interface PlaybackState {
+export interface PlaybackState {
   // Current media
   current: PlayerMedia | null;
   buffering: boolean;

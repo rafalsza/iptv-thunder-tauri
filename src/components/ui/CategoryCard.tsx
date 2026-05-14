@@ -2,6 +2,7 @@ import React from 'react';
 import { StalkerGenre } from '@/types';
 import { useLongPress } from '@/hooks/useLongPress';
 import { useTranslation } from '@/hooks/useTranslation';
+import { Film, List, Heart, Check } from 'lucide-react';
 
 interface CategoryCardProps {
   category: StalkerGenre;
@@ -36,21 +37,17 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
   const categoryId = String(category.id);
 
   const handleClick = (e: React.MouseEvent) => {
-    // Immediate check for long press flag
-    if ((globalThis as any).__tvLongPressPreventClick) {
+    // Use the hook's isLongPress state instead of global variable
+    if (isLongPress) {
       e.preventDefault();
       e.stopPropagation();
       return;
     }
-    // For mouse/touch, let useLongPress handle it
-    if (!isLongPress && !(globalThis as any).__tvLongPressPreventClick) {
-      onSelect(category);
-    }
+    onSelect(category);
   };
 
   return (
     <div
-      key={category.id}
       ref={ref}
       data-tv-focusable
       data-tv-id={`category-${category.id}`}
@@ -63,14 +60,6 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
       onContextMenu={(e) => {
         e.preventDefault();
         onLongPress(category);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-          (e.currentTarget as HTMLElement).classList.add('long-press-active');
-        }
-      }}
-      onKeyUp={(e) => {
-        (e.currentTarget as HTMLElement).classList.remove('long-press-active');
       }}
       className={`
         relative dark:bg-slate-800 dark:bg-opacity-50 bg-white bg-opacity-50 backdrop-blur-sm dark:border border-slate-600 border-gray-300 rounded-lg p-2 sm:p-3 md:p-4 h-full min-h-[80px] sm:min-h-[100px] md:min-h-[120px]
@@ -90,7 +79,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
             : 'dark:bg-slate-700 bg-gray-200 dark:text-slate-300 text-slate-600'
           }
         `}>
-          {category.id === '*' ? '🎬' : '🎭'}
+          {category.id === '*' ? <Film className="w-4 h-4 sm:w-5 sm:h-5" /> : <List className="w-4 h-4 sm:w-5 sm:h-5" />}
         </div>
         <div className="flex items-center gap-2">
           {selectedCategory?.id === category.id && (
@@ -103,10 +92,12 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
                 e.stopPropagation();
                 onToggleFavorite(e, categoryId, categoryName);
               }}
-              className="text-xl hover:scale-110 transition-transform bg-transparent border-0 p-0"
-              title={isFavorite ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+              className="hover:scale-110 transition-transform bg-transparent border-0 p-0"
+              title={isFavorite ? t('removeFromFavorites') : t('addToFavorites')}
+              aria-label={isFavorite ? t('removeFromFavorites') : t('addToFavorites')}
+              aria-pressed={isFavorite}
             >
-              {isFavorite ? '❤️' : '🤍'}
+              <Heart className={isFavorite ? 'fill-red-500 text-red-500 w-5 h-5' : 'w-5 h-5'} />
             </button>
           )}
         </div>
@@ -124,9 +115,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
       {selectedCategory?.id === category.id && (
         <div className="absolute top-2 right-2">
           <div className="w-6 h-6 bg-green-700 rounded-full flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+            <Check className="w-4 h-4 text-white" />
           </div>
         </div>
       )}

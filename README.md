@@ -112,50 +112,111 @@ src/
 │   │   ├── tv.hooks.ts
 │   │   ├── ChannelCategoriesList.tsx
 │   │   ├── FavoriteChannelsList.tsx
-│   │   └── FavoriteCategoriesList.tsx
+│   │   ├── FavoriteCategoriesList.tsx
+│   │   └── ChannelLogo.tsx
 │   ├── movies/             # Movies VOD feature
 │   │   ├── MovieList.tsx
 │   │   ├── MovieDetails.tsx
 │   │   ├── movies.api.ts
 │   │   ├── movies.hooks.ts
 │   │   ├── MovieCategoriesList.tsx
-│   │   └── FavoriteMovieCategoriesList.tsx
+│   │   ├── FavoriteMovieCategoriesList.tsx
+│   │   ├── FavoriteMoviesList.tsx
+│   │   └── ContinueWatching.tsx
 │   ├── series/             # Series VOD feature
 │   │   ├── SeriesList.tsx
+│   │   ├── SeriesDetails.tsx
 │   │   ├── series.api.ts
-│   │   └── series.hooks.ts
+│   │   ├── series.hooks.ts
+│   │   ├── SeriesCategoriesList.tsx
+│   │   ├── FavoriteSeriesCategoriesList.tsx
+│   │   └── FavoriteSeriesList.tsx
 │   ├── epg/                # EPG feature
 │   │   ├── EPGTimeline.tsx
 │   │   ├── epg.api.ts
 │   │   └── epg.hooks.ts
 │   ├── player/             # Video player feature
 │   │   ├── Player.tsx
-│   │   └── player.hooks.ts
-│   └── portals/            # Portal management
+│   │   ├── player.hooks.ts
+│   │   ├── mpv/            # MPV player integration
+│   │   └── exo/            # ExoPlayer integration (Android)
+│   ├── portals/            # Portal management
+│   │   ├── PortalList.tsx
+│   │   ├── PortalForm.tsx
+│   │   ├── PortalTest.tsx
+│   │   └── portals.types.ts
+│   ├── settings/           # Settings feature
+│   │   └── Settings.tsx
+│   └── personalized/       # Personalized content
+│       └── ForYouSection.tsx
 ├── components/
+│   ├── AppContent.tsx      # Main content router
+│   ├── AppLayout.tsx       # App layout with sidebar
+│   ├── ErrorBoundary.tsx   # Error boundary
+│   ├── theme-provider.tsx  # Theme provider
 │   └── ui/                 # Shared UI components
 ├── store/                  # Global state management
-├── lib/                    # Utilities and services
+│   ├── app.store.ts
+│   ├── accountStore.ts
+│   ├── playback.store.ts
+│   ├── portalCache.store.ts
+│   ├── portals.store.ts
+│   ├── resume.store.ts
+│   └── stream.store.ts
 ├── hooks/                  # Shared React hooks
-└── types/                  # TypeScript definitions
+│   ├── useSecureStorage.ts
+│   ├── useDatabase.ts
+│   ├── useImageCache.ts
+│   ├── useSettings.ts
+│   ├── usePlaybackManager.ts
+│   ├── useFavorites.ts
+│   ├── useTypedRouter.ts
+│   ├── useNavigationMenu.ts
+│   ├── useCategories.ts
+│   ├── useRecentItems.ts
+│   ├── useCarousel.ts
+│   ├── useDebounce.ts
+│   ├── useLongPress.ts
+│   ├── useTVContainers.ts
+│   ├── useTVFocusGraph.ts
+│   ├── useTVKeyboard.ts
+│   ├── useTranslation.ts
+│   ├── tv-navigation/      # TV navigation system
+│   └── index.ts
+├── lib/                    # Utilities and services
+│   ├── stalkerAPI_new.ts
+│   ├── tauriHttp.ts
+│   ├── tauriStorage.ts
+│   ├── schema.ts
+│   ├── services.ts
+│   ├── logger.ts
+│   ├── translations.ts
+│   ├── db.ts
+│   └── utils.ts
+├── types/                  # TypeScript definitions
+│   └── index.ts
+└── App.tsx                 # Main application component
 ```
 
 ### State Management
 ```typescript
-// Zustand store for global state
-interface AppStore {
-  favorites: {
-    channels: string[];
-    movies: string[];
-    series: string[];
-  };
-  // Actions...
-}
+// Multiple Zustand stores for different concerns
+// app.store.ts - Global app state (fullscreen, etc.)
+// accountStore.ts - Account management
+// playback.store.ts - Playback state
+// portalCache.store.ts - Portal data caching
+// portals.store.ts - Portal management
+// resume.store.ts - Resume playback state
+// stream.store.ts - Stream URL management
 ```
 
 ### Data Fetching
 - **TanStack Query**: Server state with caching and background updates
 - **Feature-specific hooks**: `useChannels`, `useMovies`, `useSeries`, `useEPG`
+- **Playback management**: `usePlaybackManager` for unified playback control
+- **Favorites management**: `useFavorites` for favorites across content types
+- **Navigation**: `useTypedRouter` for type-safe routing
+- **TV Navigation**: Comprehensive TV navigation system for Android TV
 - **Prefetching**: Hover-based stream URL prefetching
 
 ## Configuration
@@ -176,18 +237,22 @@ interface AppStore {
 
 ### Project Structure Principles
 
-1. **Feature-Based Organization**: Each feature (TV, Movies, Series, EPG, Player) has its own directory with components, hooks, and API co-located
+1. **Feature-Based Organization**: Each feature (TV, Movies, Series, EPG, Player, Portals, Settings, Personalized) has its own directory with components, hooks, and API co-located
 2. **Dependency Injection**: Components receive dependencies via props for testability
 3. **Clean API Layer**: Each feature has dedicated `.api.ts` files abstracting StalkerClient
 4. **Type Safety**: Full TypeScript coverage with shared types
+5. **Multi-Store State**: Zustand stores separated by concern (app, account, playback, portals, etc.)
+6. **TV Navigation**: Comprehensive TV navigation system for Android TV support
 
 ### Adding New Features
 
 1. Create feature directory in `/src/features/`
 2. Add API layer (`{feature}.api.ts`)
 3. Add hooks (`{feature}.hooks.ts`)
-4. Create main component (`{Feature}List.tsx`)
-5. Update navigation in `App-complete.tsx`
+4. Create main component (`{Feature}List.tsx` or similar)
+5. Update navigation in `useNavigationMenu.ts` hook
+6. Add routing in `useTypedRouter.ts` hook
+7. Update `AppContent.tsx` to render the new feature
 
 ### Available Scripts
 

@@ -4,6 +4,8 @@
 import React from 'react';
 import { PortalList } from './PortalList';
 
-export const PortalsPage: React.FC = () => {
+const PortalsPage: React.FC = () => {
   return <PortalList />;
 };
+
+export default PortalsPage;

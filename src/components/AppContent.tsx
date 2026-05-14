@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre, StalkerVOD, StalkerChannel } from '@/types';
 import { Route, isMovieDetails, isSeriesDetails } from '@/hooks/useTypedRouter';
+import { PortalAccount } from '@/features/portals/portals.types';
 
 // Lazy load components
 const TVList = lazy(() => import('@/features/tv/TVList').then(module => ({ default: module.TVList })));
@@ -9,7 +10,7 @@ const MovieList = lazy(() => import('@/features/movies/MovieList').then(module =
 const MovieDetails = lazy(() => import('@/features/movies/MovieDetails').then(module => ({ default: module.MovieDetails })));
 const SeriesList = lazy(() => import('@/features/series/SeriesList').then(module => ({ default: module.SeriesList })));
 const SeriesDetails = lazy(() => import('@/features/series/SeriesDetails').then(module => ({ default: module.SeriesDetails })));
-const PortalsPage = lazy(() => import('@/features/portals/PortalsPage').then(module => ({ default: module.PortalsPage })));
+const PortalsPage = lazy(() => import('@/features/portals/PortalsPage'));
 const ChannelCategoriesList = lazy(() => import('@/features/tv/ChannelCategoriesList').then(module => ({ default: module.ChannelCategoriesList })));
 const FavoriteCategoriesList = lazy(() => import('@/features/tv/FavoriteCategoriesList').then(module => ({ default: module.FavoriteCategoriesList })));
 const MovieCategoriesList = lazy(() => import('@/features/movies/MovieCategoriesList').then(module => ({ default: module.MovieCategoriesList })));
@@ -23,7 +24,7 @@ const ForYouSection = lazy(() => import('@/features/personalized/ForYouSection')
 
 interface AppContentProps {
   route: Route;
-  activePortal: any;
+  activePortal: PortalAccount | null;
   client: StalkerClient | null;
   search: string;
   selectedCategory: StalkerGenre | null;
@@ -63,12 +64,24 @@ export const AppContent: React.FC<AppContentProps> = ({
     );
   }
 
+  // Show error if no client
+  if (!client) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">No Connection</h2>
+          <p className="text-muted-foreground">Unable to connect to the portal. Please try again.</p>
+        </div>
+      </div>
+    );
+  }
+
   switch (route.type) {
     case 'tv':
       return (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading TV...</div>}>
           <TVList
-            client={client!}
+            client={client}
             accountId={activePortal.id}
             search={search}
             selectedCategory={selectedCategory}
@@ -81,7 +94,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       return (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Categories...</div>}>
           <ChannelCategoriesList
-            client={client!}
+            client={client}
             search={search}
             onCategorySelect={navigateToCategory}
           />
@@ -92,7 +105,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       return (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Categories...</div>}>
           <FavoriteCategoriesList
-            client={client!}
+            client={client}
             search={search}
             onCategorySelect={navigateToCategory}
           />
@@ -103,7 +116,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       return (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Channels...</div>}>
           <FavoriteChannelsList
-            client={client!}
+            client={client}
             accountId={activePortal.id}
             search={search}
             onChannelSelect={handleChannelSelect}
@@ -115,7 +128,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       return (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Movies...</div>}>
           <MovieList
-            client={client!}
+            client={client}
             selectedCategory={selectedCategory}
             onMovieSelect={navigateToMovie}
             search={search}
@@ -127,7 +140,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       return (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Movie Categories...</div>}>
           <MovieCategoriesList
-            client={client!}
+            client={client}
             search={search}
             onCategorySelect={navigateToCategory}
           />
@@ -138,7 +151,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       return (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Movie Categories...</div>}>
           <FavoriteMovieCategoriesList
-            client={client!}
+            client={client}
             search={search}
             onCategorySelect={navigateToCategory}
           />
@@ -172,7 +185,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       return (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Series...</div>}>
           <SeriesList
-            client={client!}
+            client={client}
             onSeriesSelect={navigateToSeries}
             selectedCategory={selectedCategory}
             search={search}
@@ -181,11 +194,11 @@ export const AppContent: React.FC<AppContentProps> = ({
       );
     
     case 'series-details':
-      return selectedSeries ? (
+      return selectedSeries && client ? (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Series Details...</div>}>
           <SeriesDetails
             series={selectedSeries}
-            client={client!}
+            client={client}
             onPlay={handleEpisodeSelect}
             onBack={goBack}
           />
@@ -196,7 +209,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       return (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Series Categories...</div>}>
           <SeriesCategoriesList
-            client={client!}
+            client={client}
             search={search}
             onCategorySelect={navigateToCategory}
           />
@@ -207,7 +220,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       return (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Favorite Series Categories...</div>}>
           <FavoriteSeriesCategoriesList
-            client={client!}
+            client={client}
             search={search}
             onCategorySelect={navigateToCategory}
           />
@@ -229,7 +242,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       return (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading For You...</div>}>
           <ForYouSection
-            client={client!}
+            client={client}
             onChannelSelect={handleChannelSelect}
             onSeriesSelect={navigateToSeries}
             onMoviePlay={handleMoviePlay}
@@ -239,9 +252,12 @@ export const AppContent: React.FC<AppContentProps> = ({
 
     default:
       return (
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center">Loading Portals...</div>}>
-          <PortalsPage />
-        </Suspense>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold mb-2">Page Not Found</h2>
+            <p className="text-muted-foreground">The requested page could not be found.</p>
+          </div>
+        </div>
       );
   }
 };

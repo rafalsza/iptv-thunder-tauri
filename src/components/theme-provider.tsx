@@ -1,11 +1,11 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 type Theme = 'dark' | 'light' | 'system';
 
 type ThemeProviderProps = {
-  children: React.ReactNode;
-  defaultTheme?: Theme;
-  storageKey?: string;
+  readonly children: ReactNode;
+  readonly defaultTheme?: Theme;
+  readonly storageKey?: string;
 };
 
 type ThemeProviderState = {
@@ -26,40 +26,58 @@ export function ThemeProvider({
   storageKey = 'iptv-thunder-ui-theme',
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  );
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored === 'light' || stored === 'dark' || stored === 'system') {
+        return stored as Theme;
+      }
+    } catch (error) {
+      console.error('Failed to read theme from localStorage:', error);
+    }
+    return defaultTheme;
+  });
 
   useEffect(() => {
-    const root = window.document.documentElement;
+    const root = globalThis.document.documentElement;
 
     root.classList.remove('light', 'dark');
 
     if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
-        .matches
-        ? 'dark'
-        : 'light';
+      const mediaQuery = globalThis.matchMedia('(prefers-color-scheme: dark)');
+      const systemTheme = mediaQuery.matches ? 'dark' : 'light';
 
       root.classList.add(systemTheme);
-      return;
+
+      const handleChange = () => {
+        const newSystemTheme = mediaQuery.matches ? 'dark' : 'light';
+        root.classList.remove('light', 'dark');
+        root.classList.add(newSystemTheme);
+      };
+
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
     }
 
     root.classList.add(theme);
   }, [theme]);
 
-  const value = {
-    theme,
-    setTheme: (theme: Theme) => {
-      setTheme(theme);
-      // Save to localStorage in background (non-blocking)
-      try {
-        localStorage.setItem(storageKey, theme);
-      } catch (error) {
-        console.error('Failed to save theme to localStorage:', error);
-      }
-    },
-  };
+  const setThemeHandler = useCallback((newTheme: Theme) => {
+    setTheme(newTheme);
+    try {
+      localStorage.setItem(storageKey, newTheme);
+    } catch (error) {
+      console.error('Failed to save theme to localStorage:', error);
+    }
+  }, [storageKey]);
+
+  const value = useMemo(
+    () => ({
+      theme,
+      setTheme: setThemeHandler,
+    }),
+    [theme]
+  );
 
   return (
     <ThemeProviderContext.Provider {...props} value={value}>
