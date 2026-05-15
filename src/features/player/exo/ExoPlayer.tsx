@@ -112,7 +112,8 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   // Fetch channels from the same category/genre for carousel
   const { data: categoryChannels, isLoading: channelsLoading } = useChannels(
     client!,
-    !isVod && genreId ? genreId : undefined
+    !isVod && genreId ? genreId : undefined,
+    false // Disable EPG prefetching when playing from for-you/recent-channels
   );
 
   React.useEffect(() => {

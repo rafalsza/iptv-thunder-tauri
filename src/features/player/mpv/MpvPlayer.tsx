@@ -38,7 +38,8 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
   // Fetch channels from the same category/genre
   const { data: categoryChannels } = useChannels(
     client!,
-    !isVod && genreId ? genreId : undefined
+    !isVod && genreId ? genreId : undefined,
+    false // Disable EPG prefetching when playing from for-you/recent-channels
   );
   const hasResumedRef = useRef(false);
   const urlChangeIdRef = useRef(0);
@@ -163,6 +164,7 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
   const handleSetSubTrack = useCallback((id: string) => void mpv.setSubTrack(id), [mpv.setSubTrack]);
   const handleFullscreen = useCallback(() => void controls.handleFullscreen(), [controls.handleFullscreen]);
   const handlePip = useCallback(() => void controls.handlePip(), [controls.handlePip]);
+  const handleSeekToBeginning = useCallback(() => void controls.seekTo(0, mpv.duration), [controls.seekTo, mpv.duration]);
 
   return (
     <main
@@ -248,6 +250,7 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
             onShowEPG={handleShowEPG}
             onSetAudioTrack={handleSetAudioTrack}
             onSetSubTrack={handleSetSubTrack}
+            onSeekToBeginning={handleSeekToBeginning}
             categoryChannels={!isVod && genreId ? categoryChannels : undefined}
             currentChannelId={channelId}
             onChannelSelect={handleChannelSelect}

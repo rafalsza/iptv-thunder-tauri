@@ -117,15 +117,23 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
   const favoriteChannels = useMemo((): StalkerChannel[] => {
     return dbFavorites
       .filter(f => f.type === 'live')
-      .map(f => ({
-        id: f.item_id,
-        name: f.name || 'Unknown Channel',
-        cmd: f.cmd || '',
-        logo: f.poster,
-        tv_genre_id: undefined,
-        number: 0,
-        censored: false,
-      }));
+      .map(f => {
+        let extraData: any = {};
+        try {
+          extraData = f.extra ? JSON.parse(f.extra) : {};
+        } catch {
+          extraData = {};
+        }
+        return {
+          id: f.item_id,
+          name: f.name || 'Unknown Channel',
+          cmd: f.cmd || '',
+          logo: f.poster,
+          tv_genre_id: extraData.genre_id ? Number(extraData.genre_id) : undefined,
+          number: 0,
+          censored: false,
+        };
+      });
   }, [dbFavorites]);
 
   // Apply search filter
@@ -142,6 +150,7 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
       name: channel.name,
       poster: channel.logo,
       cmd: channel.cmd,
+      extra: { genre_id: channel.tv_genre_id },
     });
     if (navigator.vibrate) {
       navigator.vibrate(50);
@@ -154,6 +163,7 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
       name: channel.name,
       poster: channel.logo,
       cmd: channel.cmd,
+      extra: { genre_id: channel.tv_genre_id },
     });
   };
 

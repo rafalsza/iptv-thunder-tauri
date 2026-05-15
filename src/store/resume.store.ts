@@ -12,7 +12,6 @@ interface MovieProgress {
 }
 
 interface ResumeState {
-  positions: Record<string, number>; // movieId -> time in seconds (legacy)
   movies: Record<string, MovieProgress>; // movieId -> full progress data
   setPosition: (movieId: string, time: number, duration?: number) => void;
   getPosition: (movieId: string) => number;
@@ -22,19 +21,31 @@ interface ResumeState {
   getWatchStatus: (movieId: string) => WatchStatus;
   getInProgressMovies: () => { movieId: string; progress: MovieProgress }[];
   getWatchedMovies: () => { movieId: string; progress: MovieProgress }[];
+  cleanupOldEntries: () => void;
 }
 
 const WATCHED_THRESHOLD = 90; // 90% ukończenia = obejrzane
-const MIN_WATCH_TIME = 30; // Minimum 30 sekund aby zapisać
+const MIN_WATCH_TIME = 30; // Minimum 30 sec
+const ENTRY_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+
+// Helper function to validate movieId
+const validateMovieId = (movieId: string): boolean => {
+  return typeof movieId === 'string' && movieId.length > 0;
+};
+
+// Helper function to check if entry is expired
+const isEntryExpired = (lastWatched: number): boolean => {
+  return Date.now() - lastWatched > ENTRY_TTL;
+};
 
 export const useResumeStore = create<ResumeState>()(
   persist(
     (set, get) => ({
-      positions: {},
       movies: {},
 
       setPosition: (movieId, time, duration = 0) => {
-        if (time < MIN_WATCH_TIME && time > 0) return; // Don't save if less than 30 seconds
+        if (!validateMovieId(movieId)) return;
+        if (time > 0 && time < MIN_WATCH_TIME) return; // Don't save if less than 30 seconds
 
         const percentage = duration > 0 ? Math.round((time / duration) * 100) : 0;
 
@@ -50,8 +61,7 @@ export const useResumeStore = create<ResumeState>()(
         if (time === 0) {
           set((state) => {
             const { [movieId]: _, ...restMovies } = state.movies;
-            const { [movieId]: __, ...restPositions } = state.positions;
-            return { movies: restMovies, positions: restPositions };
+            return { movies: restMovies };
           });
           return;
         }
@@ -65,13 +75,12 @@ export const useResumeStore = create<ResumeState>()(
         };
 
         set((state) => ({
-          positions: { ...state.positions, [movieId]: time },
           movies: { ...state.movies, [movieId]: progress },
         }));
       },
 
       getPosition: (movieId) => {
-        return get().movies[movieId]?.position || get().positions[movieId] || 0;
+        return get().movies[movieId]?.position || 0;
       },
 
       getProgress: (movieId) => {
@@ -79,14 +88,15 @@ export const useResumeStore = create<ResumeState>()(
       },
 
       clearPosition: (movieId) => {
+        if (!validateMovieId(movieId)) return;
         set((state) => {
           const { [movieId]: _, ...restMovies } = state.movies;
-          const { [movieId]: __, ...restPositions } = state.positions;
-          return { movies: restMovies, positions: restPositions };
+          return { movies: restMovies };
         });
       },
 
       markAsWatched: (movieId, duration) => {
+        if (!validateMovieId(movieId)) return;
         const progress: MovieProgress = {
           position: duration,
           duration,
@@ -96,7 +106,6 @@ export const useResumeStore = create<ResumeState>()(
         };
 
         set((state) => ({
-          positions: { ...state.positions, [movieId]: duration },
           movies: { ...state.movies, [movieId]: progress },
         }));
       },
@@ -120,10 +129,49 @@ export const useResumeStore = create<ResumeState>()(
           .sort((a, b) => b[1].lastWatched - a[1].lastWatched)
           .map(([movieId, progress]) => ({ movieId, progress }));
       },
+
+      cleanupOldEntries: () => {
+        set((state) => {
+          const filteredMovies = Object.entries(state.movies)
+            .filter(([_, progress]) => !isEntryExpired(progress.lastWatched))
+            .reduce((acc, [movieId, progress]) => {
+              acc[movieId] = progress;
+              return acc;
+            }, {} as Record<string, MovieProgress>);
+          return { movies: filteredMovies };
+        });
+      },
     }),
     {
       name: 'iptv-resume-positions',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => {
+        try {
+          return localStorage;
+        } catch (error) {
+          console.error('localStorage access failed:', error);
+          // Fallback to in-memory storage if localStorage fails
+          const inMemoryStorage: Storage = {
+            getItem: () => null,
+            setItem: () => {},
+            removeItem: () => {},
+            clear: () => {},
+            get length() { return 0; },
+            key: () => null,
+          };
+          return inMemoryStorage;
+        }
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // Cleanup old entries on rehydration
+          state.movies = Object.entries(state.movies)
+            .filter(([_, progress]) => !isEntryExpired(progress.lastWatched))
+            .reduce((acc, [movieId, progress]) => {
+              acc[movieId] = progress;
+              return acc;
+            }, {} as Record<string, MovieProgress>);
+        }
+      },
     }
   )
 );

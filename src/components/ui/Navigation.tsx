@@ -1,12 +1,13 @@
 // =========================
 // 🧭 NAVIGATION COMPONENT
 // =========================
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useRef, useMemo } from 'react';
 import { ChevronDown, Power, Lock } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { exit } from '@tauri-apps/plugin-process';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
+import packageJson from '../../../package.json';
 
 export type NavigationItem = {
   id: string;
@@ -23,6 +24,32 @@ export type NavigationItem = {
   }>;
 };
 
+// TV navigation index multiplier - creates spacing between main items for submenu indices
+const TV_INDEX_MULTIPLIER = 10;
+
+// Determine if a submenu should be expanded based on state and active sub-items
+const shouldExpandSubmenu = (
+  itemId: string,
+  expandedItem: string | null,
+  manuallyInteracted: Set<string>,
+  hasSubItems: boolean,
+  subItems?: NavigationItem['subItems']
+): boolean => {
+  if (!hasSubItems || !subItems) return false;
+  return expandedItem === itemId || (!expandedItem && !manuallyInteracted.has(itemId) && subItems.some((sub) => sub.active));
+};
+
+// Generate button classes based on item state
+const getButtonClass = (isActive: boolean, isDisabled: boolean, hasSubItems: boolean): string => {
+  if (isActive && !hasSubItems) {
+    return 'bg-green-700/90 text-white';
+  }
+  if (isDisabled) {
+    return 'dark:bg-slate-700/20 bg-gray-200/30 dark:text-slate-500 text-slate-500 cursor-not-allowed';
+  }
+  return 'dark:bg-slate-800/30 bg-gray-100/30 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 hover:text-white';
+};
+
 interface NavigationProps {
   items: NavigationItem[];
 }
@@ -30,12 +57,23 @@ interface NavigationProps {
 export const Navigation: React.FC<NavigationProps> = memo(({ items }) => {
   const { t } = useTranslation();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
-  const [manuallyInteracted, setManuallyInteracted] = useState<Set<string>>(new Set());
+  const manuallyInteracted = useRef<Set<string>>(new Set());
 
   const toggleSubmenu = (itemId: string) => {
-    setManuallyInteracted(prev => new Set(prev).add(itemId));
+    manuallyInteracted.current.add(itemId);
     setExpandedItem(expandedItem === itemId ? null : itemId);
   };
+
+  // Memoize computed values for each navigation item
+  const computedItems = useMemo(() => {
+    return items.map((item, index) => {
+      const hasSubItems = Boolean(item.subItems && item.subItems.length > 0);
+      const isExpanded = shouldExpandSubmenu(item.id, expandedItem, manuallyInteracted.current, hasSubItems, item.subItems);
+      const baseIndex = index * TV_INDEX_MULTIPLIER;
+      const buttonClass = getButtonClass(Boolean(item.active), Boolean(item.disabled), hasSubItems);
+      return { item, hasSubItems, isExpanded, baseIndex, buttonClass };
+    });
+  }, [items, expandedItem]);
 
   const handleCloseApp = async () => {
     try {
@@ -64,19 +102,7 @@ export const Navigation: React.FC<NavigationProps> = memo(({ items }) => {
 
       {/* Navigation Items */}
       <nav className="flex-1 p-2 md:p-3 lg:p-4 gap-2 md:gap-3 space-y-2 md:space-y-3 overflow-y-auto scrollbar-hide">
-        {items.map((item, index) => {
-          const hasSubItems = item.subItems && item.subItems.length > 0;
-          const isExpanded = hasSubItems && (expandedItem === item.id || (!expandedItem && !manuallyInteracted.has(item.id) && item.subItems?.some((sub) => sub.active)));
-          const baseIndex = index * 10;
-
-          let buttonClass;
-          if (item.active && !hasSubItems) {
-            buttonClass = 'bg-green-700/90 text-white';
-          } else if (item.disabled) {
-            buttonClass = 'dark:bg-slate-700/20 bg-gray-200/30 dark:text-slate-500 text-slate-500 cursor-not-allowed';
-          } else {
-            buttonClass = 'dark:bg-slate-800/30 bg-gray-100/30 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 hover:text-white';
-          }
+        {computedItems.map(({ item, hasSubItems, isExpanded, baseIndex, buttonClass }) => {
 
           return (
             <div key={item.id} className="relative group">
@@ -95,10 +121,9 @@ export const Navigation: React.FC<NavigationProps> = memo(({ items }) => {
                     item.onClick();
                   }
                 }}
-                onFocus={() => {
-                  // Focus handler
-                }}
                 disabled={item.disabled}
+                aria-expanded={hasSubItems ? isExpanded : undefined}
+                aria-controls={hasSubItems ? `submenu-${item.id}` : undefined}
                 className={`w-full text-left px-3 md:px-4 py-2.5 md:py-3 rounded-xl md:rounded-2xl flex items-center gap-3 md:gap-4 transition-all duration-200 relative overflow-hidden group ${buttonClass}`}
               >
                 {/* Active state gradient overlay */}
@@ -106,7 +131,7 @@ export const Navigation: React.FC<NavigationProps> = memo(({ items }) => {
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10"
                     animate={{ x: ['-100%', '100%'] }}
-                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                    transition={{ duration: 2, repeat: 10, ease: 'linear' }}
                   />
                 )}
                 
@@ -195,7 +220,7 @@ export const Navigation: React.FC<NavigationProps> = memo(({ items }) => {
         </motion.button>
 
         <div className="text-center py-2 md:py-3">
-          <p className="text-xs md:text-sm dark:text-slate-500 text-slate-400">v1.0.0</p>
+          <p className="text-xs md:text-sm dark:text-slate-500 text-slate-400">v{packageJson.version}</p>
         </div>
       </div>
     </div>

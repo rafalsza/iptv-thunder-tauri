@@ -99,6 +99,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
     e.preventDefault();
     
     if (!validateForm()) {
+      showToast(t('fixErrors'), 'error');
       return;
     }
 
@@ -165,6 +166,8 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               data-tv-index="0"
               tabIndex={0}
               type="text"
+              inputMode="text"
+              autoComplete="off"
               value={formData.name}
               onChange={(e) => handleInputChange('name', e.target.value)}
               className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl text-white placeholder-slate-500 transition-all duration-200 ${
@@ -189,6 +192,8 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               data-tv-index="1"
               tabIndex={0}
               type="url"
+              inputMode="url"
+              autoComplete="off"
               value={formData.portalUrl}
               onChange={(e) => handleInputChange('portalUrl', e.target.value)}
               className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl text-white placeholder-slate-500 transition-all duration-200 ${
@@ -212,6 +217,8 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
                 data-tv-index="2"
                 tabIndex={0}
                 type="text"
+                inputMode="text"
+                autoComplete="off"
                 value={formData.mac}
                 onChange={(e) => handleInputChange('mac', e.target.value.toUpperCase())}
                 className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl text-white placeholder-slate-500 font-mono transition-all duration-200 ${

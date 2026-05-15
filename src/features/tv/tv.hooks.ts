@@ -10,7 +10,7 @@ import { saveChannels, upsertChannels, getChannels as getChannelsFromDB, searchC
 import { getChannelEPG, getEPGTimeRange } from '@/features/epg/epg.api';
 import { getGenres, getChannels } from './tv.api';
 
-export const useChannels = (client: StalkerClient, genreId?: string) => {
+export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG: boolean = true) => {
   const accountId = client?.['account']?.id || 'default';
   const prevSignatureRef = useRef<string>('');
   
@@ -134,7 +134,7 @@ export const useChannels = (client: StalkerClient, genreId?: string) => {
   
   useEffect(() => {
     const channels = query.data;
-    if (!channels || channels.length === 0 || !client) return;
+    if (!channels || channels.length === 0 || !client || !prefetchEPG) return;
 
     const { from, to } = getEPGTimeRange(4);
     const channelsToPrefetch = channels.slice(0, 20);

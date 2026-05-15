@@ -121,6 +121,7 @@ export const translations = {
     invalidUrl: 'Nieprawidłowy format URL',
     macRequired: 'Adres MAC jest wymagany',
     invalidMac: 'Nieprawidłowy format MAC (np. 00:1A:79:84:1A:AB)',
+    fixErrors: 'Proszę poprawić błędy przed wysłaniem',
     editPortal: 'Edytuj Portal',
     addNewPortal: 'Dodaj Nowy Portal',
     connectionTest: 'Test Połączenia',
@@ -279,6 +280,12 @@ export const translations = {
     allChannelsSelected: 'Wybrano wszystkie kanały',
     categoryChannelsSelected: 'Wybrano kategorię kanałów #{{id}}',
     showChannels: 'Pokaż kanały',
+
+    // Title Bar
+    minimizeWindow: 'Minimalizuj okno',
+    maximizeWindow: 'Maksymalizuj okno',
+    restoreWindow: 'Przywróć okno',
+    closeWindow: 'Zamknij okno',
   },
 
   en: {
@@ -399,6 +406,7 @@ export const translations = {
     invalidUrl: 'Invalid URL format',
     macRequired: 'MAC address is required',
     invalidMac: 'Invalid MAC format (e.g. 00:1A:79:84:1A:AB)',
+    fixErrors: 'Please fix the errors before submitting',
     editPortal: 'Edit Portal',
     addNewPortal: 'Add New Portal',
     connectionTest: 'Connection Test',
@@ -557,6 +565,12 @@ export const translations = {
     allChannelsSelected: 'All channels selected',
     categoryChannelsSelected: 'Channel category #{{id}} selected',
     showChannels: 'Show channels',
+
+    // Title Bar
+    minimizeWindow: 'Minimize window',
+    maximizeWindow: 'Maximize window',
+    restoreWindow: 'Restore window',
+    closeWindow: 'Close window',
   }
 } as const;
 

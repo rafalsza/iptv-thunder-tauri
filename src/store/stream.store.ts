@@ -18,24 +18,65 @@ try {
     }
   }
 } catch (err) {
-  console.error('Error checking stream store size:', err);
-  localStorage.removeItem(STORAGE_KEY);
+  // Only clear storage on quota or parsing errors, not other errors
+  const errorMessage = err instanceof Error ? err.message : String(err);
+  if (errorMessage.includes('quota') || errorMessage.includes('storage') || err instanceof SyntaxError) {
+    console.error('Storage quota or parse error, clearing:', err);
+    localStorage.removeItem(STORAGE_KEY);
+  } else {
+    console.error('Error checking stream store size (not clearing storage):', err);
+  }
 }
 
 type StreamStats = {
-  url: string;
-  successRate: number;
-  successes: number;
-  fails: number;
-  lastSuccess?: number;
+  readonly url: string;
+  readonly successRate: number;
+  readonly successes: number;
+  readonly fails: number;
+  readonly lastSuccess?: number;
+};
+
+// Helper function to validate URL
+const isValidUrl = (url: unknown): url is string => {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Helper function to trim streams to MAX_STREAMS by lastSuccess
+const trimStreams = (streams: Record<string, StreamStats>): Record<string, StreamStats> => {
+  const entries = Object.entries(streams);
+  if (entries.length <= MAX_STREAMS) return streams;
+
+  const sorted = entries.toSorted((a, b) => {
+    const aTime = a[1].lastSuccess || 0;
+    const bTime = b[1].lastSuccess || 0;
+    return bTime - aTime;
+  });
+
+  const trimmed = sorted.slice(0, MAX_STREAMS);
+  const newStreams: Record<string, StreamStats> = {};
+  for (const [url, stats] of trimmed) {
+    newStreams[url] = stats;
+  }
+  return newStreams;
 };
 
 type Store = {
-  streams: Record<string, StreamStats>;
+  readonly streams: Record<string, StreamStats>;
   success: (url: string) => void;
   fail: (url: string) => void;
   cleanup: () => void;
   clear: () => void;
+  // Selector methods for common queries
+  getStreamStats: (url: string) => StreamStats | undefined;
+  getTopStreams: (limit?: number) => StreamStats[];
+  getStreamCount: () => number;
+  getAverageSuccessRate: () => number;
 };
 
 export const useStreamStore = create<Store>()(
@@ -43,10 +84,12 @@ export const useStreamStore = create<Store>()(
     (set, get) => ({
       streams: {},
 
-      success: (url) => {
-        const s = get().streams[url] || {
+      success: (url: string) => {
+        if (!isValidUrl(url)) return;
+        const { streams } = get();
+        const s: StreamStats = streams[url] || {
           url,
-          successRate: 0.5,
+          successRate: 0,
           successes: 0,
           fails: 0,
         };
@@ -54,47 +97,35 @@ export const useStreamStore = create<Store>()(
         const successes = s.successes + 1;
         const total = successes + s.fails;
 
-        // Cleanup BEFORE set to prevent quota errors
-        const streams = get().streams;
-        const entries = Object.entries(streams);
-        if (entries.length > MAX_STREAMS) {
-          const sorted = entries.sort((a, b) => {
-            const aTime = a[1].lastSuccess || 0;
-            const bTime = b[1].lastSuccess || 0;
-            return bTime - aTime;
-          });
-          const trimmed = sorted.slice(0, MAX_STREAMS);
-          const newStreams: Record<string, StreamStats> = {};
-          for (const [u, stats] of trimmed) {
-            newStreams[u] = stats;
+        const updatedStream: StreamStats = {
+          ...s,
+          successes,
+          successRate: successes / total,
+          lastSuccess: Date.now(),
+        };
+
+        const trimmed = trimStreams(streams);
+        trimmed[url] = updatedStream;
+        try {
+          set({ streams: trimmed });
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          if (errorMessage.includes('quota') || errorMessage.includes('storage')) {
+            console.error('Storage quota exceeded in success:', err);
+            // Trigger cleanup to free space
+            get().cleanup();
+          } else {
+            console.error('Error updating stream stats:', err);
           }
-          // Add/update current URL before setting
-          newStreams[url] = {
-            ...s,
-            successes,
-            successRate: successes / total,
-            lastSuccess: Date.now(),
-          };
-          set({ streams: newStreams });
-        } else {
-          set({
-            streams: {
-              ...get().streams,
-              [url]: {
-                ...s,
-                successes,
-                successRate: successes / total,
-                lastSuccess: Date.now(),
-              }
-            }
-          });
         }
       },
 
-      fail: (url) => {
-        const s = get().streams[url] || {
+      fail: (url: string) => {
+        if (!isValidUrl(url)) return;
+        const { streams } = get();
+        const s: StreamStats = streams[url] || {
           url,
-          successRate: 0.5,
+          successRate: 0,
           successes: 0,
           fails: 0,
         };
@@ -102,42 +133,68 @@ export const useStreamStore = create<Store>()(
         const fails = s.fails + 1;
         const total = fails + s.successes;
 
-        set({
-          streams: {
-            ...get().streams,
-            [url]: {
-              ...s,
-              fails,
-              successRate: s.successes / total,
+        try {
+          set({
+            streams: {
+              ...streams,
+              [url]: {
+                ...s,
+                fails,
+                successRate: s.successes / total,
+              }
             }
+          });
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          if (errorMessage.includes('quota') || errorMessage.includes('storage')) {
+            console.error('Storage quota exceeded in fail:', err);
+            // Trigger cleanup to free space
+            get().cleanup();
+          } else {
+            console.error('Error updating stream stats:', err);
           }
-        });
+        }
       },
 
       cleanup: () => {
         const streams = get().streams;
-        const entries = Object.entries(streams);
-
-        if (entries.length <= MAX_STREAMS) return;
-
-        // Sort by lastSuccess (most recent first), keep top MAX_STREAMS
-        const sorted = entries.sort((a, b) => {
-          const aTime = a[1].lastSuccess || 0;
-          const bTime = b[1].lastSuccess || 0;
-          return bTime - aTime;
-        });
-
-        const trimmed = sorted.slice(0, MAX_STREAMS);
-        const newStreams: Record<string, StreamStats> = {};
-        for (const [url, stats] of trimmed) {
-          newStreams[url] = stats;
+        const trimmed = trimStreams(streams);
+        try {
+          set({ streams: trimmed });
+        } catch (err) {
+          console.error('Error during cleanup:', err);
         }
-
-        set({ streams: newStreams });
       },
 
       clear: () => {
         set({ streams: {} });
+      },
+
+      // Selector methods for common queries
+      getStreamStats: (url: string) => {
+        if (!isValidUrl(url)) return undefined;
+        const { streams } = get();
+        return streams[url];
+      },
+
+      getTopStreams: (limit: number = 10) => {
+        const { streams } = get();
+        const entries = Object.entries(streams);
+        const sorted = entries.toSorted((a, b) => b[1].successRate - a[1].successRate);
+        return sorted.slice(0, limit).map(([, stats]) => stats);
+      },
+
+      getStreamCount: () => {
+        const { streams } = get();
+        return Object.keys(streams).length;
+      },
+
+      getAverageSuccessRate: () => {
+        const { streams } = get();
+        const entries = Object.entries(streams);
+        if (entries.length === 0) return 0;
+        const total = entries.reduce((sum, [, stats]) => sum + stats.successRate, 0);
+        return total / entries.length;
       },
     }),
     { name: STORAGE_KEY }

@@ -151,10 +151,20 @@
             android:layout_marginTop="8dp">
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/seek_to_beginning_button"
+                style="@style/PlayerControlButton"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                app:icon="@drawable/ic_first"
+                app:iconSize="28dp"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/seek_backward_button"
                 style="@style/PlayerControlButton"
                 android:layout_width="56dp"
                 android:layout_height="56dp"
+                android:layout_marginStart="12dp"
                 app:icon="@drawable/ic_replay_10"
                 app:iconSize="28dp" />
 

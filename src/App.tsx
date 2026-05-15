@@ -17,6 +17,7 @@ import { usePlaybackManager } from '@/hooks/usePlaybackManager';
 import { useNavigationMenu } from '@/hooks/useNavigationMenu';
 import { AppLayout } from '@/components/AppLayout';
 import { AppContent } from '@/components/AppContent';
+import { StalkerAccount } from '@/types';
 
 // Create a client with persistent cache
 const queryClient = new QueryClient({
@@ -34,11 +35,22 @@ const persister = createAsyncStoragePersister({
   storage: globalThis.localStorage,
 });
 
-interface AppProps {
-  // Remove activeAccount prop - we'll get it from store
+// Helper function to convert PortalAccount to StalkerAccount
+function portalToStalkerAccount(portal: { id: string; name: string; portalUrl: string; mac: string; token?: string; expiresAt?: Date; login?: string }): StalkerAccount {
+  return {
+    id: portal.id,
+    name: portal.name,
+    portalUrl: portal.portalUrl,
+    mac: portal.mac,
+    token: portal.token,
+    expiresAt: portal.expiresAt,
+    login: portal.login,
+    lastUsed: new Date(),
+    isActive: true,
+  };
 }
 
-function AppInner({ }: AppProps) {
+function AppInner() {
   const [search, setSearch] = React.useState('');
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
 
@@ -59,7 +71,7 @@ function AppInner({ }: AppProps) {
         console.debug('Not hiding decorations (not in Tauri):', err);
       }
     };
-    hideDecorations();
+    void hideDecorations();
   }, []);
 
   // Routing logic
@@ -91,7 +103,7 @@ function AppInner({ }: AppProps) {
 
   // Create client only when we have an active portal (memoized to avoid recreation on every render)
   const client = useMemo(() => 
-    activePortal ? new StalkerClient(activePortal as any) : null,
+    activePortal ? new StalkerClient(portalToStalkerAccount(activePortal)) : null,
     [activePortal]
   );
 
@@ -174,7 +186,7 @@ function AppInner({ }: AppProps) {
   );
 }
 
-export const App: React.FC<AppProps> = ({ }) => {
+export const App: React.FC = () => {
   const [isAndroid, setIsAndroid] = useState(false);
 
   useEffect(() => {
@@ -182,7 +194,7 @@ export const App: React.FC<AppProps> = ({ }) => {
       const osPlatform = platform();
       setIsAndroid(osPlatform === 'android');
     } catch (e) {
-      console.log('[App] Platform detection failed:', e);
+      console.error('[App] Platform detection failed:', e);
       setIsAndroid(false);
     }
   }, []);

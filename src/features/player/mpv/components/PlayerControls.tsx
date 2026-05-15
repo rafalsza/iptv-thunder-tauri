@@ -26,6 +26,7 @@ interface PlayerControlsProps {
   onShowEPG: () => void;
   onSetAudioTrack: (id: string) => void;
   onSetSubTrack: (id: string) => void;
+  onSeekToBeginning?: () => void;
   categoryChannels?: any[];
   currentChannelId?: number;
   onChannelSelect?: (channel: any) => void;
@@ -35,7 +36,7 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
   isVod, streamState, isFullscreen, isPip, showUi, isPaused, volume,
   currentTime, duration, tracks, currentAudioId, currentSubId,
   onPlayPause, onFullscreen, onPip, onClose,
-  onVolumeChange, onProgressClick, onShowEPG, onSetAudioTrack, onSetSubTrack,
+  onVolumeChange, onProgressClick, onShowEPG, onSetAudioTrack, onSetSubTrack, onSeekToBeginning,
   categoryChannels, currentChannelId, onChannelSelect
 }) => {
   const { t } = useTranslation();
@@ -58,8 +59,24 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
         padding: '16px 20px 20px',
       }}>
       <div className="flex items-center justify-between">
-        {/* Left: Play/Pause */}
+        {/* Left: Controls */}
         <div className="flex items-center gap-3">
+          {/* From Beginning Button - VOD only */}
+          {isVod && onSeekToBeginning && (
+            <button
+              data-tv-focusable
+              tabIndex={0}
+              onClick={onSeekToBeginning}
+              className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+              title="Od początku"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+              </svg>
+            </button>
+          )}
+
+          {/* Play/Pause */}
           <button
             data-tv-focusable
             tabIndex={0}

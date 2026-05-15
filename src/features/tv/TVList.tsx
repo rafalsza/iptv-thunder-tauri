@@ -240,6 +240,7 @@ export const TVList: React.FC<TVListProps> = ({
       name: channel.name,
       poster: channel.logo,
       cmd: channel.cmd,
+      extra: { genre_id: channel.tv_genre_id },
     });
     if (navigator.vibrate) {
       navigator.vibrate(50);
@@ -252,6 +253,7 @@ export const TVList: React.FC<TVListProps> = ({
       name: channel.name,
       poster: channel.logo,
       cmd: channel.cmd,
+      extra: { genre_id: channel.tv_genre_id },
     });
   }, [toggleItemFavorite]);
 

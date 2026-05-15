@@ -29,6 +29,7 @@ class UiController(
     private val playPauseButton: MaterialButton?,
     private val seekForwardButton: MaterialButton?,
     private val seekBackwardButton: MaterialButton?,
+    private val seekToBeginningButton: MaterialButton?,
     private val trackSelectButton: MaterialButton?,
     private val statusIndicator: View?,
     private val getDuration: () -> Long,
@@ -36,6 +37,7 @@ class UiController(
     private val onPlayPause: () -> Unit,
     private val onSeekForward: () -> Unit,
     private val onSeekBackward: () -> Unit,
+    private val onSeekToBeginning: () -> Unit = {},
     private val formatTime: (Long) -> String,
     private val getTrackInfo: () -> PlayerController.PlayerUiState? = { null },
     private val onSelectAudioTrack: (String?) -> Unit = {},
@@ -54,7 +56,7 @@ class UiController(
         private set
 
     private val focusableButtons by lazy {
-        listOf(playPauseButton, seekBackwardButton, seekForwardButton, trackSelectButton)
+        listOf(seekToBeginningButton, playPauseButton, seekBackwardButton, seekForwardButton, trackSelectButton)
     }
 
     private var currentTrackInfo: PlayerController.PlayerUiState? = null
@@ -82,11 +84,14 @@ class UiController(
         playPauseButton?.isFocusable = true
         seekForwardButton?.isFocusable = true
         seekBackwardButton?.isFocusable = true
+        seekToBeginningButton?.isFocusable = true
         trackSelectButton?.isFocusable = true
 
         playPauseButton?.nextFocusRightId = seekForwardButton?.id ?: 0
         playPauseButton?.nextFocusLeftId = seekBackwardButton?.id ?: 0
         seekBackwardButton?.nextFocusRightId = playPauseButton?.id ?: 0
+        seekBackwardButton?.nextFocusLeftId = seekToBeginningButton?.id ?: 0
+        seekToBeginningButton?.nextFocusRightId = seekBackwardButton?.id ?: 0
         seekForwardButton?.nextFocusLeftId = playPauseButton?.id ?: 0
         seekForwardButton?.nextFocusRightId = trackSelectButton?.id ?: 0
         trackSelectButton?.nextFocusLeftId = seekForwardButton?.id ?: 0
@@ -157,6 +162,10 @@ class UiController(
         trackSelectButton?.visibility = if (hasMultipleTracks) View.VISIBLE else View.GONE
     }
 
+    fun updateSeekToBeginningButtonVisibility(isVod: Boolean) {
+        seekToBeginningButton?.visibility = if (isVod) View.VISIBLE else View.GONE
+    }
+
     fun updateTrackInfo(info: PlayerController.PlayerUiState) {
         currentTrackInfo = info
         updateTrackButtonVisibility(info.hasMultipleTracks)
@@ -199,6 +208,11 @@ class UiController(
 
         seekBackwardButton?.setOnClickListener {
             onSeekBackward()
+            resetHideTimer()
+        }
+
+        seekToBeginningButton?.setOnClickListener {
+            onSeekToBeginning()
             resetHideTimer()
         }
     }

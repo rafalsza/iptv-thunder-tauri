@@ -46,17 +46,24 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
     onSelect(category);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelect(category);
+    }
+  };
+
   return (
-    <div
+    <button
       ref={ref}
       data-tv-focusable
       data-tv-id={`category-${category.id}`}
       data-tv-group={groupId}
       data-tv-index={categoryIndex}
       data-tv-initial={categoryIndex === 0}
-      tabIndex={0}
       {...longPressHandlers}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
       onContextMenu={(e) => {
         e.preventDefault();
         onLongPress(category);
@@ -69,6 +76,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
           : 'dark:border-slate-600 border-gray-300 hover:border-green-700'
         }
       `}
+      type="button"
     >
       {/* Category Icon/Number */}
       <div className="flex items-center justify-between mb-2 sm:mb-3">
@@ -88,11 +96,12 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
           {/* Favorite Button */}
           {onToggleFavorite && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleFavorite(e, categoryId, categoryName);
               }}
-              className="hover:scale-110 transition-transform bg-transparent border-0 p-0"
+              className="hover:scale-110 transition-transform cursor-pointer bg-transparent border-0 p-0"
               title={isFavorite ? t('removeFromFavorites') : t('addToFavorites')}
               aria-label={isFavorite ? t('removeFromFavorites') : t('addToFavorites')}
               aria-pressed={isFavorite}
@@ -122,6 +131,6 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
 
       {/* Hover Effect Overlay */}
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-700 to-transparent opacity-0 hover:opacity-5 transition-opacity duration-200 rounded-xl pointer-events-none" />
-    </div>
+    </button>
   );
 };

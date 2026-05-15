@@ -1,6 +1,5 @@
 // =========================
 // 💾 MODERN PORTALS STORE (Zustand v5 + Immer)
-// Cache-bust: 2024-04-01-001
 // =========================
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
@@ -54,7 +53,7 @@ export const usePortalsStore = create<PortalsState>()(
       portals: [],
       activePortalId: null,
       externalEpgUrl: null,
-      selectedEpgService: 'auto',
+      selectedEpgService: null,
 
       addPortal: (portalData) => {
         set((state) => {
@@ -93,9 +92,10 @@ export const usePortalsStore = create<PortalsState>()(
           // Clear React Query persisted cache from localStorage
           localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
           logger.debug('Database, categories cache, and React Query cache cleared for portal:', id);
-        } catch (error: any) {
+        } catch (error: unknown) {
           // Ignore if database has old schema (missing portal_id column)
-          if (error?.message?.includes('no such column') || error?.message?.includes('no such table')) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (errorMessage.includes('no such column') || errorMessage.includes('no such table')) {
             logger.debug('Database has old schema, skipping cleanup');
           } else {
             logger.error('Error clearing database for portal:', id, error);
@@ -144,10 +144,6 @@ export const usePortalsStore = create<PortalsState>()(
       setSelectedEpgService: (serviceId) => {
         set((state) => {
           state.selectedEpgService = serviceId;
-          const service = PREDEFINED_EPG_SERVICES.find(s => s.id === serviceId);
-          if (service && serviceId !== 'custom') {
-            state.externalEpgUrl = service.url || null;
-          }
         });
       },
 

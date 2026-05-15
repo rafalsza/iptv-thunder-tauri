@@ -29,6 +29,7 @@ class NativePlayerActivity : AppCompatActivity() {
     // Views
     private var playerView: PlayerView? = null
     private var progressBar: ProgressBar? = null
+    private var seekToBeginningButton: com.google.android.material.button.MaterialButton? = null
     private var channelCarouselButton: com.google.android.material.button.MaterialButton? = null
     private var channelCarouselContainer: android.widget.HorizontalScrollView? = null
     private var channelCarousel: android.widget.LinearLayout? = null
@@ -117,6 +118,7 @@ class NativePlayerActivity : AppCompatActivity() {
     private fun initializeViews() {
         playerView = findViewById(R.id.player_view)
         progressBar = findViewById(R.id.loading_spinner)
+        seekToBeginningButton = findViewById(R.id.seek_to_beginning_button)
         channelCarouselButton = findViewById(R.id.channel_carousel_button)
         channelCarouselContainer = findViewById(R.id.channel_carousel_container)
         channelCarousel = findViewById(R.id.channel_carousel)
@@ -185,6 +187,7 @@ class NativePlayerActivity : AppCompatActivity() {
             playPauseButton = findViewById(R.id.play_pause_button),
             seekForwardButton = findViewById(R.id.seek_forward_button),
             seekBackwardButton = findViewById(R.id.seek_backward_button),
+            seekToBeginningButton = seekToBeginningButton,
             trackSelectButton = findViewById(R.id.track_select_button),
             statusIndicator = findViewById(R.id.status_indicator),
             getDuration = { playerController.player?.duration ?: 0L },
@@ -195,6 +198,7 @@ class NativePlayerActivity : AppCompatActivity() {
             onPlayPause = { playerController.togglePlayPause() },
             onSeekForward = { playerController.seekRelative(10000) },
             onSeekBackward = { playerController.seekRelative(-10000) },
+            onSeekToBeginning = { playerController.seekTo(0) },
             formatTime = ::formatTime,
             getTrackInfo = { playerController.currentUiState },
             onSelectAudioTrack = { trackId -> playerController.selectAudioTrack(trackId) },
@@ -299,6 +303,7 @@ class NativePlayerActivity : AppCompatActivity() {
         uiController.updateQualityLabel(state.videoQuality)
         uiController.updateSeekBar(state.currentProgress, state.duration, state.currentPosition, state.isVod)
         uiController.updateTrackInfo(state)
+        uiController.updateSeekToBeginningButtonVisibility(state.isVod)
     }
 
     private fun loadResumePosition() {
