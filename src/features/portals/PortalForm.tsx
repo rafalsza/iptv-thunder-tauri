@@ -36,12 +36,28 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
     onBack: onClose,
   });
 
+  // Show keyboard when input is focused on Android TV
+  const showKeyboard = () => {
+    if ((window as any).AndroidTV?.showKeyboard) {
+      (window as any).AndroidTV.showKeyboard();
+    }
+  };
+
+  const hideKeyboard = () => {
+    if ((window as any).AndroidTV?.hideKeyboard) {
+      (window as any).AndroidTV.hideKeyboard();
+    }
+  };
+
   useEffect(() => {
     const modal = modalRef.current;
     if (modal) {
       setActiveContainer(modal);
     }
-    return () => setActiveContainer(null);
+    return () => {
+      setActiveContainer(null);
+      hideKeyboard();
+    };
   }, [setActiveContainer]);
 
   useEffect(() => {
@@ -170,6 +186,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               autoComplete="off"
               value={formData.name}
               onChange={(e) => handleInputChange('name', e.target.value)}
+              onFocus={showKeyboard}
               className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl text-white placeholder-slate-500 transition-all duration-200 ${
                 errors.name ? 'border-red-500' : 'border-slate-700'
               }`}
@@ -196,6 +213,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               autoComplete="off"
               value={formData.portalUrl}
               onChange={(e) => handleInputChange('portalUrl', e.target.value)}
+              onFocus={showKeyboard}
               className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl text-white placeholder-slate-500 transition-all duration-200 ${
                 errors.portalUrl ? 'border-red-500' : 'border-slate-700'
               }`}
@@ -221,6 +239,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
                 autoComplete="off"
                 value={formData.mac}
                 onChange={(e) => handleInputChange('mac', e.target.value.toUpperCase())}
+                onFocus={showKeyboard}
                 className={`w-full px-4 py-2.5 bg-slate-800/50 border rounded-xl text-white placeholder-slate-500 font-mono transition-all duration-200 ${
                   errors.mac ? 'border-red-500' : 'border-slate-700'
                 }`}

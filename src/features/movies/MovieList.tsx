@@ -15,6 +15,7 @@ import { useLongPress } from '@/hooks/useLongPress';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerVOD, StalkerGenre } from '@/types';
 import { ContinueWatching } from './ContinueWatching';
+import { platform } from '@tauri-apps/plugin-os';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -28,6 +29,17 @@ const getRowHeight = () => {
 };
 
 const IMAGE_CACHE_LIMIT = 500;
+
+// ─── Platform detection ─────────────────────────────────────────────────────────────
+
+const isMobilePlatform = () => {
+  try {
+    const os = platform();
+    return os === 'android' || os === 'ios';
+  } catch {
+    return false; // Default to desktop if platform detection fails
+  }
+};
 
 // ─── Image cache (module-level, survives re-renders, bounded size) ─────────────
 
@@ -114,11 +126,9 @@ const MovieCard = React.memo<MovieCardProps>(({
   const handleClick = () => {
     // Save focus before navigation for restoration when closing details
     const focusedEl = document.activeElement as HTMLElement;
-    console.log('[MovieList] handleClick - activeElement:', focusedEl?.dataset?.tvId, 'index:', focusedEl?.dataset?.tvIndex);
     if (focusedEl?.dataset.tvId) {
       (window as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
       (window as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
-      console.log('[MovieList] Saved focus:', focusedEl.dataset.tvId, 'index:', focusedEl.dataset.tvIndex);
     }
     // For mouse/touch, let useLongPress handle it
     if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
@@ -169,8 +179,8 @@ const MovieCard = React.memo<MovieCardProps>(({
       data-tv-group="movies"
       data-tv-index={moviesIndex}
       tabIndex={0}
-      onMouseEnter={() => onPrefetch(movie)}
-      onFocus={() => onPrefetch(movie)}
+      onMouseEnter={isMobilePlatform() ? undefined : () => onPrefetch(movie)}
+      onFocus={isMobilePlatform() ? () => onPrefetch(movie) : undefined}
       onClick={handleClick}
       onKeyUp={handleKeyUp}
       onContextMenu={(e) => {

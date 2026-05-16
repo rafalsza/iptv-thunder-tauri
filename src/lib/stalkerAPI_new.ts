@@ -607,7 +607,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
   /**
    * Pobieranie linku do odtwarzania (cmd → pełny URL strumienia)
    */
-  async getStreamUrl(cmd: string, options?: { signal?: AbortSignal }): Promise<string> {
+  async getStreamUrl(cmd: string, options?: { signal?: AbortSignal; genreId?: string }): Promise<string> {
     await this.ensureAuthenticated();
 
     // Replace MAC in cmd with current account MAC
@@ -626,6 +626,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
       JsHttpRequest: '1-xml',
     };
     if (streamId) params.stream = streamId;
+    if (options?.genreId) params.genre = options.genreId;
 
     const response = await this._makeRequest(params, options?.signal);
     const streamUrl = this.useTauri ? response?.js?.cmd : response.data?.js?.cmd;

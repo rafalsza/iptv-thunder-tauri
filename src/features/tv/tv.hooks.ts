@@ -628,7 +628,9 @@ export const usePrefetchStream = (client: StalkerClient) => {
 
     queryClient.prefetchQuery({
       queryKey,
-      queryFn: () => client.getStreamUrl(channel.cmd),
+      queryFn: () => client.getStreamUrl(channel.cmd, {
+        genreId: channel.tv_genre_id?.toString() || (channel as any).genreId?.toString()
+      }),
       retry: 2,
       retryDelay: attempt => Math.min(1000 * 2 ** attempt, 5000),
     });

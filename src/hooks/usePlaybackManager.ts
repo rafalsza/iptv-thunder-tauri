@@ -71,7 +71,10 @@ export const usePlaybackManager = ({
 
       const url = await queryClient.fetchQuery({
         queryKey: ['stream', channel.id, accountId],
-        queryFn: () => client.getStreamUrl(channel.cmd, { signal: controller.signal }),
+        queryFn: () => client.getStreamUrl(channel.cmd, { 
+          signal: controller.signal,
+          genreId: channel.tv_genre_id?.toString() || (channel as any).genreId?.toString()
+        }),
         staleTime: 2 * 60 * 1000, // Use cache for 2 minutes (allows prefetch to work)
       });
 

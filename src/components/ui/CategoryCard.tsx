@@ -54,7 +54,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
   };
 
   return (
-    <button
+    <div
       ref={ref}
       data-tv-focusable
       data-tv-id={`category-${category.id}`}
@@ -68,6 +68,8 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
         e.preventDefault();
         onLongPress(category);
       }}
+      role="button"
+      tabIndex={0}
       className={`
         relative dark:bg-slate-800 dark:bg-opacity-50 bg-white bg-opacity-50 backdrop-blur-sm dark:border border-slate-600 border-gray-300 rounded-lg p-2 sm:p-3 md:p-4 h-full min-h-[80px] sm:min-h-[100px] md:min-h-[120px]
         cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl
@@ -76,7 +78,6 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
           : 'dark:border-slate-600 border-gray-300 hover:border-green-700'
         }
       `}
-      type="button"
     >
       {/* Category Icon/Number */}
       <div className="flex items-center justify-between mb-2 sm:mb-3">
@@ -131,6 +132,6 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
 
       {/* Hover Effect Overlay */}
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-700 to-transparent opacity-0 hover:opacity-5 transition-opacity duration-200 rounded-xl pointer-events-none" />
-    </button>
+    </div>
   );
 };

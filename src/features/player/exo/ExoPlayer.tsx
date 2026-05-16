@@ -109,10 +109,10 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   onClose,
   onEnded: _onEnded
 }) => {
-  // Fetch channels from the same category/genre for carousel
+  // Fetch channels from the same category/genre for carousel (only for TV channels, not VOD/movies)
   const { data: categoryChannels, isLoading: channelsLoading } = useChannels(
     client!,
-    !isVod && genreId ? genreId : undefined,
+    isVod ? undefined : genreId,
     false // Disable EPG prefetching when playing from for-you/recent-channels
   );
 
@@ -157,7 +157,9 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
           // If cmd is a ffmpeg/vlc command, try to resolve it
           if (streamUrl && (streamUrl.startsWith('ffmpeg ') || streamUrl.startsWith('vlc ') || streamUrl.startsWith('ffplay '))) {
             try {
-              streamUrl = await client.getStreamUrl(streamUrl);
+              streamUrl = await client.getStreamUrl(streamUrl, {
+                genreId: channel.tv_genre_id?.toString() || channel.genreId?.toString()
+              });
             } catch (e) {
               logger.warn('[ExoPlayer] Failed to resolve stream URL for channel:', channel.name, e);
               streamUrl = ''; // Mark as unavailable
@@ -183,6 +185,8 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
       }
 
       const params = {
+        url,
+        channelName: name,
         channelId: channelId?.toString() || '',
         portalUrl,
         mac,
@@ -201,25 +205,7 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
       }
 
       try {
-        exoPlayer.open_compose_player(
-          url,
-          name,
-          params.channelId,
-          params.portalUrl,
-          params.mac,
-          params.token,
-          params.isVod,
-          params.episodesJson,
-          params.currentEpisodeIndex,
-          params.autoPlayEpisodes,
-          params.channelsJson,
-          params.epgTitle || '',
-          params.epgStart || '',
-          params.epgEnd || '',
-          params.epgNextTitle || '',
-          params.epgNextStart || '',
-          params.epgNextEnd || ''
-        );
+        exoPlayer.open_compose_player(JSON.stringify(params));
       } catch (error) {
         console.error('[ExoPlayer] Error calling open_compose_player:', error);
         logger.error(`Error calling open_compose_player: ${error}`);
