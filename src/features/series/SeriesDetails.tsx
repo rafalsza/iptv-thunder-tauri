@@ -7,7 +7,7 @@ import { usePortalsStore } from '@/store/portals.store';
 import { useTranslation } from '@/hooks/useTranslation';
 import { TranslationKey } from '@/lib/translations';
 import { useTVNavigation } from '@/hooks';
-import { useSeriesInfo } from './series.hooks';
+import { useSeriesInfo, usePrefetchSeriesStream } from './series.hooks';
 import { Button } from '@/components/ui/button';
 import { Loader2, Play, Heart, ArrowLeft, X } from 'lucide-react';
 
@@ -458,6 +458,26 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     : series;
   const episodes = seriesInfo?.episodes || [];
   const seasons = seriesInfo?.seasons || [];
+
+  // Prefetch stream URL for the newest episode when data loads
+  const prefetchStream = usePrefetchSeriesStream(client);
+  useEffect(() => {
+    if (episodes.length > 0) {
+      // Find newest episode (highest season, highest episode number)
+      const sortedEpisodes = [...episodes].sort((a, b) => {
+        const seasonA = Number.parseInt(String(a.season ?? 1));
+        const seasonB = Number.parseInt(String(b.season ?? 1));
+        const episodeA = Number.parseInt(String(a.episode ?? 1));
+        const episodeB = Number.parseInt(String(b.episode ?? 1));
+        if (seasonA !== seasonB) return seasonB - seasonA;
+        return episodeB - episodeA;
+      });
+      const newestEpisode = sortedEpisodes[0];
+      if (newestEpisode?.cmd) {
+        prefetchStream(newestEpisode);
+      }
+    }
+  }, [episodes, prefetchStream]);
 
   // Set first available season after loading data
   useEffect(() => {

@@ -28,8 +28,9 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
   
   const [errors, setErrors] = useState<Partial<Record<keyof PortalFormData, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
-  const { addPortal, updatePortal } = usePortalsStore();
+  const { addPortal, updatePortal, portals } = usePortalsStore();
 
   // TV Navigation - simple isolated instance for this modal
   const { setActiveContainer } = useTVNavigation({
@@ -38,14 +39,14 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
 
   // Show keyboard when input is focused on Android TV
   const showKeyboard = () => {
-    if ((window as any).AndroidTV?.showKeyboard) {
-      (window as any).AndroidTV.showKeyboard();
+    if ((globalThis as any).AndroidTV?.showKeyboard) {
+      (globalThis as any).AndroidTV.showKeyboard();
     }
   };
 
   const hideKeyboard = () => {
-    if ((window as any).AndroidTV?.hideKeyboard) {
-      (window as any).AndroidTV.hideKeyboard();
+    if ((globalThis as any).AndroidTV?.hideKeyboard) {
+      (globalThis as any).AndroidTV.hideKeyboard();
     }
   };
 
@@ -91,6 +92,14 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
       newErrors.mac = t('macRequired');
     } else if (!isValidMac(formData.mac)) {
       newErrors.mac = t('invalidMac');
+    } else {
+      // Check if MAC address is already used by another portal
+      const macExists = portals.some(
+        p => p.mac.toLowerCase() === formData.mac.toLowerCase() && p.id !== portal?.id
+      );
+      if (macExists) {
+        newErrors.mac = t('macAlreadyExists');
+      }
     }
 
     setErrors(newErrors);
@@ -114,11 +123,17 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
   const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     
+    // Prevent double submission on Android TV
+    if (isSubmittingRef.current) {
+      return;
+    }
+    
     if (!validateForm()) {
       showToast(t('fixErrors'), 'error');
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -136,6 +151,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
       showToast(t('errorSavingPortal'), 'error');
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 

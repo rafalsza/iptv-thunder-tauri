@@ -54,7 +54,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   const [imgError, setImgError] = useState(false);
   const seriesName = String(series.series || series.name || '');
 
-  const { isLongPress, ref, ...longPressHandlers } = useLongPress({
+  const { isLongPress, ref, isLongPressRef: _, ...longPressHandlers } = useLongPress({
     onLongPress: () => onLongPress(series),
     delay: 500,
   });
@@ -110,8 +110,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
   }, [posterUrl]);
 
   return (
-    <button
-      type="button"
+    <div
       data-tv-focusable
       data-tv-id={`fav-series-${series.id}`}
       data-tv-group="favorite-series"
@@ -127,6 +126,8 @@ const SeriesCard = React.memo<SeriesCardProps>(({
       onKeyDown={() => {
         // Let useLongPress handle it
       }}
+      tabIndex={0}
+      role="button"
       className="cursor-pointer group h-[calc(100%-8px)] rounded-lg relative mb-1 bg-transparent border-0 p-0 text-left"
     >
       <div className="relative overflow-hidden rounded-lg hover:border-green-700 hover:shadow-lg transition-all dark:bg-slate-800 bg-white h-full flex flex-col">
@@ -137,7 +138,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
             <img
               src={imgSrc}
               alt={series.name}
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="absolute inset-0 w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
               onError={() => setImgError(true)}
               loading="lazy"
             />
@@ -164,7 +165,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
           </h3>
         </div>
       </div>
-    </button>
+    </div>
   );
 });
 

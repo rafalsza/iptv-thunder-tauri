@@ -167,6 +167,10 @@ export const useMovieDetails = (client: StalkerClient, movieId?: string, cmd?: s
 
 // ─── Prefetch stream URL ──────────────────────────────────────────────────────
 
+// Module-level tracking to prevent request flooding when entering a category
+const inFlightPrefetches = new Set<string>();
+const MAX_CONCURRENT_PREFETCHES = 5; // Optimal for ~50-100 items
+
 export const usePrefetchMovieStream = (client: StalkerClient) => {
   const queryClient = useQueryClient();
   const lastPrefetch = React.useRef(new Map<string, number>());
@@ -203,14 +207,26 @@ export const usePrefetchMovieStream = (client: StalkerClient) => {
         return; // Skip prefetch if data is still fresh
       }
 
+      // Limit concurrent prefetches to prevent flooding when entering category
+      if (inFlightPrefetches.size >= MAX_CONCURRENT_PREFETCHES) {
+        return; // Skip if too many prefetches in flight
+      }
+
       // Update last prefetch time
       lastPrefetch.current.set(movieId, now);
+      inFlightPrefetches.add(movieId);
 
       // Prefetch the stream URL
       queryClient.prefetchQuery({
         queryKey,
-        queryFn: () => client.getVODUrl(movie.cmd),
+        queryFn: () => client.getVODUrl(movie.cmd).finally(() => {
+          inFlightPrefetches.delete(movieId);
+        }),
         staleTime: PREFETCH_STALE_MS,
+      }).then(() => {
+        inFlightPrefetches.delete(movieId);
+      }).catch(() => {
+        inFlightPrefetches.delete(movieId);
       });
     },
     [client, queryClient],

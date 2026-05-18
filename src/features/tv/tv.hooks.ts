@@ -10,12 +10,13 @@ import { saveChannels, upsertChannels, getChannels as getChannelsFromDB, searchC
 import { getChannelEPG, getEPGTimeRange } from '@/features/epg/epg.api';
 import { getGenres, getChannels } from './tv.api';
 
-export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG: boolean = true) => {
+export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG: boolean = true, enabled: boolean = true) => {
   const accountId = client?.['account']?.id || 'default';
   const prevSignatureRef = useRef<string>('');
-  
+
   const query = useQuery({
     queryKey: ['channels', accountId, genreId],
+    enabled: enabled && !!client,
     queryFn: async ({ signal }) => {
       // Always use paginated fetching - get_all_channels endpoint is deprecated
       const targetGenreId = genreId || '*';
@@ -93,7 +94,6 @@ export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    enabled: !!client,
   });
   
   // Save channels to SQLite when data changes (replaces onSuccess callback)
@@ -585,6 +585,10 @@ export const useChannelSearch = (accountId: string, query: string, backgroundLoa
 };
 
 // Prefetch stream URL
+// Module-level tracking to prevent request flooding when entering a category
+const inFlightTvPrefetches = new Set<string>();
+const MAX_CONCURRENT_TV_PREFETCHES = 5;
+
 export const usePrefetchStream = (client: StalkerClient) => {
   const queryClient = useQueryClient();
   const prefetchedRef = useRef<Map<string, number>>(new Map());
@@ -612,7 +616,13 @@ export const usePrefetchStream = (client: StalkerClient) => {
       return;
     }
     
+    // Limit concurrent prefetches to prevent flooding
+    if (inFlightTvPrefetches.size >= MAX_CONCURRENT_TV_PREFETCHES) {
+      return;
+    }
+    
     prefetchedRef.current.set(channelId, now);
+    inFlightTvPrefetches.add(channelId);
 
     // Cleanup: keep only last 200 entries to prevent memory leak
     if (prefetchedRef.current.size > 500) {
@@ -630,9 +640,15 @@ export const usePrefetchStream = (client: StalkerClient) => {
       queryKey,
       queryFn: () => client.getStreamUrl(channel.cmd, {
         genreId: channel.tv_genre_id?.toString() || (channel as any).genreId?.toString()
+      }).finally(() => {
+        inFlightTvPrefetches.delete(channelId);
       }),
       retry: 2,
       retryDelay: attempt => Math.min(1000 * 2 ** attempt, 5000),
+    }).then(() => {
+      inFlightTvPrefetches.delete(channelId);
+    }).catch(() => {
+      inFlightTvPrefetches.delete(channelId);
     });
   }, [client, accountId, queryClient]);
 };

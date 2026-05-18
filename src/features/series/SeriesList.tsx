@@ -5,7 +5,7 @@ import React, {
   useMemo, useRef, useState, useEffect, useCallback,
 } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useSeriesAll, usePrefetchSeriesStream } from './series.hooks';
+import { useSeriesAll } from './series.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { usePortalsStore } from '@/store/portals.store';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -42,7 +42,6 @@ function setCachedImage(key: string, value: string) {
 interface SeriesCardProps {
   series: StalkerVOD;
   onSelect: (seriesName: string) => void;
-  onPrefetch: (series: StalkerVOD) => void;
   favoriteIds: Set<string>;
   onToggleFavorite: (e: React.MouseEvent, series: StalkerVOD) => void;
   onLongPress: (series: StalkerVOD) => void;
@@ -50,7 +49,7 @@ interface SeriesCardProps {
 }
 
 const SeriesCard = React.memo<SeriesCardProps>(({
-  series, onSelect, onPrefetch, favoriteIds, onToggleFavorite, onLongPress, seriesIndex,
+  series, onSelect, favoriteIds, onToggleFavorite, onLongPress, seriesIndex,
 }) => {
   const posterUrl = useMemo(
     () => series.poster || series.logo || '',
@@ -131,8 +130,6 @@ const SeriesCard = React.memo<SeriesCardProps>(({
       tabIndex={0}
       {...longPressHandlers}
       ref={ref}
-      onMouseEnter={() => onPrefetch(series)}
-      onFocus={() => onPrefetch(series)}
       onClick={handleClick}
       onKeyUp={handleKeyUp}
       onContextMenu={(e) => {
@@ -152,7 +149,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
             <img
               src={imgSrc}
               alt={series.name}
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="absolute inset-0 w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
               onError={() => setImgError(true)}
               loading="lazy"
             />
@@ -198,7 +195,6 @@ export const SeriesList: React.FC<SeriesListProps> = ({
   const { t } = useTranslation();
   // ── Data ──────────────────────────────────────────────────────────────────────
   const { series: seriesData, isLoading, error } = useSeriesAll(client, selectedCategory?.id);
-  const prefetchStream = usePrefetchSeriesStream(client);
 
   // ── Favorites ─────────────────────────────────────────────────────────────────
   const accountId = usePortalsStore(s =>
@@ -231,7 +227,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
   // ── Layout ────────────────────────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null);
   // Fixed column count for consistency
-  const [columnCount] = useState(9);
+  const [columnCount] = useState(6);
 
   // Reset scroll when category changes
   useEffect(() => {
@@ -249,16 +245,6 @@ export const SeriesList: React.FC<SeriesListProps> = ({
     overscan: 15,
   });
 
-  // ── Prefetch guard ────────────────────────────────────────────────────────────
-  const prefetchedRef = useRef(new Set<string>());
-
-  const handlePrefetch = useCallback((series: StalkerVOD) => {
-    const id = String(series.id);
-    if (prefetchedRef.current.has(id)) return;
-    if (prefetchedRef.current.size > 1000) prefetchedRef.current.clear();
-    prefetchedRef.current.add(id);
-    prefetchStream(series);
-  }, [prefetchStream]);
 
   const handleToggleFavorite = useCallback((e: React.MouseEvent, series: StalkerVOD) => {
     e.stopPropagation();
@@ -415,7 +401,6 @@ export const SeriesList: React.FC<SeriesListProps> = ({
                           key={seriesId}
                           series={series}
                           onSelect={handleSeriesSelect}
-                          onPrefetch={handlePrefetch}
                           favoriteIds={favoriteIds}
                           onToggleFavorite={handleToggleFavorite}
                           onLongPress={handleLongPress}

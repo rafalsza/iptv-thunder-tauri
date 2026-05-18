@@ -152,7 +152,7 @@ const MovieCard = React.memo<MovieCardProps>(({
             <img
               src={imgSrc}
               alt={movie.name}
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="absolute inset-0 w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
               onError={() => setImgError(true)}
               loading="lazy"
             />
@@ -272,7 +272,7 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
   // ── Layout ────────────────────────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null);
   // Fixed column count for consistency
-  const [cols] = useState(9);
+  const [cols] = useState(6);
 
   // ── Virtualizer ───────────────────────────────────────────────────────────────
   const rowCount = Math.ceil(filtered.length / cols);

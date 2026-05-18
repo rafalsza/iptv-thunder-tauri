@@ -375,19 +375,50 @@ export const useSeriesDetails = (client: StalkerClient, seriesId: string) => {
 };
 
 // ─── Prefetch stream URL ──────────────────────────────────────────────────────
+// Module-level tracking to prevent request flooding when entering a category
+const inFlightSeriesPrefetches = new Set<string>();
+const MAX_CONCURRENT_SERIES_PREFETCHES = 5;
+const SERIES_PREFETCH_DEBOUNCE_MS = 1000;
+const lastSeriesPrefetch = new Map<string, number>();
+
 export const usePrefetchSeriesStream = (client: StalkerClient) => {
   const queryClient = useQueryClient();
 
   return React.useCallback(
     (episode: StalkerVOD) => {
       if (!episode.cmd) return;
-      const queryKey = ['series-stream', episode.id];
+      const episodeId = String(episode.id);
+      const queryKey = ['series-stream', episodeId];
+      const now = Date.now();
+
+      // Check if already fetching
       const state = queryClient.getQueryState(queryKey);
       if (state?.fetchStatus === 'fetching') return;
+
+      // Per-episode debounce
+      const lastTime = lastSeriesPrefetch.get(episodeId);
+      if (lastTime && now - lastTime < SERIES_PREFETCH_DEBOUNCE_MS) {
+        return;
+      }
+
+      // Limit concurrent prefetches
+      if (inFlightSeriesPrefetches.size >= MAX_CONCURRENT_SERIES_PREFETCHES) {
+        return;
+      }
+
+      lastSeriesPrefetch.set(episodeId, now);
+      inFlightSeriesPrefetches.add(episodeId);
+
       queryClient.prefetchQuery({
         queryKey,
-        queryFn: () => getSeriesStream(client, episode.cmd),
+        queryFn: () => getSeriesStream(client, episode.cmd).finally(() => {
+          inFlightSeriesPrefetches.delete(episodeId);
+        }),
         staleTime: 5 * 60 * 1000,
+      }).then(() => {
+        inFlightSeriesPrefetches.delete(episodeId);
+      }).catch(() => {
+        inFlightSeriesPrefetches.delete(episodeId);
       });
     },
     [client, queryClient],

@@ -5,7 +5,7 @@ import React, {
   useMemo, useRef, useState, useEffect, useCallback,
 } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useMoviesAll, usePrefetchMovieStream } from './movies.hooks';
+import { useMoviesAll } from './movies.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { useTranslation } from '@/hooks/useTranslation';
 import { usePortalsStore } from '@/store/portals.store';
@@ -15,7 +15,6 @@ import { useLongPress } from '@/hooks/useLongPress';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerVOD, StalkerGenre } from '@/types';
 import { ContinueWatching } from './ContinueWatching';
-import { platform } from '@tauri-apps/plugin-os';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -29,17 +28,6 @@ const getRowHeight = () => {
 };
 
 const IMAGE_CACHE_LIMIT = 500;
-
-// ─── Platform detection ─────────────────────────────────────────────────────────────
-
-const isMobilePlatform = () => {
-  try {
-    const os = platform();
-    return os === 'android' || os === 'ios';
-  } catch {
-    return false; // Default to desktop if platform detection fails
-  }
-};
 
 // ─── Image cache (module-level, survives re-renders, bounded size) ─────────────
 
@@ -80,7 +68,6 @@ interface MovieCardProps {
   movie: StalkerVOD;
   posterUrl: string;
   onSelect: (movie: StalkerVOD) => void;
-  onPrefetch: (movie: StalkerVOD) => void;
   favoriteIds: Set<string>;
   onToggleFavorite: (e: React.MouseEvent, movie: StalkerVOD) => void;
   onLongPress: (movie: StalkerVOD) => void;
@@ -90,7 +77,7 @@ interface MovieCardProps {
 }
 
 const MovieCard = React.memo<MovieCardProps>(({
-  movie, posterUrl, onSelect, onPrefetch, favoriteIds, onToggleFavorite, onLongPress,
+  movie, posterUrl, onSelect, favoriteIds, onToggleFavorite, onLongPress,
   watchStatus, progressPercentage = 0, moviesIndex,
 }) => {
   const { t } = useTranslation();
@@ -111,12 +98,12 @@ const MovieCard = React.memo<MovieCardProps>(({
       const focusedEl = document.activeElement as HTMLElement;
       console.log('[MovieList] handleKeyUp - activeElement:', focusedEl?.dataset?.tvId, 'index:', focusedEl?.dataset?.tvIndex);
       if (focusedEl?.dataset.tvId) {
-        (window as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
-        (window as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
+        (globalThis as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
+        (globalThis as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
         console.log('[MovieList] Saved focus:', focusedEl.dataset.tvId, 'index:', focusedEl.dataset.tvIndex);
       }
       // Check if long press was triggered - if so, don't call onSelect
-      if (!(window as any).__tvLongPressPreventClick) {
+      if (!(globalThis as any).__tvLongPressPreventClick) {
         e.preventDefault();
         onSelect(movie);
       }
@@ -127,11 +114,11 @@ const MovieCard = React.memo<MovieCardProps>(({
     // Save focus before navigation for restoration when closing details
     const focusedEl = document.activeElement as HTMLElement;
     if (focusedEl?.dataset.tvId) {
-      (window as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
-      (window as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
+      (globalThis as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
+      (globalThis as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
     }
     // For mouse/touch, let useLongPress handle it
-    if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
+    if (!isLongPress && !(globalThis as any).__tvLongPressPreventClick) {
       onSelect(movie);
     }
   };
@@ -179,8 +166,6 @@ const MovieCard = React.memo<MovieCardProps>(({
       data-tv-group="movies"
       data-tv-index={moviesIndex}
       tabIndex={0}
-      onMouseEnter={isMobilePlatform() ? undefined : () => onPrefetch(movie)}
-      onFocus={isMobilePlatform() ? () => onPrefetch(movie) : undefined}
       onClick={handleClick}
       onKeyUp={handleKeyUp}
       onContextMenu={(e) => {
@@ -199,7 +184,7 @@ const MovieCard = React.memo<MovieCardProps>(({
             <img
               src={imgSrc}
               alt={movie.name}
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="absolute inset-0 w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
               onError={() => setImgError(true)}
               loading="lazy"
             />
@@ -272,7 +257,6 @@ export const MovieList: React.FC<MovieListProps> = ({
   const { t } = useTranslation();
   // ── Data ──────────────────────────────────────────────────────────────────────
   const { movies, isLoading, isFetching, error, streamingState } = useMoviesAll(client, selectedCategory?.id);
-  const prefetchStream = usePrefetchMovieStream(client);
 
   // ── Favorites ─────────────────────────────────────────────────────────────────
   const accountId = usePortalsStore(s =>
@@ -302,7 +286,7 @@ export const MovieList: React.FC<MovieListProps> = ({
   // ── Layout ────────────────────────────────────────────────────────────────────
   const parentRef    = useRef<HTMLDivElement>(null);
   // Fixed column count for consistency
-  const [cols] = useState(9);
+  const [cols] = useState(6);
 
   // Reset scroll when category changes
   useEffect(() => {
@@ -322,7 +306,7 @@ export const MovieList: React.FC<MovieListProps> = ({
 
   // Restore scroll position after MovieDetails closes (handle virtualization)
   useEffect(() => {
-    const savedIndex = (window as any).__lastFocusedMovieIndex;
+    const savedIndex = (globalThis as any).__lastFocusedMovieIndex;
     if (savedIndex && savedIndex !== '0') {
       const indexNum = Number(savedIndex);
       console.log('[MovieList] Scrolling to saved index:', indexNum);
@@ -339,16 +323,6 @@ export const MovieList: React.FC<MovieListProps> = ({
     [filtered, cols],
   );
 
-  // ── Prefetch guard (prevent duplicate requests) ───────────────────────────────
-  const prefetchedRef = useRef(new Set<string>());
-
-  const handlePrefetch = useCallback((movie: StalkerVOD) => {
-    const id = String(movie.id);
-    if (prefetchedRef.current.has(id)) return;
-    if (prefetchedRef.current.size > 1000) prefetchedRef.current.clear();
-    prefetchedRef.current.add(id);
-    prefetchStream(movie);
-  }, [prefetchStream]);
 
   const handleToggleCategoryFavorite = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -527,7 +501,6 @@ export const MovieList: React.FC<MovieListProps> = ({
                       movie={movie}
                       posterUrl={movie.poster || movie.logo || ''}
                       onSelect={onMovieSelect}
-                      onPrefetch={handlePrefetch}
                       favoriteIds={favoriteIds}
                       onToggleFavorite={handleToggleFavorite}
                       onLongPress={handleLongPress}

@@ -6,7 +6,7 @@ import { useResumeStore } from '@/store/resume.store';
 import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { useMovieDetails } from './movies.hooks';
+import { useMovieDetails, usePrefetchMovieStream } from './movies.hooks';
 import { X } from 'lucide-react';
 
 interface MovieDetailsProps {
@@ -48,6 +48,14 @@ export const MovieDetails: React.FC<MovieDetailsProps> = ({
 
   // Use detailed data if available, otherwise fall back to list/favorites data
   const displayMovie = movieDetails || movie;
+
+  // Prefetch stream URL when entering details screen
+  const prefetchStream = usePrefetchMovieStream(client);
+  useEffect(() => {
+    if (movie.cmd) {
+      prefetchStream(movie);
+    }
+  }, [movie.cmd, prefetchStream]);
 
   const progress = getProgress(String(movie.id));
   const isWatched = progress?.status === 'watched';

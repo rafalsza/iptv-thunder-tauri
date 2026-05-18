@@ -113,7 +113,8 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   const { data: categoryChannels, isLoading: channelsLoading } = useChannels(
     client!,
     isVod ? undefined : genreId,
-    false // Disable EPG prefetching when playing from for-you/recent-channels
+    false, // Disable EPG prefetching when playing from for-you/recent-channels
+    !isVod // Only enabled for TV (not VOD/movies)
   );
 
   React.useEffect(() => {
