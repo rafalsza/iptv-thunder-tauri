@@ -19,6 +19,9 @@ declare global {
 
 const USER_AGENT = 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG250 Safari/533.3';
 
+const DEFAULT_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Berlin';
+const DEFAULT_LANGUAGE = navigator.language || 'en-US';
+
 export class StalkerClient {
   private readonly axios: AxiosInstance;
   private readonly tauriHttp: TauriHttpClient | null;
@@ -28,8 +31,9 @@ export class StalkerClient {
   token: string | null = null;
   private tokenExpiresAt: Date | null = null;
 
-  constructor(account: StalkerAccount) {
+  constructor(account: StalkerAccount, options?: { timezone?: string }) {
     this.account = account;
+    const timezone = options?.timezone ?? DEFAULT_TIMEZONE;
     
     // Detect Tauri environment using OS plugin (most reliable)
     let osPlatform: string | null;
@@ -77,7 +81,7 @@ export class StalkerClient {
     if (this.useTauri) {
       // Use Tauri HTTP client - no CORS issues!
       // Cookie with MAC is required for EPG and other requests
-      const cookieHeader = `mac=${this.account.mac}; stb_lang=en_US; timezone=Europe/Berlin`;
+      const cookieHeader = `mac=${this.account.mac}; stb_lang=${DEFAULT_LANGUAGE}; timezone=${timezone}`;
       this.tauriHttp = new TauriHttpClient(baseURL, {
         'User-Agent': USER_AGENT,
         'X-User-Agent': USER_AGENT,
@@ -89,7 +93,7 @@ export class StalkerClient {
       this.axios = {} as AxiosInstance; // Placeholder - won't be used
     } else {
       // Use Axios for browser development - will have CORS issues
-      const cookieHeader = `mac=${this.account.mac}; stb_lang=en_US; timezone=Europe/Berlin`;
+      const cookieHeader = `mac=${this.account.mac}; stb_lang=${DEFAULT_LANGUAGE}; timezone=${timezone}`;
       this.axios = axios.create({
         baseURL,
         timeout: 15000,
@@ -242,9 +246,8 @@ export class StalkerClient {
   /**
    * Create link for streaming
    */
-  async createLink(cmd: string, _streamId?: number): Promise<string> {
-    // streamId is available for future use but not needed for current implementation
-    return this.getStreamUrl(cmd);
+  async createLink(cmd: string, streamId?: number): Promise<string> {
+    return this.getStreamUrl(cmd, streamId ? { streamId: String(streamId) } : undefined);
   }
 
   /**
@@ -324,9 +327,8 @@ export class StalkerClient {
     await this.ensureAuthenticated();
 
     // Wywołaj getProfileAndAuth aby aktywować sesję - to może być wymagane aby dostać pełną listę kategorii
-    console.log('🎬 Calling getProfileAndAuth...');
+    this.logger.debug('Calling getProfileAndAuth for VOD categories');
     await this.getProfileAndAuth();
-    console.log('🎬 getProfileAndAuth done, proceeding to get_categories');
 
     const params = {
       type: 'vod',
@@ -513,9 +515,9 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
 
   /**
    * Resolve poster URL - handles different field names for VOD posters
+   * Returns array of possible URLs for fallback handling
    */
   resolvePosterUrl(vod: any): string | undefined {
-
     // Check for common poster field names - screenshot_uri often contains external URLs like TMDB
     const posterFields = ['screenshot_uri', 'poster', 'screenshot', 'img', 'fname', 'cover', 'thumbnail', 'picture', 'image'];
     
@@ -539,6 +541,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
           `${baseUrl}${fullValue.startsWith('/') ? fullValue.substring(1) : fullValue}`,
         ];
 
+        // Return first possibility - caller can implement fallback if needed
         return possibleUrls[0];
       }
     }
@@ -552,6 +555,40 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     }
     
     return undefined;
+  }
+
+  /**
+   * Get all possible poster URLs for a VOD item (for fallback handling)
+   */
+  getPosterUrls(vod: any): string[] {
+    const urls: string[] = [];
+    const posterFields = ['screenshot_uri', 'poster', 'screenshot', 'img', 'fname', 'cover', 'thumbnail', 'picture', 'image'];
+    const baseUrl = this.account.portalUrl;
+
+    for (const field of posterFields) {
+      const value = vod[field];
+      if (value && typeof value === 'string' && value.trim() !== '') {
+        const fullValue = value.trim();
+        if (fullValue.startsWith('http')) {
+          urls.push(fullValue);
+        } else {
+          urls.push(
+            `${baseUrl}misc/posters/${fullValue}`,
+            `${baseUrl}misc/img/${fullValue}`,
+            `${baseUrl}misc/screenshots/${fullValue}`,
+            `${baseUrl}uploads/${fullValue}`,
+            `${baseUrl}${fullValue.startsWith('/') ? fullValue.substring(1) : fullValue}`,
+          );
+        }
+        break; // Found a field, no need to check others
+      }
+    }
+
+    if (urls.length === 0 && vod.id) {
+      urls.push(`${baseUrl}misc/posters/${vod.id}.jpg`);
+    }
+
+    return urls;
   }
 
   // Nowa metoda do pobierania kanałów z informacjami o paginacji
@@ -607,16 +644,16 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
   /**
    * Pobieranie linku do odtwarzania (cmd → pełny URL strumienia)
    */
-  async getStreamUrl(cmd: string, options?: { signal?: AbortSignal; genreId?: string }): Promise<string> {
+  async getStreamUrl(cmd: string, options?: { signal?: AbortSignal; genreId?: string; streamId?: string }): Promise<string> {
     await this.ensureAuthenticated();
 
     // Replace MAC in cmd with current account MAC
     const currentMac = this.account.mac;
     const cmdWithCorrectMac = cmd.replace(/mac=([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}/, `mac=${currentMac}`);
 
-    // Wyciągnij stream ID z cmd (e.g., stream=1929427)
-    const streamMatch = /stream[=:](\d+)/.exec(cmdWithCorrectMac);
-    const streamId = streamMatch ? streamMatch[1] : null;
+    // Extract stream ID from cmd if not provided in options (e.g., stream=1929427)
+    const extractedStreamId = /stream[=:](\d+)/.exec(cmdWithCorrectMac)?.[1];
+    const streamId = options?.streamId ?? extractedStreamId;
 
     const params: any = {
       type: cmdWithCorrectMac.startsWith('eyJ') ? 'vod' : 'itv',

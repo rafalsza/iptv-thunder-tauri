@@ -1,30 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
-import { translations, Language, TranslationKey } from '@/lib/translations';
+import { translations, SupportedLanguage, TranslationKey } from '@/lib/translations';
 import { getSetting, setSetting } from '@/hooks/useSettings';
 
 // Global state for language synchronization
-let globalLanguage: Language = 'pl';
-const listeners = new Set<(lang: Language) => void>();
+let globalLanguage: SupportedLanguage = 'pl';
+const listeners = new Set<(lang: SupportedLanguage) => void>();
 
-const subscribe = (callback: (lang: Language) => void) => {
+const subscribe = (callback: (lang: SupportedLanguage) => void) => {
   listeners.add(callback);
   return () => listeners.delete(callback);
 };
 
-const notifyListeners = (lang: Language) => {
+const notifyListeners = (lang: SupportedLanguage) => {
   globalLanguage = lang;
   listeners.forEach(cb => cb(lang));
 };
 
 export const useTranslation = () => {
-  const [currentLang, setCurrentLang] = useState<Language>(globalLanguage);
+  const [currentLang, setCurrentLang] = useState<SupportedLanguage>(globalLanguage);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadLanguage = async () => {
       try {
         const savedLang = await getSetting('language');
-        if (savedLang && ['pl', 'en'].includes(savedLang)) {
+        if (savedLang && ['pl', 'en', 'cs', 'sk', 'be', 'de'].includes(savedLang)) {
           setCurrentLang(savedLang);
           globalLanguage = savedLang;
         }
@@ -55,7 +55,7 @@ export const useTranslation = () => {
     return text;
   }, [currentLang]);
 
-  const changeLanguage = useCallback(async (lang: Language) => {
+  const changeLanguage = useCallback(async (lang: SupportedLanguage) => {
     try {
       await setSetting('language', lang);
       setCurrentLang(lang);
@@ -69,7 +69,7 @@ export const useTranslation = () => {
 };
 
 // Reset global language state (for testing)
-export const _resetLanguageState = (lang: Language = 'pl') => {
+export const _resetLanguageState = (lang: SupportedLanguage = 'pl') => {
   globalLanguage = lang;
   listeners.clear();
 };

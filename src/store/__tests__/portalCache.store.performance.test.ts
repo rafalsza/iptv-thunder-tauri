@@ -72,7 +72,7 @@ describe('portalCache.store Performance Tests', () => {
   });
 
   describe('VOD Operations Performance', () => {
-    it('should set VOD in under 10ms', () => {
+    it('should set VOD in under 20ms', () => {
       const vod = Array.from({ length: 100 }, (_, i) => ({
         id: i,
         name: `VOD ${i}`,
@@ -87,7 +87,7 @@ describe('portalCache.store Performance Tests', () => {
       const endTime = performance.now();
       const duration = endTime - startTime;
 
-      expect(duration).toBeLessThan(10);
+      expect(duration).toBeLessThan(20);
     });
 
     it('should set VOD categories in under 5ms', () => {

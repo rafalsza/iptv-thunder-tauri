@@ -1,4 +1,5 @@
 import { Store } from '@tauri-apps/plugin-store';
+import type { SupportedLanguage } from '@/lib/translations';
 
 let storeInstance: Store | null = null;
 
@@ -12,7 +13,7 @@ async function getStore(): Promise<Store> {
 // Settings types
 export interface AppSettings {
   // UI settings
-  language: 'pl' | 'en';
+  language: SupportedLanguage;
   sidebarCollapsed: boolean;
   channelViewMode: 'grid' | 'list';
 
@@ -84,7 +85,34 @@ export async function getSetting<K extends keyof AppSettings>(
 ): Promise<AppSettings[K]> {
   const store = await getStore();
   const value = await store.get<AppSettings[K]>(key);
-  return value ?? DEFAULT_SETTINGS[key];
+  
+  if (value !== undefined && value !== null) {
+    return value;
+  }
+
+  // Auto-detect language if not set
+  if (key === 'language') {
+    const browserLang = navigator.language?.toLowerCase() || 'pl';
+    let detectedLang: SupportedLanguage;
+    if (browserLang.startsWith('pl')) {
+      detectedLang = 'pl';
+    } else if (browserLang.startsWith('cs')) {
+      detectedLang = 'cs';
+    } else if (browserLang.startsWith('sk')) {
+      detectedLang = 'sk';
+    } else if (browserLang.startsWith('be')) {
+      detectedLang = 'be';
+    } else if (browserLang.startsWith('de')) {
+      detectedLang = 'de';
+    } else {
+      detectedLang = 'en';
+    }
+    await store.set(key, detectedLang);
+    await store.save();
+    return detectedLang as AppSettings[K];
+  }
+
+  return DEFAULT_SETTINGS[key];
 }
 
 /**

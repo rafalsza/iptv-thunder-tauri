@@ -255,7 +255,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         data-tv-index="11"
                         tabIndex={0}
                         value={currentLang}
-                        onChange={(e) => changeLanguage(e.target.value as 'pl' | 'en')}
+                        onChange={(e) => changeLanguage(e.target.value as 'pl' | 'en' | 'cs' | 'sk' | 'be' | 'de')}
                         onKeyDown={(e: React.KeyboardEvent<HTMLSelectElement>) => {
                           if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
                             e.preventDefault();
@@ -277,6 +277,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900"
                       >
                         <option value="pl">Polski</option>
+                        <option value="cs">Čeština</option>
+                        <option value="sk">Slovenčina</option>
+                        <option value="be">Беларуская</option>
+                        <option value="de">Deutsch</option>
                         <option value="en">English</option>
                       </select>
                     </div>

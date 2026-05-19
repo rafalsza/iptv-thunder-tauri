@@ -28,11 +28,51 @@ describe('translations', () => {
     expect(translations.en.series).toBe('Series');
   });
 
-  it('should have same keys in both languages', () => {
-    const plKeys = Object.keys(translations.pl);
-    const enKeys = Object.keys(translations.en);
+  it('should have Czech translations', () => {
+    expect(translations.cs).toBeDefined();
+    expect(translations.cs.channels).toBe('TV kanály');
+    expect(translations.cs.movies).toBe('Filmy');
+    expect(translations.cs.series).toBe('Seriály');
+    expect(translations.cs.settings).toBe('Nastavení');
+  });
 
-    expect(plKeys.sort()).toEqual(enKeys.sort());
+  it('should have Slovak translations', () => {
+    expect(translations.sk).toBeDefined();
+    expect(translations.sk.channels).toBe('TV kanály');
+    expect(translations.sk.movies).toBe('Filmy');
+    expect(translations.sk.series).toBe('Seriály');
+    expect(translations.sk.settings).toBe('Nastavenia');
+  });
+
+  it('should have Belarusian translations', () => {
+    expect(translations.be).toBeDefined();
+    expect(translations.be.channels).toBe('ТВ каналы');
+    expect(translations.be.movies).toBe('Фільмы');
+    expect(translations.be.series).toBe('Серыялы');
+    expect(translations.be.settings).toBe('Налады');
+  });
+
+  it('should have German translations', () => {
+    expect(translations.de).toBeDefined();
+    expect(translations.de.channels).toBe('TV-Kanäle');
+    expect(translations.de.movies).toBe('Filme');
+    expect(translations.de.series).toBe('Serien');
+    expect(translations.de.settings).toBe('Einstellungen');
+  });
+
+  it('should have same keys in all languages', () => {
+    const plKeys = Object.keys(translations.pl).sort();
+    const enKeys = Object.keys(translations.en).sort();
+    const csKeys = Object.keys(translations.cs).sort();
+    const skKeys = Object.keys(translations.sk).sort();
+    const beKeys = Object.keys(translations.be).sort();
+    const deKeys = Object.keys(translations.de).sort();
+
+    expect(plKeys).toEqual(enKeys);
+    expect(plKeys).toEqual(csKeys);
+    expect(plKeys).toEqual(skKeys);
+    expect(plKeys).toEqual(beKeys);
+    expect(plKeys).toEqual(deKeys);
   });
 
   it('should have all required translation keys', () => {
@@ -52,6 +92,10 @@ describe('translations', () => {
     requiredKeys.forEach(key => {
       expect(translations.pl[key]).toBeDefined();
       expect(translations.en[key]).toBeDefined();
+      expect(translations.cs[key]).toBeDefined();
+      expect(translations.sk[key]).toBeDefined();
+      expect(translations.be[key]).toBeDefined();
+      expect(translations.de[key]).toBeDefined();
     });
   });
 
@@ -149,6 +193,62 @@ describe('useTranslation hook', () => {
     expect(result.current.t('movies')).toBe('Movies');
     expect(result.current.t('series')).toBe('Series');
     expect(result.current.t('settings')).toBe('Settings');
+  });
+
+  it('should translate Czech keys correctly', async () => {
+    mockGetSetting.mockResolvedValue('cs');
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.t('channels')).toBe('TV kanály');
+    expect(result.current.t('movies')).toBe('Filmy');
+    expect(result.current.t('series')).toBe('Seriály');
+    expect(result.current.t('settings')).toBe('Nastavení');
+  });
+
+  it('should translate Slovak keys correctly', async () => {
+    mockGetSetting.mockResolvedValue('sk');
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.t('channels')).toBe('TV kanály');
+    expect(result.current.t('movies')).toBe('Filmy');
+    expect(result.current.t('series')).toBe('Seriály');
+    expect(result.current.t('settings')).toBe('Nastavenia');
+  });
+
+  it('should translate Belarusian keys correctly', async () => {
+    mockGetSetting.mockResolvedValue('be');
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.t('channels')).toBe('ТВ каналы');
+    expect(result.current.t('movies')).toBe('Фільмы');
+    expect(result.current.t('series')).toBe('Серыялы');
+    expect(result.current.t('settings')).toBe('Налады');
+  });
+
+  it('should translate German keys correctly', async () => {
+    mockGetSetting.mockResolvedValue('de');
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.t('channels')).toBe('TV-Kanäle');
+    expect(result.current.t('movies')).toBe('Filme');
+    expect(result.current.t('series')).toBe('Serien');
+    expect(result.current.t('settings')).toBe('Einstellungen');
   });
 
   it('should change language', async () => {
@@ -373,6 +473,54 @@ describe('useTranslation hook', () => {
     expect(result.current.t('channels')).toBe('Channels');
   });
 
+  it('should switch between all supported languages', async () => {
+    mockGetSetting.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Start with Polish
+    expect(result.current.currentLang).toBe('pl');
+
+    // Switch to Czech
+    await act(async () => {
+      await result.current.changeLanguage('cs');
+    });
+    expect(result.current.currentLang).toBe('cs');
+    expect(result.current.t('settings')).toBe('Nastavení');
+
+    // Switch to Slovak
+    await act(async () => {
+      await result.current.changeLanguage('sk');
+    });
+    expect(result.current.currentLang).toBe('sk');
+    expect(result.current.t('settings')).toBe('Nastavenia');
+
+    // Switch to Belarusian
+    await act(async () => {
+      await result.current.changeLanguage('be');
+    });
+    expect(result.current.currentLang).toBe('be');
+    expect(result.current.t('settings')).toBe('Налады');
+
+    // Switch to German
+    await act(async () => {
+      await result.current.changeLanguage('de');
+    });
+    expect(result.current.currentLang).toBe('de');
+    expect(result.current.t('settings')).toBe('Einstellungen');
+
+    // Switch back to English
+    await act(async () => {
+      await result.current.changeLanguage('en');
+    });
+    expect(result.current.currentLang).toBe('en');
+    expect(result.current.t('settings')).toBe('Settings');
+  });
+
   it('should load English from saved settings', async () => {
     mockGetSetting.mockResolvedValue('en');
 
@@ -399,6 +547,62 @@ describe('useTranslation hook', () => {
     expect(result.current.currentLang).toBe('pl');
     expect(result.current.t('movies')).toBe('Filmy');
     expect(result.current.t('series')).toBe('Seriale');
+  });
+
+  it('should load Czech from saved settings', async () => {
+    mockGetSetting.mockResolvedValue('cs');
+
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.currentLang).toBe('cs');
+    expect(result.current.t('movies')).toBe('Filmy');
+    expect(result.current.t('series')).toBe('Seriály');
+  });
+
+  it('should load Slovak from saved settings', async () => {
+    mockGetSetting.mockResolvedValue('sk');
+
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.currentLang).toBe('sk');
+    expect(result.current.t('movies')).toBe('Filmy');
+    expect(result.current.t('series')).toBe('Seriály');
+  });
+
+  it('should load Belarusian from saved settings', async () => {
+    mockGetSetting.mockResolvedValue('be');
+
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.currentLang).toBe('be');
+    expect(result.current.t('movies')).toBe('Фільмы');
+    expect(result.current.t('series')).toBe('Серыялы');
+  });
+
+  it('should load German from saved settings', async () => {
+    mockGetSetting.mockResolvedValue('de');
+
+    const { result } = renderHook(() => useTranslation());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.currentLang).toBe('de');
+    expect(result.current.t('movies')).toBe('Filme');
+    expect(result.current.t('series')).toBe('Serien');
   });
 
   it('should memoize t function', async () => {
@@ -553,7 +757,7 @@ describe('useTranslation hook', () => {
   });
 
   it('should handle language code not in allowed list', async () => {
-    mockGetSetting.mockResolvedValue('de' as any);
+    mockGetSetting.mockResolvedValue('fr' as any);
 
     const { result } = renderHook(() => useTranslation());
 
@@ -561,7 +765,7 @@ describe('useTranslation hook', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    // Should fallback to Polish for invalid language
+    // Should fallback to Polish for invalid language (fr is not in the list)
     expect(result.current.currentLang).toBe('pl');
   });
 
