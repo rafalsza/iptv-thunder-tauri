@@ -1,8 +1,8 @@
 // ======================
-// logger.ts - Poprawiona wersja
+// logger.ts
 // ======================
 
-const isDebugMode = import.meta.env.DEV; // Najlepsza praktyka w Vite
+const isDev = import.meta.env.DEV;
 
 export interface Logger {
   debug: (...args: unknown[]) => void;
@@ -39,7 +39,9 @@ export function createLogger(scope: string): Logger {
     },
 
     warn: (...args: unknown[]) => {
-      console.warn(`%c${prefix}`, styles.warn, ...args);
+      if (import.meta.env.DEV) {
+        console.warn(`%c${prefix}`, styles.warn, ...args);
+      }
     },
 
     error: (...args: unknown[]) => {
@@ -55,7 +57,7 @@ export function createLogger(scope: string): Logger {
 let requestSequence = 0;
 
 function createRequestId(): string {
-  requestSequence += 1;
+  requestSequence = requestSequence >= 999 ? 0 : requestSequence + 1;
   return `${Date.now().toString(36)}-${requestSequence.toString().padStart(3, '0')}`;
 }
 
@@ -81,18 +83,8 @@ export function createDebugRequestContext(operation: string, request: unknown): 
   };
 }
 
-export interface DebugEvent {
-  requestId: string;
-  operation: string;
-  request: unknown;
-  response?: unknown;
-  error?: unknown;
-  durationMs: number;
-  status: 'success' | 'error';
-}
-
 export function logDebugRequest(context: RequestDebugContext): void {
-  if (!isDebugMode) return;
+  if (!isDev) return;
 
   console.groupCollapsed(`%c[REQ] ${context.operation} ${context.requestId}`, 'color: #60a5fa; font-weight: 500');
   console.debug('meta', {
@@ -105,7 +97,7 @@ export function logDebugRequest(context: RequestDebugContext): void {
 }
 
 export function logDebugSuccess(context: RequestDebugContext, response: unknown): void {
-  if (!isDebugMode) return;
+  if (!isDev) return;
 
   const duration = performance.now() - context.startedAt;
 
@@ -117,7 +109,7 @@ export function logDebugSuccess(context: RequestDebugContext, response: unknown)
 }
 
 export function logDebugError(context: RequestDebugContext, error: unknown): void {
-  if (!isDebugMode) return;
+  if (!isDev) return;
 
   const duration = performance.now() - context.startedAt;
 
