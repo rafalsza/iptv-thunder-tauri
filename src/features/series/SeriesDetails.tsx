@@ -572,7 +572,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
       return;
     }
 
-    // Sort by season (descending) and episode number (descending) to find the newest episode
+    // Sort by season (ascending) and episode number (ascending) to find the first episode
     const sortedEpisodes = [...allEpisodes].sort((a, b) => {
       const seasonA = Number.parseInt(String(a.season) || '0');
       const seasonB = Number.parseInt(String(b.season) || '0');
@@ -580,20 +580,20 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
       const episodeB = Number.parseInt(String(b.episode) || '0');
 
       if (seasonA !== seasonB) {
-        return seasonB - seasonA; // Higher season first
+        return seasonA - seasonB; // Lower season first
       }
-      return episodeB - episodeA; // Higher episode first within the same season
+      return episodeA - episodeB; // Lower episode first within the same season
     });
 
-    const newestEpisode = sortedEpisodes[0];
+    const firstEpisode = sortedEpisodes[0];
 
     // Update selected season to match the episode's season
-    const episodeSeason = String(newestEpisode.season || '1');
+    const episodeSeason = String(firstEpisode.season || '1');
     if (seasons.includes(episodeSeason)) {
       setSelectedSeason(episodeSeason);
     }
 
-    handleEpisodePlay(newestEpisode);
+    handleEpisodePlay(firstEpisode);
   };
 
   const handleToggleFavorite = () => {

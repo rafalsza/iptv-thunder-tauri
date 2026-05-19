@@ -32,7 +32,11 @@ jest.mock('@/hooks/useFavorites');
 jest.mock('@/store/resume.store');
 jest.mock('@/store/portals.store');
 jest.mock('@/hooks/useTranslation');
-jest.mock('../series.hooks');
+jest.mock('../series.hooks', () => ({
+  ...jest.requireActual('../series.hooks'),
+  usePrefetchSeriesStream: jest.fn(() => jest.fn()),
+  useSeriesInfo: jest.fn(),
+}));
 jest.mock('@/hooks');
 jest.mock('@/components/ui/select', () => ({
   Select: ({ children, onValueChange, value }: any) => (
@@ -155,7 +159,7 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     } as any);
   });
 
-  it('should play the newest episode (highest season, highest episode) when play button is clicked', () => {
+  it('should play the first episode (lowest season, lowest episode) when play button is clicked', () => {
     render(
       <SeriesDetails
         series={mockSeries}
@@ -168,11 +172,11 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     const playButton = screen.getByText('Odtwórz pierwszy odcinek');
     fireEvent.click(playButton);
 
-    // Should play episode 5 (season 3, episode 1) - the newest episode
+    // Should play episode 1 (season 1, episode 1) - the first episode
     expect(mockOnPlay).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: 5,
-        season: '3',
+        id: 1,
+        season: '1',
         episode: '1',
       }),
       0
@@ -207,12 +211,12 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     const playButton = screen.getByText('Odtwórz pierwszy odcinek');
     fireEvent.click(playButton);
 
-    // Episode 2 (season 2, episode 5) is highest
+    // Episode 1 (season 1, episode 1) is first
     expect(mockOnPlay).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: 2,
-        season: '2',
-        episode: '5',
+        id: 1,
+        season: '1',
+        episode: '1',
       }),
       0
     );
@@ -272,11 +276,11 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     const playButton = screen.getByText('Odtwórz pierwszy odcinek');
     fireEvent.click(playButton);
 
-    // Should play episode 4 (season 3, episode 5) - highest season and highest episode
+    // Should play episode 1 (season 1, episode 5) - lowest season and lowest episode
     expect(mockOnPlay).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: 4,
-        season: '3',
+        id: 1,
+        season: '1',
         episode: '5',
       }),
       0
@@ -296,11 +300,11 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     const playButton = screen.getByText('Odtwórz pierwszy odcinek');
     fireEvent.click(playButton);
 
-    // After clicking play, the season should be updated to season 3 (newest episode's season)
-    // This is verified by the fact that the correct episode (season 3) was played
+    // After clicking play, the season should be updated to season 1 (first episode's season)
+    // This is verified by the fact that the correct episode (season 1) was played
     expect(mockOnPlay).toHaveBeenCalledWith(
       expect.objectContaining({
-        season: '3',
+        season: '1',
       }),
       0
     );
@@ -358,12 +362,12 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     const playButton = screen.getByText('Odtwórz pierwszy odcinek');
     fireEvent.click(playButton);
 
-    // Should play episode 3 (season 10, episode 10) - numerically highest
+    // Should play episode 2 (season 2, episode 15) - lowest season
     expect(mockOnPlay).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: 3,
-        season: '10',
-        episode: '10',
+        id: 2,
+        season: '2',
+        episode: '15',
       }),
       0
     );
