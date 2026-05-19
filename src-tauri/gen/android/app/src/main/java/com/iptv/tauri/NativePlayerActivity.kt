@@ -51,6 +51,7 @@ class NativePlayerActivity : AppCompatActivity() {
     private var epgNextTitle = ""
     private var epgNextStart = ""
     private var epgNextEnd = ""
+    private var initialVolume = 0.8f
 
     // Channel data for carousel
     private var categoryChannels: List<ChannelInfo> = emptyList()
@@ -109,6 +110,10 @@ class NativePlayerActivity : AppCompatActivity() {
         epgNextStart = intent.getStringExtra("epgNextStart") ?: ""
         epgNextEnd = intent.getStringExtra("epgNextEnd") ?: ""
         android.util.Log.d("NativePlayerActivity", "EPG data: title=$epgTitle, start=$epgStart, end=$epgEnd")
+
+        // Get volume from settings (0-100, default 80)
+        initialVolume = intent.getIntExtra("volume", 80) / 100f
+        android.util.Log.d("NativePlayerActivity", "Initial volume: $initialVolume")
 
         initializeViews()
         initializeControllers(channelName)
@@ -232,6 +237,7 @@ class NativePlayerActivity : AppCompatActivity() {
 
         // Initialize player
         playerController.initialize(currentUrl, isVod)
+        playerController.setVolume(initialVolume)
         playerView?.player = playerController.player
 
         // Initialize MediaSession for Android TV integration

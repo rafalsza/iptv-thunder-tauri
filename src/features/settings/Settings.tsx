@@ -35,6 +35,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   const TABS = useTabs(t);
   const epgServices = useEpgServices();
 
+  // Show keyboard when input is focused on Android TV
+  const showKeyboard = () => {
+    if ((globalThis as any).AndroidTV?.showKeyboard) {
+      (globalThis as any).AndroidTV.showKeyboard();
+    }
+  };
+
   const {
     externalEpgUrl,
     setExternalEpgUrl,
@@ -74,9 +81,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   // Sync theme from Tauri Store to ThemeProvider when settings are loaded
   useEffect(() => {
     if (settings?.theme) {
-      setTheme(settings.theme as 'dark' | 'light' | 'system');
+      setTheme(settings.theme);
     }
-  }, [settings?.theme, setTheme]);
+  }, [settings?.theme]);
 
   // Sync local EPG state with store values whenever they change
   useEffect(() => {
@@ -90,7 +97,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
     // Update theme provider immediately when theme changes
     if (key === 'theme') {
-      setTheme(value as 'dark' | 'light' | 'system');
+      setTheme(value as 'light' | 'dark' | 'system');
     }
 
     // Save to Tauri store in background (non-blocking)
@@ -429,6 +436,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                               setExternalEpgUrl(newUrl.trim());
                             }
                           }}
+                          onFocus={showKeyboard}
                           placeholder="https://twoj-serwer.pl/epg.xml"
                           className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-2xl"
                         />

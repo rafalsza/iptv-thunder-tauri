@@ -200,11 +200,9 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
 
         {/* Center: Progress Bar (VOD only) */}
         {isVod ? (
-          <div className="flex-1 mx-4">
-            <div className="flex justify-between text-white text-xs mb-1">
-              <span>{formatDurationTime(currentTime)}</span>
-              <span>{formatDurationTime(duration)}</span>
-            </div>
+          <div className="flex-1 mx-4 h-10 flex flex-col justify-center relative">
+            <span className="absolute -left-2 top-0 text-white text-xs">{formatDurationTime(currentTime)}</span>
+            <span className="absolute -right-2 top-0 text-white text-xs">{formatDurationTime(duration)}</span>
             <div className="h-1 bg-gray-600 rounded cursor-pointer relative group" onClick={onProgressClick}>
               <div className="h-full bg-red-600 rounded transition-all duration-100"
                 style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />

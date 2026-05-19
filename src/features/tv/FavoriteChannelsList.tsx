@@ -1,12 +1,13 @@
 // =========================
 // ❤️ FAVORITE CHANNELS LIST
 // =========================
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel } from '@/types';
 import { useLongPress } from '@/hooks/useLongPress';
+import { searchChannels } from '@/hooks/useDatabase';
 
 interface FavoriteChannelsListProps {
   client?: StalkerClient;
@@ -112,29 +113,59 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
   // Use SQLite for favorites - contains all metadata (name, poster/logo, cmd)
   const { favorites: dbFavorites, isLoading, toggleItemFavorite } = useFavorites(accountId);
   const { t } = useTranslation();
+  const [favoriteChannels, setFavoriteChannels] = useState<StalkerChannel[]>([]);
 
-  // Convert favorites to StalkerChannel format using stored metadata
-  const favoriteChannels = useMemo((): StalkerChannel[] => {
-    return dbFavorites
-      .filter(f => f.type === 'live')
-      .map(f => {
-        let extraData: any = {};
+  // Convert favorites to StalkerChannel format and enrich missing genre_id from SQLite
+  useEffect(() => {
+    const loadChannels = async () => {
+      const baseChannels = dbFavorites
+        .filter(f => f.type === 'live')
+        .map(f => {
+          let extraData: any = {};
+          try {
+            extraData = f.extra ? JSON.parse(f.extra) : {};
+          } catch {
+            extraData = {};
+          }
+          return {
+            id: f.item_id,
+            name: f.name || 'Unknown Channel',
+            cmd: f.cmd || '',
+            logo: f.poster,
+            tv_genre_id: extraData.genre_id ? Number(extraData.genre_id) : undefined,
+            number: 0,
+            censored: false,
+          };
+        });
+
+      // Enrich missing genre_id from SQLite channels table
+      const channelsWithoutGenre = baseChannels.filter(ch => !ch.tv_genre_id);
+      if (channelsWithoutGenre.length > 0) {
         try {
-          extraData = f.extra ? JSON.parse(f.extra) : {};
+          const dbChannels = await searchChannels('', accountId, 10000);
+          const dbGenreMap = new Map(dbChannels.map(ch => [ch.id, ch.genreId]));
+
+          const enrichedChannels = baseChannels.map(ch => {
+            if (!ch.tv_genre_id) {
+              const genreIdFromDb = dbGenreMap.get(String(ch.id));
+              if (genreIdFromDb) {
+                return { ...ch, tv_genre_id: Number(genreIdFromDb) };
+              }
+            }
+            return ch;
+          });
+          setFavoriteChannels(enrichedChannels);
         } catch {
-          extraData = {};
+          // Fallback to base channels if DB query fails
+          setFavoriteChannels(baseChannels);
         }
-        return {
-          id: f.item_id,
-          name: f.name || 'Unknown Channel',
-          cmd: f.cmd || '',
-          logo: f.poster,
-          tv_genre_id: extraData.genre_id ? Number(extraData.genre_id) : undefined,
-          number: 0,
-          censored: false,
-        };
-      });
-  }, [dbFavorites]);
+      } else {
+        setFavoriteChannels(baseChannels);
+      }
+    };
+
+    loadChannels();
+  }, [dbFavorites, accountId]);
 
   // Apply search filter
   const filtered = useMemo(() =>

@@ -56,7 +56,7 @@ const MovieCard = React.memo<MovieCardProps>(({
   const isWatched = watchStatus === 'watched';
   const isInProgress = watchStatus === 'in_progress';
 
-  const { isLongPress, ref, ...longPressHandlers } = useLongPress({
+  const { isLongPress, isLongPressRef, ref, ...longPressHandlers } = useLongPress({
     onLongPress: () => onLongPress(movie),
     delay: 500,
   });

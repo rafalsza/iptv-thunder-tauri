@@ -250,6 +250,7 @@ class MainActivity : TauriActivity() {
                             intent.putExtra("epgNextTitle", params.optString("epgNextTitle"))
                             intent.putExtra("epgNextStart", params.optString("epgNextStart"))
                             intent.putExtra("epgNextEnd", params.optString("epgNextEnd"))
+                            intent.putExtra("volume", params.optInt("volume", 80))
                         android.util.Log.d("MainActivity", "Starting NativePlayerActivity")
                         startActivity(intent)
                     } catch (e: Exception) {

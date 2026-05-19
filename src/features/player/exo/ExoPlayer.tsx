@@ -10,6 +10,7 @@ import { usePortalsStore } from '@/store/portals.store';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { getChannelEPG, getCurrentProgram, getNextProgram, formatEPGTime } from '@/features/epg/epg.api';
 import { useChannels } from '@/features/tv/tv.hooks';
+import { getSetting } from '@/hooks/useSettings';
 
 const logger = createLogger('ExoPlayer');
 
@@ -110,11 +111,12 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   onEnded: _onEnded
 }) => {
   // Fetch channels from the same category/genre for carousel (only for TV channels, not VOD/movies)
+  // Only enable when we have a valid genreId to avoid fetching ALL channels (category: "*")
   const { data: categoryChannels, isLoading: channelsLoading } = useChannels(
     client!,
     isVod ? undefined : genreId,
     false, // Disable EPG prefetching when playing from for-you/recent-channels
-    !isVod // Only enabled for TV (not VOD/movies)
+    !isVod && !!genreId // Only enabled for TV when we have a valid genreId
   );
 
   React.useEffect(() => {
@@ -147,6 +149,9 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
       const autoPlayEpisodes = player?.autoPlayEpisodes ?? true;
 
       const epgData = await fetchEPGData(channelId || 0, isVod || false);
+
+      // Load volume from settings
+      const volume = await getSetting('volume') || 80;
 
       // Filter channels for carousel (exclude hidden channels starting with #####)
       const filteredChannels = categoryChannels?.filter((channel: any) => !channel.name.startsWith('#####')) || [];
@@ -197,6 +202,7 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         currentEpisodeIndex,
         autoPlayEpisodes,
         channelsJson: JSON.stringify(resolvedChannels),
+        volume,
         ...epgData
       };
 

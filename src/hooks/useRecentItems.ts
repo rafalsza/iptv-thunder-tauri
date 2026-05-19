@@ -98,16 +98,22 @@ export async function initRecentViewedTable(): Promise<void> {
 export async function loadRecentViewed(accountId: string, type?: 'live' | 'vod' | 'series', limit: number = 20): Promise<RecentItem[]> {
   try {
     const db = await getDB();
-    let query = "SELECT * FROM recently_viewed WHERE account_id = ?";
     const params: any[] = [accountId];
+    let query: string;
 
     if (type) {
-      query += " AND type = ?";
-      params.push(type);
+      query = `SELECT * FROM recently_viewed WHERE id IN (
+        SELECT MAX(id) FROM recently_viewed WHERE account_id = ? AND type = ?
+        GROUP BY account_id, type, item_id
+      ) ORDER BY viewed_at DESC LIMIT ?`;
+      params.push(type, limit);
+    } else {
+      query = `SELECT * FROM recently_viewed WHERE id IN (
+        SELECT MAX(id) FROM recently_viewed WHERE account_id = ?
+        GROUP BY account_id, type, item_id
+      ) ORDER BY viewed_at DESC LIMIT ?`;
+      params.push(limit);
     }
-
-    query += " ORDER BY viewed_at DESC LIMIT ?";
-    params.push(limit);
 
     const result = await db.select<RecentItem[]>(query, params);
     return result || [];

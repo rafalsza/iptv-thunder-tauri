@@ -36,11 +36,12 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
   const [showEPGModal, setShowEPGModal] = useState(false);
 
   // Fetch channels from the same category/genre (only for TV channels, not VOD/movies)
+  // Only enable when we have a valid genreId to avoid fetching ALL channels (category: "*")
   const { data: categoryChannels } = useChannels(
     client!,
     isVod ? undefined : genreId,
     false, // Disable EPG prefetching when playing from for-you/recent-channels
-    !isVod // Only enabled for TV (not VOD/movies)
+    !isVod && !!genreId // Only enabled for TV when we have a valid genreId
   );
   const hasResumedRef = useRef(false);
   const urlChangeIdRef = useRef(0);

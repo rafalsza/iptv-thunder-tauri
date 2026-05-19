@@ -80,6 +80,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
   const isMobile = currentPlatform === 'android' || currentPlatform === 'ios';
 
+  // Show keyboard when input is focused on Android TV
+  const showKeyboard = () => {
+    if ((globalThis as any).AndroidTV?.showKeyboard) {
+      (globalThis as any).AndroidTV.showKeyboard();
+    }
+  };
+
   // Extract complex className logic
   const containerClassName = useMemo(() => {
     const baseClasses = 'flex flex-col h-full min-h-screen';
@@ -114,6 +121,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   placeholder={t('search')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  onFocus={showKeyboard}
                   data-tv-focusable
                   data-tv-search
                   tabIndex={0}
