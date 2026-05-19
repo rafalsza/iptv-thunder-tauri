@@ -1,12 +1,17 @@
 import { Store } from '@tauri-apps/plugin-store';
 import { PersistStorage, StorageValue } from 'zustand/middleware';
 
-// Singleton store instance
+// Singleton store instance with promise caching to avoid race conditions
 let store: Store | null = null;
+let storePromise: Promise<Store> | null = null;
 
 async function getStore(): Promise<Store> {
-  store ??= await Store.load('stalker-portals');
-  return store;
+  if (store) return store;
+  storePromise ??= Store.load('stalker-portals').then(s => {
+    store = s;
+    return s;
+  });
+  return storePromise;
 }
 
 export async function clearTauriStore(): Promise<void> {
@@ -25,7 +30,6 @@ export const tauriStorage: PersistStorage<unknown> = {
     try {
       const s = await getStore();
       const value = await s.get<StorageValue<unknown>>(name);
-      console.log('[TauriStorage] getItem:', name, value ? 'found' : 'not found');
       return value ?? null;
     } catch (error) {
       console.error('[TauriStorage] getItem error:', error);
@@ -48,8 +52,7 @@ export const tauriStorage: PersistStorage<unknown> = {
       const s = await getStore();
       await s.delete(name);
       await s.save();
-      console.log('[TauriStorage] removeItem:', name);
-    } catch (error) {
+      } catch (error) {
       console.error('[TauriStorage] removeItem error:', error);
     }
   },

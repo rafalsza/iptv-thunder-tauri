@@ -39,13 +39,6 @@ export class TauriHttpClient {
     this.onAuthError = onAuthError;
   }
 
-  private serializeHeaders(): string {
-    return Object.entries(this.defaultHeaders)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}:${v}`)
-      .join('|');
-  }
-
   setHeader(key: string, value: string) {
     this.defaultHeaders = { ...this.defaultHeaders, [key]: value };
   }
@@ -56,7 +49,7 @@ export class TauriHttpClient {
     options?: HttpRequestOptions
   ): Promise<T> {
     const fullUrl = this.buildUrl(url, params);
-    const cacheKey = `${fullUrl.toString()}::${this.serializeHeaders()}`;
+    const cacheKey = `${fullUrl.toString()}::${this.buildHeaders().join('|')}`;
 
     // Deduplicate in-flight requests only when no AbortSignal (signals are per-request)
     if (!options?.signal) {
@@ -83,8 +76,8 @@ export class TauriHttpClient {
     url: string,
     options?: HttpRequestOptions
   ): Promise<T> {
-    const timeoutMs = options?.timeoutMs ?? this.defaultOptions.timeoutMs!;
-    const retries = options?.retries ?? this.defaultOptions.retries!;
+    const timeoutMs = options?.timeoutMs ?? this.defaultOptions.timeoutMs ?? 30000;
+    const retries = options?.retries ?? this.defaultOptions.retries ?? 2;
     const signal = options?.signal;
 
     let lastError: Error | undefined;
@@ -118,9 +111,9 @@ export class TauriHttpClient {
         const decision = await this.handleRequestError(
           error as Error,
           lastResponse,
-          parsed,
           attempt,
-          retries
+          retries,
+          isAuth
         );
         
         if (decision === 'fail') throw error;
@@ -259,11 +252,10 @@ export class TauriHttpClient {
   private async handleRequestError(
     error: Error,
     lastResponse: { status: number; headers: Record<string, string>; body: string } | undefined,
-    parsed: any,
     attempt: number,
-    retries: number
+    retries: number,
+    isAuth: boolean
   ): Promise<RetryDecision> {
-    const isAuth = this.isAuthError(lastResponse?.status ?? 0, lastResponse?.body ?? '', parsed);
     if (isAuth && this.onAuthError) {
       const shouldContinue = await this.handleAuthError();
       if (shouldContinue) {
@@ -281,14 +273,16 @@ export class TauriHttpClient {
   }
 
   private async handleAuthError(): Promise<boolean> {
-    if (this.refreshPromise === null) {
-      logger.info('Auth error detected, initiating token refresh...');
-      this.refreshPromise = this.onAuthError!().finally(() => {
-        this.refreshPromise = null;
-      });
-    } else {
+    if (this.refreshPromise) {
       logger.info('Token refresh already in progress, waiting...');
+      const result = await this.refreshPromise;
+      return result.ok;
     }
+
+    logger.info('Auth error detected, initiating token refresh...');
+    this.refreshPromise = this.onAuthError!().finally(() => {
+      this.refreshPromise = null;
+    });
 
     const result = await this.refreshPromise;
     if (result.ok) {

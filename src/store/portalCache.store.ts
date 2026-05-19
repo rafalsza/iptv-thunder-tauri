@@ -238,10 +238,3 @@ export const usePortalCacheStore = create<PortalCacheState>()(
     }))
 );
 
-// Clear old localStorage cache on load (migration cleanup)
-if (globalThis.window !== undefined) {
-  try {
-    localStorage.removeItem('portal-data-cache');
-    console.log('[PortalCache] Cleared old localStorage cache');
-  } catch {}
-}

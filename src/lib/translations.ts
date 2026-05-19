@@ -218,7 +218,7 @@ export const translations = {
     opening: 'Otwieranie...',
 
     // Categories
-    all: 'Wszystkie',
+    allCategories: 'Wszystkie',
     categories: 'Kategorie',
     channelCategories: 'Kategorie kanałów',
     selectChannelCategory: 'Wybierz kategorię, aby zobaczyć dostępne kanały',
@@ -505,6 +505,7 @@ export const translations = {
     opening: 'Opening...',
 
     // Categories
+    allCategories: 'All',
     categories: 'Categories',
     channelCategories: 'Channel categories',
     selectChannelCategory: 'Select a category to see available channels',
