@@ -122,15 +122,25 @@ export const usePortalCacheStore = create<PortalCacheState>()(
             state.portalsData[portalId].vodByCategory = {};
           }
           const existing = state.portalsData[portalId].vodByCategory[categoryId] || [];
-          // Only add items that don't already exist (by id) and keep sorted by added date desc
           const existingIds = new Set(existing.map(v => v.id));
           const newItems = items.filter(v => !existingIds.has(v.id));
-          // Merge and sort by added date descending (newest first)
-          const merged = [...existing, ...newItems].sort((a, b) => {
-            const dateA = Number(a.added) || 0;
-            const dateB = Number(b.added) || 0;
-            return dateB - dateA;
-          });
+          
+          if (newItems.length === 0) {
+            return;
+          }
+          
+          // Insert new items in sorted position (maintains sort without full resort)
+          const merged = [...existing];
+          for (const item of newItems) {
+            const itemDate = Number(item.added) || 0;
+            const insertIndex = merged.findIndex(v => (Number(v.added) || 0) < itemDate);
+            if (insertIndex === -1) {
+              merged.push(item);
+            } else {
+              merged.splice(insertIndex, 0, item);
+            }
+          }
+          
           state.portalsData[portalId].vodByCategory[categoryId] = merged;
           state.portalsData[portalId].lastUpdated = Date.now();
           console.log('[PortalCache] Appended', newItems.length, 'items (page', page, ') for', categoryId, '- total:', merged.length);
@@ -170,26 +180,6 @@ export const usePortalCacheStore = create<PortalCacheState>()(
             timestamp: Date.now(),
           };
         });
-        // Catch quota errors silently - they don't break functionality
-        try {
-          // Force persist by triggering a state update
-          set((state) => ({ ...state }));
-        } catch (e: any) {
-          if (e?.name === 'QuotaExceededError') {
-            console.warn('[PortalCache] localStorage quota exceeded - data in memory only');
-            // Clear old EPG data to make room
-            set((state) => {
-              if (state.portalsData[portalId]?.epgCache) {
-                const keys = Object.keys(state.portalsData[portalId].epgCache!);
-                // Remove oldest 50% of cached EPG entries
-                const toRemove = keys.slice(0, Math.floor(keys.length / 2));
-                for (const key of toRemove) {
-                  delete state.portalsData[portalId].epgCache![Number(key)];
-                }
-              }
-            });
-          }
-        }
       },
 
       getChannelEPG: (portalId, channelId) => {
