@@ -12,7 +12,7 @@ let initPromise: Promise<Database> | null = null;
 let writeQueue: Promise<unknown> = Promise.resolve();
 
 let DB_PATH: string | null = null;
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 async function getDbPath(): Promise<string> {
   if (!DB_PATH) {
@@ -111,6 +111,7 @@ export async function getDB(): Promise<Database> {
     await initEpgTable(db);
     await initCategoriesTable(db);
     await initFavoritesTable(db);
+    await initForeignKeys(db);
     
     dbInstance = db;
     return db;
@@ -138,9 +139,6 @@ async function runMigrations(db: Database): Promise<void> {
   const currentVersion = result[0]?.version ?? 0;
   
   // Run migrations in order
-  if (currentVersion < 1) {
-    await migrateToV1(db);
-  }
   if (currentVersion < 2) {
     await migrateToV2(db);
   }
@@ -149,13 +147,16 @@ async function runMigrations(db: Database): Promise<void> {
     await migrateToV3(db);
   }
   
+  if (currentVersion < 4) {
+    await migrateToV4(db);
+  }
+  
   // Update version
   await db.execute('DELETE FROM schema_version');
   await db.execute('INSERT INTO schema_version (version) VALUES (?)', [CURRENT_SCHEMA_VERSION]);
 }
 
 async function migrateToV3(db: Database): Promise<void> {
-  // Add cmd column to series table for stream URL caching
   try {
     const tableInfo = await db.select<{name: string}[]>(`PRAGMA table_info(series)`);
     const columns = new Set(tableInfo.map(c => c.name));
@@ -164,17 +165,20 @@ async function migrateToV3(db: Database): Promise<void> {
       await db.execute(`ALTER TABLE series ADD COLUMN cmd TEXT`);
     }
   } catch (e) {
-    // Table doesn't exist or other error, skip
+    console.warn('[DB] migrateToV3 skip:', e);
   }
 }
 
-async function migrateToV1(_db: Database): Promise<void> {
-  // V1: Initial schema - tables created by init functions
-  // Nothing to do here, init functions handle it
+async function migrateToV4(_db: Database): Promise<void> {
+  // Future migrations placeholder
+  try {
+    // Add migrations here when needed
+  } catch (e) {
+    console.warn('[DB] migrateToV4 skip:', e);
+  }
 }
 
 async function migrateToV2(db: Database): Promise<void> {
-  // Add missing columns to existing tables using ALTER TABLE
   const tables = ['channels', 'vod', 'series', 'epg', 'categories'];
 
   for (const table of tables) {
@@ -182,21 +186,20 @@ async function migrateToV2(db: Database): Promise<void> {
       const tableInfo = await db.select<{name: string}[]>(`PRAGMA table_info(${table})`);
       const columns = new Set(tableInfo.map(c => c.name));
 
-      // Add portal_id if missing (critical for multi-portal support)
       if (!columns.has('portal_id')) {
         await db.execute(`ALTER TABLE ${table} ADD COLUMN portal_id TEXT`);
       }
-
-      // Add updated_at if missing
       if (!columns.has('updated_at')) {
         await db.execute(`ALTER TABLE ${table} ADD COLUMN updated_at INTEGER`);
       }
+      if (!columns.has('category_id')) {
+        await db.execute(`ALTER TABLE ${table} ADD COLUMN category_id TEXT`);
+      }
     } catch (e) {
-      // Table doesn't exist or other error, skip
+      console.warn(`[DB] migrateToV2 skip ${table}:`, e);
     }
   }
 
-  // Migrate favorites table separately
   await migrateFavoritesToV2(db);
 }
 
@@ -220,7 +223,7 @@ async function migrateFavoritesToV2(db: Database): Promise<void> {
       await db.execute(`ALTER TABLE favorites ADD COLUMN extra TEXT`);
     }
   } catch (e) {
-    // Table doesn't exist or other error, skip
+    console.warn('[DB] migrateFavoritesToV2 skip:', e);
   }
 }
 
@@ -263,8 +266,8 @@ async function initVodTable(db: Database): Promise<void> {
       poster_local TEXT,
       stream_url TEXT,
       year INTEGER,
-      rating TEXT,
-      duration TEXT,
+      rating REAL,
+      duration INTEGER,
       genre TEXT,
       director TEXT,
       actors TEXT,
@@ -278,17 +281,6 @@ async function initVodTable(db: Database): Promise<void> {
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_vod_portal ON vod(portal_id)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_vod_genre ON vod(portal_id, genre)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_vod_category ON vod(portal_id, category_id)`);
-
-  // Add category_id column if it doesn't exist (for existing databases)
-  try {
-    const tableInfo = await db.select<{name: string}[]>(`PRAGMA table_info(vod)`);
-    const hasCategoryId = tableInfo.some(col => col.name === 'category_id');
-    if (!hasCategoryId) {
-      await db.execute(`ALTER TABLE vod ADD COLUMN category_id TEXT`);
-    }
-  } catch (e) {
-    // Column already exists or other error, skip
-  }
 }
 
 // =========================
@@ -316,17 +308,6 @@ async function initSeriesTables(db: Database): Promise<void> {
 
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_series_portal ON series(portal_id)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_series_category ON series(portal_id, category_id)`);
-
-  // Add category_id column if it doesn't exist (for existing databases)
-  try {
-    const tableInfo = await db.select<{name: string}[]>(`PRAGMA table_info(series)`);
-    const hasCategoryId = tableInfo.some(col => col.name === 'category_id');
-    if (!hasCategoryId) {
-      await db.execute(`ALTER TABLE series ADD COLUMN category_id TEXT`);
-    }
-  } catch (e) {
-    // Column already exists or other error, skip
-  }
 
   // Seasons
   await db.execute(`
@@ -356,7 +337,7 @@ async function initSeriesTables(db: Database): Promise<void> {
       description TEXT,
       stream_url TEXT,
       container_extension TEXT,
-      duration TEXT,
+      duration INTEGER,
       updated_at INTEGER,
       UNIQUE(series_id, season_id, portal_id, episode_number)
     )
@@ -387,6 +368,11 @@ async function initEpgTable(db: Database): Promise<void> {
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_epg_time ON epg(start_time, end_time)`);
 }
 
+// Enable foreign keys
+async function initForeignKeys(db: Database): Promise<void> {
+  await db.execute(`PRAGMA foreign_keys = ON`);
+}
+
 // =========================
 // 📂 CATEGORIES
 // =========================
@@ -405,7 +391,6 @@ async function initCategoriesTable(db: Database): Promise<void> {
   `);
   
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_categories_full ON categories(portal_id, type, id)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_categories_updated ON categories(updated_at)`);
 }
 
 // =========================
@@ -466,23 +451,6 @@ async function migrateFavoritesTable(db: Database, tableInfo: {name: string}[]):
   const missingColumns = requiredColumns.filter(col => !columns.has(col));
 
   if (missingColumns.length > 0) {
-    // Backup old data if possible
-    try {
-      // Filter out columns that don't exist in new schema (like category_id from old versions)
-      const newSchemaColumns = ['id', 'account_id', 'kind', 'type', 'item_id', 'parent_id', 'name', 'poster', 'cmd', 'season', 'episode', 'extra', 'created_at'];
-      const existingColumns = tableInfo
-        .map(c => c.name)
-        .filter(col => newSchemaColumns.includes(col))
-        .join(', ');
-      const oldData = await db.select<unknown[]>(`SELECT ${existingColumns} FROM favorites LIMIT 1`);
-      if (oldData.length > 0) {
-        await db.execute(`DROP TABLE IF EXISTS favorites_backup`);
-        await db.execute(`CREATE TABLE favorites_backup AS SELECT ${existingColumns} FROM favorites`);
-      }
-    } catch (e) {
-      // No old data to backup or schema mismatch
-    }
-
     // Drop and recreate (breaking change - data will be lost)
     await db.execute(`DROP TABLE IF EXISTS favorites`);
     await createFavoritesTable(db);
@@ -610,7 +578,7 @@ export async function resetDatabase(): Promise<void> {
       
       await dbInstance.close();
     } catch (e) {
-      // Ignore
+      console.warn('[DB] Error closing database:', e);
     }
     dbInstance = null;
     initPromise = null;

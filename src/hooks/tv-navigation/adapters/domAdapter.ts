@@ -122,7 +122,7 @@ function buildCarouselRows(groupNodes: NavNode[]): NavNode[][] {
 
 function buildVirtualizedGridRows(groupNodes: NavNode[]): NavNode[][] {
   const sortedByIndex = [...groupNodes].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-  const columnCount = 9;
+  const columnCount = 6;
   const rowGroups: NavNode[][] = [];
   for (let i = 0; i < sortedByIndex.length; i += columnCount) {
     rowGroups.push(sortedByIndex.slice(i, i + columnCount));

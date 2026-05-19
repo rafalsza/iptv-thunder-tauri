@@ -512,7 +512,7 @@ export function initAutoFocus(): () => void {
     }
 
     const contentElements = getContentElements(mainContainer);
-    const movieDetailsElements = mainContainer.querySelectorAll('[data-tv-group="movie-actions"][data-tv-initial="true"]') as NodeListOf<HTMLElement>;
+    const movieDetailsElements = mainContainer.querySelectorAll('[data-tv-group="movie-actions"][data-tv-initial="true"], [data-tv-group="series-actions"][data-tv-initial="true"]') as NodeListOf<HTMLElement>;
 
     const hadMovieDetails = state.hadMovieDetails;
     const hasMovieDetailsNow = movieDetailsElements.length > 0;

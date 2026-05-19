@@ -207,12 +207,15 @@ export const usePlaybackManager = ({
 
   const prepareEpisodesData = (episodes: StalkerVOD[]) => {
     return episodes.map((ep) => ({
-      id: String(ep.id),
+      id: ep.id,
       url: '',
       name: `${t('season')} ${ep.season || 1} - ${t('episode')} ${ep.episode || 1}`,
-      season: String(ep.season || '1'),
-      episode: String(ep.episode || '1'),
+      season: ep.season,
+      episode: ep.episode,
       cmd: ep.cmd,
+      description: ep.description || '',
+      added: ep.added || '',
+      censored: ep.censored ?? false,
     }));
   };
 
