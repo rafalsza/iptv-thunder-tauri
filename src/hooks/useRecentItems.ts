@@ -6,10 +6,12 @@ import { useEffect, useState } from 'react';
 import { getDB } from './db';
 import { createLogger } from '../lib/logger';
 
+export type RecentItemType = 'live' | 'vod' | 'series';
+
 export interface RecentItem {
   id: number;
   account_id: string;
-  type: 'live' | 'vod' | 'series';
+  type: RecentItemType;
   item_id: string;
   name: string;
   poster?: string;
@@ -47,7 +49,6 @@ export async function initRecentViewedTable(): Promise<void> {
   }
 
   isInitializing = true;
-  logger.info('Initializing recently_viewed table...');
 
   initPromise = (async () => {
     try {
@@ -95,7 +96,7 @@ export async function initRecentViewedTable(): Promise<void> {
   return initPromise;
 }
 
-export async function loadRecentViewed(accountId: string, type?: 'live' | 'vod' | 'series', limit: number = 20): Promise<RecentItem[]> {
+export async function loadRecentViewed(accountId: string, type?: RecentItemType, limit: number = 20): Promise<RecentItem[]> {
   try {
     const db = await getDB();
     const params: any[] = [accountId];
@@ -125,7 +126,7 @@ export async function loadRecentViewed(accountId: string, type?: 'live' | 'vod' 
 
 export async function addRecentViewed(
   accountId: string,
-  type: 'live' | 'vod' | 'series',
+  type: RecentItemType,
   itemId: string,
   metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any; genre_id?: string }
 ): Promise<void> {
@@ -173,14 +174,13 @@ export async function clearRecentViewed(accountId: string): Promise<void> {
   try {
     const db = await getDB();
     await db.execute(`DELETE FROM recently_viewed WHERE account_id = ?`, [accountId]);
-    logger.info('Cleared recent viewed for account:', accountId);
   } catch (error) {
     logger.error('Error clearing recent viewed:', error);
     throw error;
   }
 }
 
-export function useRecentViewed(accountId: string, type?: 'live' | 'vod' | 'series', limit: number = 20) {
+export function useRecentViewed(accountId: string, type?: RecentItemType, limit: number = 20) {
   const tableReady = useTableReady();
 
   const queryKey = type ? ['recent-viewed', accountId, type] : ['recent-viewed', accountId];
