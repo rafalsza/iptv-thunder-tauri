@@ -520,6 +520,8 @@ export function useMpvPlayer(
     firstTimePosRef.current = 0;
     currentCacheSecsRef.current = 10;
     isEndedRef.current = false;
+    lastStallPositionRef.current = 0;
+    stallCountAtPositionRef.current = 0;
 
     recordUrlStart(streamUrl);
   }, [getStatusMessage]);
@@ -850,10 +852,16 @@ export function useMpvPlayer(
     setStreamState('stalled');
 
     // Check if stalling at same position repeatedly - restart from beginning
-    if (Math.abs(currentPos - lastStallPositionRef.current) < 10) {
+    // Only track same-position stalls after:
+    // 1. Playback has actually started (firstTimePosRef > 0)
+    // 2. Current position is > 0 (not stuck at initial position)
+    // This prevents false positives during initial buffering at position 0
+    const hasPlaybackStarted = firstTimePosRef.current > 0;
+    const isBeyondInitialPosition = currentPos > 0;
+    if (hasPlaybackStarted && isBeyondInitialPosition && Math.abs(currentPos - lastStallPositionRef.current) < 10) {
       stallCountAtPositionRef.current++;
       console.warn(`📍 Same position stall detected: count=${stallCountAtPositionRef.current}`);
-      if (stallCountAtPositionRef.current >= 1) {
+      if (stallCountAtPositionRef.current >= 2) {
         console.warn('🔄 Stalling at same position, restarting stream from beginning');
         stallCountAtPositionRef.current = 0;
         lastStallPositionRef.current = 0;

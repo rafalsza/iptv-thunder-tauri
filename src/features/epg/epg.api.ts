@@ -141,6 +141,12 @@ const cleanChannelName = (name: string): string => {
 // Common generic terms that shouldn't be used for matching alone
 const GENERIC_TERMS = new Set(['international', 'channel', 'tv', 'television', 'network', 'hd', 'sd', 'raw', 'live', 'news', 'sports', 'movies', 'music']);
 
+// Extract trailing numbers from channel name for exact matching (e.g., "Canal+ Extra 2" -> 2)
+const extractChannelNumber = (name: string): number | null => {
+  const match = name.match(/(\d+)\s*$/);
+  return match ? parseInt(match[1], 10) : null;
+};
+
 const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): StalkerEPG[] => {
   const programs: StalkerEPG[] = [];
   
@@ -155,6 +161,7 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
     
     const cleanedIptvName = channelName ? cleanChannelName(channelName) : '';
     const iptvWords = new Set(cleanedIptvName.split(' ').filter(w => w.length > 2 && !GENERIC_TERMS.has(w)));
+    const iptvChannelNumber = channelName ? extractChannelNumber(channelName) : null;
     
     
     Array.from(channels).forEach((ch) => {
@@ -164,6 +171,7 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
       // Clean XMLTV name too
       const cleanedXmltvName = cleanChannelName(displayName);
       const xmltvWords = new Set(cleanedXmltvName.split(' ').filter(w => w.length > 2 && !GENERIC_TERMS.has(w)));
+      const xmltvChannelNumber = extractChannelNumber(displayName);
       
       // Match by cleaned channel name
       if (id && cleanedIptvName && cleanedXmltvName) {
@@ -190,6 +198,12 @@ const parseXMLTV = (xmlText: string, channelId: number, channelName?: string): S
         // Prefer shorter, more specific channel names (CNN beats "1+1 CNN International HD")
         if (score > 0) {
           score -= cleanedXmltvName.length * 0.1;
+        }
+        
+        // Apply channel number penalty: if both have numbers but they don't match, heavily penalize
+        // This prevents "Canal+ Extra 2" from matching "Canal+ Extra"
+        if (iptvChannelNumber !== null && xmltvChannelNumber !== null && iptvChannelNumber !== xmltvChannelNumber) {
+          score -= 500;
         }
         
         if (score > bestMatchScore) {
