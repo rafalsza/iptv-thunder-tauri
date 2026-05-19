@@ -228,7 +228,6 @@ export function useMpvPlayer(
       if (newCacheSecs !== currentCacheSecsRef.current) {
         currentCacheSecsRef.current = newCacheSecs;
         void setProperty('cache-secs', newCacheSecs.toString());
-        console.log(`📈 Adaptive buffering: cache-secs increased to ${newCacheSecs}s (${newBufferingCount} buffering events)`);
       }
 
       pruneUrlMetrics();
@@ -366,7 +365,7 @@ export function useMpvPlayer(
   }, []);
 
   // Helper: finalize playback - centralized completion handler
-  const finalizePlayback = useCallback((reason: 'end-file' | 'near-end' | 'timeout') => {
+  const finalizePlayback = useCallback((_reason: 'end-file' | 'near-end' | 'timeout') => {
     if (isEndedRef.current) return;
     isEndedRef.current = true;
 
@@ -380,7 +379,6 @@ export function useMpvPlayer(
       onEndedRef.current();
     }
 
-    console.log(`🏁 Playback finalized: ${reason}`);
   }, [isVod, movieId, markAsWatched]);
 
   const handleEndFile = useCallback((data: unknown) => {
@@ -402,10 +400,16 @@ export function useMpvPlayer(
     if (!mpvRunningRef.current) return;
     mpvRunningRef.current = false;
     try { await destroy(); } catch { /* already dead */ }
-    console.log('🛑 MPV destroyed');
   }, []);
 
   const cleanup = useCallback(async () => {
+    const currentToken = loadingTokenRef.current;
+    
+    // Skip if there's an active loading token - another load is in progress
+    if (currentToken) {
+      return;
+    }
+    
     // Save position BEFORE resetting refs
     if (isVod && movieId && currentTimeRef.current > 30) {
       setPosition(movieId, currentTimeRef.current, durationRef.current);
@@ -550,7 +554,6 @@ export function useMpvPlayer(
     if (!isRequestCurrent(requestId) || !isTokenCurrent(loadingToken)) return;
 
     if (retryCountRef.current < MAX_RETRIES_PER_URL) {
-      console.log('🔄 Retrying same URL, attempt:', retryCountRef.current);
       setStreamState('retrying');
       const delay = getRetryDelay(retryCountRef.current);
       retryTimerRef.current = setTimeout(() => {
@@ -687,7 +690,6 @@ export function useMpvPlayer(
 
     await command('loadfile', [streamUrl]);
     await setProperty('volume', Math.round(volume * 100));
-    console.log('✅ MPV loadfile sent');
     return true;
   }, [isRequestCurrent, isTokenCurrent, safeDestroyMpv, handleLoadFailure]);
 
@@ -731,11 +733,15 @@ export function useMpvPlayer(
     // This ensures destroy+init don't overlap with other lifecycle operations
     const currentPromise = lifecycleQueueRef.current;
     const newPromise = currentPromise.then(async () => {
-      if (!isTokenCurrent(loadingToken)) return false;
+      if (!isTokenCurrent(loadingToken)) {
+        return false;
+      }
 
       // Destroy old MPV instance
       await safeDestroyMpv();
-      if (!isTokenCurrent(loadingToken)) return false;
+      if (!isTokenCurrent(loadingToken)) {
+        return false;
+      }
 
       // Initialize new MPV instance
       const volume = volumeRef.current;
@@ -871,13 +877,11 @@ export function useMpvPlayer(
     // Increase cache aggressively during stall recovery
     const recoveryCacheSecs = Math.min(currentCacheSecsRef.current + 10, 60);
     void setProperty('cache-secs', recoveryCacheSecs.toString());
-    console.log(`📈 Stall recovery: cache-secs increased to ${recoveryCacheSecs}s`);
 
     // Seek forward by 10 seconds to skip potentially bad segment
     const seekTarget = Math.max(0, currentPos + 10);
 
     void command('seek', [seekTarget, 'absolute']).then(async () => {
-      console.log(`✅ Seek recovery successful to position ${seekTarget}`);
       setStreamState('playing');
       failedSeekRecoveryRef.current = 0;
       // Don't reset stall counter - we need to track if we're stalling at same position after seek
@@ -886,7 +890,6 @@ export function useMpvPlayer(
       if (currentAudioId) {
         try {
           await setProperty('aid', currentAudioId);
-          console.log('🔊 Audio track reinitialized after stall recovery');
         } catch (e) {
           console.warn('⚠️ Audio track reinit failed:', e);
         }

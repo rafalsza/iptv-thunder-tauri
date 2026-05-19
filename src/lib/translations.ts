@@ -185,6 +185,7 @@ export const translations = {
     seriesCount_1: 'serial',
     seriesCount_2_4: 'seriale',
     seriesCount_5_plus: 'seriali',
+    all: 'Wszystkie',
     watch: 'Oglądaj',
     info: 'Informacje',
     resumeWatching: 'Kontynuuj oglądanie?',

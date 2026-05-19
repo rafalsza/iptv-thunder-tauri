@@ -57,6 +57,12 @@ export const useResumeStore = create<ResumeState>()(
           status = 'in_progress';
         }
 
+        // Preserve 'watched' status if already set (e.g., from markAsWatched called when video ended naturally)
+        const existingProgress = get().movies[movieId];
+        if (existingProgress?.status === 'watched') {
+          status = 'watched';
+        }
+
         // If time is 0, clear the progress
         if (time === 0) {
           set((state) => {

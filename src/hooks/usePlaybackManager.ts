@@ -64,7 +64,6 @@ export const usePlaybackManager = ({
       const accountId = client?.['account']?.id || 'default';
       const lastAccount = sessionStorage.getItem('playerLastAccountId');
       if (lastAccount && lastAccount !== accountId) {
-        console.log('🎬 Portal changed, clearing stream cache');
         queryClient.removeQueries({ queryKey: ['stream'], exact: false });
       }
       sessionStorage.setItem('playerLastAccountId', accountId);
@@ -372,7 +371,6 @@ export const usePlaybackManager = ({
 
       // Check if another autoplay or user interaction occurred during async operation
       if (autoplayTokenRef.current !== currentAutoplayToken) {
-        console.log('Autoplay cancelled due to race condition');
         return;
       }
     } catch (error) {

@@ -43,6 +43,11 @@ export class TauriHttpClient {
     this.defaultHeaders = { ...this.defaultHeaders, [key]: value };
   }
 
+  removeHeader(key: string) {
+    const { [key]: _, ...rest } = this.defaultHeaders;
+    this.defaultHeaders = rest;
+  }
+
   async get<T = unknown>(
     url: string,
     params?: Record<string, string>,
@@ -97,6 +102,11 @@ export class TauriHttpClient {
       // Build headers per attempt to get fresh auth token after refresh
       const headers = this.buildHeaders();
 
+      // Ensure Content-Type is set
+      if (!headers.some(h => h.toLowerCase().startsWith('content-type:'))) {
+        headers.push('Content-Type: application/json');
+      }
+
       try {
         const response = await this.executeRequest(fullUrl, headers, timeoutMs, signal);
         lastResponse = response;
@@ -116,7 +126,7 @@ export class TauriHttpClient {
           isAuth
         );
         
-        if (decision === 'fail') throw error;
+        if (decision === 'fail') throw lastError ?? new Error('Request failed without error details');
         if (decision === 'auth-retry') {
           authRetryCount++;
           continue;
@@ -306,16 +316,11 @@ export class TauriHttpClient {
   private isAuthError(status: number, body: string, parsed?: any): boolean {
     if (status === 401 || status === 403) return true;
 
-    if (parsed !== undefined) {
-      return this.isStalkerAuthError(parsed);
-    }
-
-    try {
-      const json = JSON.parse(body);
+    const json = parsed ?? this.tryParse(body);
+    if (json) {
       return this.isStalkerAuthError(json);
-    } catch {
-      return false;
     }
+    return false;
   }
 
   private isStalkerAuthError(json: any): boolean {
@@ -323,6 +328,78 @@ export class TauriHttpClient {
            json?.js?.error === 'Authorization required' ||
            json?.js?.error === 'Token expired' ||
            json?.error === 'Not authorized';
+  }
+
+  async post<T = unknown>(
+    url: string,
+    body?: unknown,
+    options?: HttpRequestOptions
+  ): Promise<T> {
+    return this.executeMethod<T>('POST', url, body, options);
+  }
+
+  async put<T = unknown>(
+    url: string,
+    body?: unknown,
+    options?: HttpRequestOptions
+  ): Promise<T> {
+    return this.executeMethod<T>('PUT', url, body, options);
+  }
+
+  async delete<T = unknown>(
+    url: string,
+    options?: HttpRequestOptions
+  ): Promise<T> {
+    return this.executeMethod<T>('DELETE', url, undefined, options);
+  }
+
+  private async executeMethod<T>(
+    method: string,
+    url: string,
+    body?: unknown,
+    options?: HttpRequestOptions
+  ): Promise<T> {
+    const fullUrl = this.buildUrl(url);
+    const timeoutMs = options?.timeoutMs ?? this.defaultOptions.timeoutMs ?? 30000;
+    const signal = options?.signal;
+
+    if (signal?.aborted) {
+      throw new Error('Request aborted');
+    }
+
+    const headers = this.buildHeaders();
+    if (!headers.some(h => h.toLowerCase().startsWith('content-type:'))) {
+      headers.push('Content-Type: application/json');
+    }
+
+    const requestId = signal ? crypto.randomUUID() : undefined;
+
+    const onAbort = () => {
+      if (requestId) {
+        invoke('cancel_request', { requestId }).catch((err) => {
+          logger.debug('cancel_request not available or failed', err);
+        });
+      }
+    };
+
+    signal?.addEventListener('abort', onAbort);
+
+    try {
+      const response = await this.withTimeout(
+        invoke<{ status: number; headers: Record<string, string>; body: string }>('stalker_request', {
+          url: fullUrl.toString(),
+          method,
+          headers,
+          body: body ? JSON.stringify(body) : null,
+          timeoutMs,
+          requestId,
+        }),
+        timeoutMs + 1000
+      );
+      return this.parseResponse<T>(response);
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+    }
   }
 
   private delay(ms: number): Promise<void> {

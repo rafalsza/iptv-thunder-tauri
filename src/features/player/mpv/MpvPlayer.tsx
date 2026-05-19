@@ -17,9 +17,10 @@ import { useChannels } from '@/features/tv/tv.hooks';
 import { StalkerChannel } from '@/types';
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export const MpvPlayer: React.FC<PlayerProps> = ({
+const MpvPlayerComponent: React.FC<PlayerProps> = ({
   url, name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, genreId, onClose, onEnded, onChannelChange,
 }) => {
+
   const { setPosition, markAsWatched } = useResumeStore();
   const mpv = useMpvPlayer(url, isVod, movieId, setPosition, onEnded, markAsWatched);
   const controls = usePlayerControls();
@@ -46,31 +47,31 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
   const hasResumedRef = useRef(false);
   const urlChangeIdRef = useRef(0);
 
-  // Memoized cleanup handler for beforeunload event
-  const handleBeforeUnload = useCallback(() => {
-    void mpv.cleanup();
-  }, [mpv.cleanup]);
-
-  // Cleanup on unmount and before page unload
+  // Cleanup on unmount and before page unload - empty deps to run once
   useEffect(() => {
+    const cleanupRef = mpv.cleanup;
+    const handleBeforeUnload = () => void cleanupRef();
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      void mpv.cleanup();
+      void cleanupRef();
     };
-  }, [handleBeforeUnload]);
+  }, []);
 
   // Initial load on URL change
   useEffect(() => {
-    const { cleanup, loadUrl, getRankedUrls, setStreamState, setStatusMsg } = mpv;
+    const { cleanup, loadUrl, getRankedUrls, setStreamState, setStatusMsg, usingMpv } = mpv;
     hasResumedRef.current = false;
 
     const requestId = ++urlChangeIdRef.current;
 
-    // Cleanup old MPV before loading new URL
-    void cleanup().then(() => {
-      // Guard: newer URL change may have started during cleanup
-      if (requestId !== urlChangeIdRef.current) return;
+    // Skip cleanup if MPV is not running - nothing to clean
+    const skipCleanup = !usingMpv;
+
+    const doLoad = async () => {
+      if (requestId !== urlChangeIdRef.current) {
+        return;
+      }
 
       // Reset state for new stream
       setStreamState('connecting');
@@ -78,6 +79,16 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
       // Use ranked URLs for smart priority ordering
       const ranked = getRankedUrls ? getRankedUrls() : [url];
       void loadUrl(ranked[0], 0, 0);
+    };
+
+    if (skipCleanup) {
+      void doLoad();
+      return;
+    }
+
+    // Cleanup old MPV before loading new URL
+    void cleanup().then(() => doLoad()).catch(err => {
+      console.error(`❌ cleanup failed: requestId=${requestId}`, err);
     });
 
     return () => {
@@ -270,3 +281,5 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
     </main>
   );
 };
+
+export const MpvPlayer = React.memo(MpvPlayerComponent);

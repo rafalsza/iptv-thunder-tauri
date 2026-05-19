@@ -26,7 +26,7 @@ interface PlayerProps {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export const Player: React.FC<PlayerProps> = ({
+const PlayerComponent: React.FC<PlayerProps> = ({
   url, name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, genreId, onClose, onEnded, onChannelChange,
 }) => {
   const { setPosition } = useResumeStore();
@@ -97,3 +97,5 @@ export const Player: React.FC<PlayerProps> = ({
     />
   );
 };
+
+export const Player = React.memo(PlayerComponent);
