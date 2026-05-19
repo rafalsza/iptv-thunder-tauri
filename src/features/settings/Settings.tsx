@@ -30,7 +30,7 @@ const useTabs = (t: (key: TranslationKey) => string) => [
 
 export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   const { t, currentLang, changeLanguage } = useTranslation();
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const queryClient = useQueryClient();
   const TABS = useTabs(t);
   const epgServices = useEpgServices();
@@ -57,6 +57,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [version, setVersion] = useState<string>('');
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [localTheme, setLocalTheme] = useState(theme);
 
   const [epgUrl, setEpgUrl] = useState(externalEpgUrl || '');
   const [selectedService, setSelectedService] = useState(selectedEpgService || 'auto');
@@ -78,27 +79,16 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
-  // Sync theme from Tauri Store to ThemeProvider when settings are loaded
-  useEffect(() => {
-    if (settings?.theme) {
-      setTheme(settings.theme);
-    }
-  }, [settings?.theme]);
-
-  // Sync local EPG state with store values whenever they change
+  // Sync local state with external sources
   useEffect(() => {
     setEpgUrl(externalEpgUrl || '');
     setSelectedService(selectedEpgService || 'auto');
-  }, [externalEpgUrl, selectedEpgService]);
+    setLocalTheme(theme);
+  }, [externalEpgUrl, selectedEpgService, theme]);
 
   const updateSetting = async <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     // Update UI immediately (optimistic update)
     setSettings(prev => prev ? { ...prev, [key]: value } : null);
-
-    // Update theme provider immediately when theme changes
-    if (key === 'theme') {
-      setTheme(value as 'light' | 'dark' | 'system');
-    }
 
     // Save to Tauri store in background (non-blocking)
     setSetting(key, value).catch(error => {
@@ -224,8 +214,12 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         data-tv-initial
                         data-tv-index="10"
                         tabIndex={0}
-                        value={settings.theme}
-                        onChange={(e) => updateSetting('theme', e.target.value as any)}
+                        value={localTheme}
+                        onChange={(e) => {
+                          const newTheme = e.target.value as 'light' | 'dark' | 'system';
+                          setLocalTheme(newTheme);
+                          setTheme(newTheme);
+                        }}
                         onKeyDown={(e: React.KeyboardEvent<HTMLSelectElement>) => {
                           if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
                             e.preventDefault();

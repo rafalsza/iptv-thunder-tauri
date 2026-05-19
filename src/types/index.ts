@@ -132,7 +132,6 @@ export interface WatchHistory {
 }
 
 export interface AppSettings {
-  theme: 'dark' | 'light' | 'system';
   language: 'en' | 'pl' | 'de';
   autoConnect: boolean;
   bufferTime: number;

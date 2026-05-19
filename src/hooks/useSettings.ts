@@ -12,7 +12,6 @@ async function getStore(): Promise<Store> {
 // Settings types
 export interface AppSettings {
   // UI settings
-  theme: 'light' | 'dark' | 'system';
   language: 'pl' | 'en';
   sidebarCollapsed: boolean;
   channelViewMode: 'grid' | 'list';
@@ -43,7 +42,6 @@ export interface AppSettings {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  theme: 'dark',
   language: 'pl',
   sidebarCollapsed: false,
   channelViewMode: 'grid',
