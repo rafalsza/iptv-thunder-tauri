@@ -12,7 +12,6 @@ import { platform } from '@tauri-apps/plugin-os';
 
 interface PlayerProps {
   url: string;
-  fallbackUrls?: string[];
   name: string;
   channelId?: number;
   client?: any;
@@ -28,7 +27,7 @@ interface PlayerProps {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const Player: React.FC<PlayerProps> = ({
-  url, fallbackUrls = [], name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, genreId, onClose, onEnded, onChannelChange,
+  url, name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, genreId, onClose, onEnded, onChannelChange,
 }) => {
   const { setPosition } = useResumeStore();
   const [currentPlatform, setCurrentPlatform] = useState<string>('desktop');
@@ -65,7 +64,6 @@ export const Player: React.FC<PlayerProps> = ({
     return (
       <ExoPlayer
         url={url}
-        fallbackUrls={fallbackUrls}
         name={name}
         channelId={channelId}
         client={client}
@@ -85,7 +83,6 @@ export const Player: React.FC<PlayerProps> = ({
   return (
     <MpvPlayer
       url={url}
-      fallbackUrls={fallbackUrls}
       name={name}
       channelId={channelId}
       client={client}

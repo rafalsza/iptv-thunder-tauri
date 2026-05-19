@@ -18,10 +18,10 @@ import { StalkerChannel } from '@/types';
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const MpvPlayer: React.FC<PlayerProps> = ({
-  url, fallbackUrls = [], name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, genreId, onClose, onEnded, onChannelChange,
+  url, name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, genreId, onClose, onEnded, onChannelChange,
 }) => {
   const { setPosition, markAsWatched } = useResumeStore();
-  const mpv = useMpvPlayer(url, fallbackUrls, isVod, movieId, setPosition, onEnded, markAsWatched);
+  const mpv = useMpvPlayer(url, isVod, movieId, setPosition, onEnded, markAsWatched);
   const controls = usePlayerControls();
 
   // Single EPG query for 24 hours - used by both current program and EPG modal
@@ -76,7 +76,7 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
       setStreamState('connecting');
       setStatusMsg('Connecting…');
       // Use ranked URLs for smart priority ordering
-      const ranked = getRankedUrls ? getRankedUrls() : [url, ...fallbackUrls];
+      const ranked = getRankedUrls ? getRankedUrls() : [url];
       void loadUrl(ranked[0], 0, 0);
     });
 
@@ -99,8 +99,8 @@ export const MpvPlayer: React.FC<PlayerProps> = ({
     }
   }, [isVod, resumePosition, mpv.streamState, mpv.duration, seekTo]);
 
-  // Memoized URL list to avoid re-calculation on every render
-  const allUrls = useMemo(() => [url, ...fallbackUrls], [url, fallbackUrls]);
+  // Simple URL list
+  const allUrls = useMemo(() => [url], [url]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {

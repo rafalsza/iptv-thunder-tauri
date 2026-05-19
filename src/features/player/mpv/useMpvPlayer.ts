@@ -35,7 +35,6 @@ interface UseMpvPlayerReturn {
 
 export function useMpvPlayer(
   url: string,
-  fallbackUrls: string[],
   isVod: boolean,
   movieId: string | undefined,
   setPosition: (id: string, pos: number, duration?: number) => void,
@@ -46,7 +45,7 @@ export function useMpvPlayer(
   const mpvRunningRef = useRef(false);
   const currentIdxRef = useRef(0);
   const retryCountRef = useRef(0);
-  const allUrlsRef = useRef<string[]>([url, ...fallbackUrls]);
+  const allUrlsRef = useRef<string[]>([url]);
   const connTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadingTokenRef = useRef<symbol | null>(null);
@@ -120,41 +119,15 @@ export function useMpvPlayer(
     void loadSettings();
   }, []);
 
-  // Smart URL ranking based on metrics + stream store
+  // Simple URL return - no ranking needed for single URL
   const getRankedUrls = useCallback(() => {
-    const urls = [url, ...fallbackUrls];
-    const now = Date.now();
-
-    // Calculate score for each URL (lower = better)
-    const scored = urls.map(u => {
-      const metrics = urlMetricsRef.current.get(u);
-      if (!metrics) {
-        // New URL - random exploration to allow fallback discovery
-        return { url: u, score: Math.random() * 100 };
-      }
-
-      // Factors (lower score = better priority)
-      const latencyScore = Math.min(metrics.latency / 100, 500); // 0-500ms
-      // Logarithmic decay - less aggressive than linear, more natural
-      const recencyPenalty = Math.log1p((now - metrics.lastSuccess) / 60000);
-      const errorPenalty = metrics.errorCount * 50; // 50 points per consecutive error
-      const bufferingPenalty = metrics.bufferingCount * 20; // 20 points per buffering event
-      const bitrateBonus = metrics.avgBitrate > 0 ? Math.max(0, 100 - metrics.avgBitrate / 100) : 0; // lower bitrate penalty
-      const successBonus = metrics.successCount > 0 ? -20 : 0; // bonus for proven URLs
-
-      const score = latencyScore + recencyPenalty + errorPenalty + bufferingPenalty + bitrateBonus + successBonus;
-      return { url: u, score };
-    });
-
-    // Sort by score (ascending)
-    scored.sort((a, b) => a.score - b.score);
-    return scored.map(s => s.url);
-  }, [url, fallbackUrls]);
+    return [url];
+  }, [url]);
 
   // Sync allUrlsRef with props and apply adaptive ranking
   useEffect(() => {
     allUrlsRef.current = getRankedUrls();
-  }, [url, fallbackUrls, getRankedUrls]);
+  }, [url, getRankedUrls]);
 
   // Update metrics on URL attempt start
   const recordUrlStart = (streamUrl: string) => {
@@ -647,12 +620,12 @@ export function useMpvPlayer(
         'hwdec': hwdecValue,
         'keep-open': 'yes',
         'cache': 'yes',
-        'cache-secs': '10',
-        'demuxer-readahead-secs': '2',
-        'demuxer-max-bytes': '50MiB',
-        'demuxer-max-back-bytes': '20MiB',
-        'network-timeout': '30',
-        'stream-buffer-size': '4M',
+        'cache-secs': '20',
+        'demuxer-readahead-secs': '5',
+        'demuxer-max-bytes': '100MiB',
+        'demuxer-max-back-bytes': '50MiB',
+        'network-timeout': '60',
+        'stream-buffer-size': '8M',
         'aid': 'auto',
         'sid': 'no',
         'sub-auto': 'no',
@@ -662,7 +635,7 @@ export function useMpvPlayer(
           'reconnect_on_network_error=1',
           'reconnect_on_http_error=4xx,5xx',
           'reconnect_delay_max=10',
-          'timeout=10000000',
+          'timeout=30000000',
         ].join(','),
       },
       observedProperties: OBSERVED_PROPERTIES,
@@ -857,13 +830,36 @@ export function useMpvPlayer(
     return false;
   }, [finalizePlayback]);
 
+  // Track stall position to detect repeated stalls at same spot
+  const lastStallPositionRef = useRef<number>(0);
+  const stallCountAtPositionRef = useRef(0);
+
   // Helper: handle stall recovery with seek and audio reinit
   const handleStallRecovery = useCallback((stallTimeout: number, now: number) => {
     if (now - lastRetryRef.current < 10000) return;
     lastRetryRef.current = now;
 
-    console.warn(`⚠️ Stream stalled - no time update for ${stallTimeout / 1000}s`);
+    const currentPos = currentTimeRef.current || 0;
+    console.warn(`⚠️ Stream stalled - no time update for ${stallTimeout / 1000}s at position ${currentPos.toFixed(1)}s`);
     setStreamState('stalled');
+
+    // Check if stalling at same position repeatedly - restart from beginning
+    if (Math.abs(currentPos - lastStallPositionRef.current) < 10) {
+      stallCountAtPositionRef.current++;
+      console.warn(`📍 Same position stall detected: count=${stallCountAtPositionRef.current}`);
+      if (stallCountAtPositionRef.current >= 1) {
+        console.warn('🔄 Stalling at same position, restarting stream from beginning');
+        stallCountAtPositionRef.current = 0;
+        lastStallPositionRef.current = 0;
+        // Restart from beginning with clean cache
+        void setProperty('cache-secs', '5'); // Reduce cache to force fresh load
+        void command('seek', [0, 'absolute']);
+        return;
+      }
+    } else {
+      stallCountAtPositionRef.current = 0;
+    }
+    lastStallPositionRef.current = currentPos;
 
     if (failedSeekRecoveryRef.current >= 2) {
       console.warn('🔄 Multiple seek recoveries failed, doing full retry');
@@ -872,20 +868,28 @@ export function useMpvPlayer(
       return;
     }
 
-    void command('seek', [0, 'relative']).then(async () => {
-      console.log('✅ Seek recovery successful');
+    // Increase cache aggressively during stall recovery
+    const recoveryCacheSecs = Math.min(currentCacheSecsRef.current + 10, 60);
+    void setProperty('cache-secs', recoveryCacheSecs.toString());
+    console.log(`📈 Stall recovery: cache-secs increased to ${recoveryCacheSecs}s`);
+
+    // Seek forward by 10 seconds to skip potentially bad segment
+    const seekTarget = Math.max(0, currentPos + 10);
+
+    void command('seek', [seekTarget, 'absolute']).then(async () => {
+      console.log(`✅ Seek recovery successful to position ${seekTarget}`);
       setStreamState('playing');
+      failedSeekRecoveryRef.current = 0;
+      // Don't reset stall counter - we need to track if we're stalling at same position after seek
+
+      // Reinitialize audio track after seek
       if (currentAudioId) {
         try {
           await setProperty('aid', currentAudioId);
           console.log('🔊 Audio track reinitialized after stall recovery');
-          failedSeekRecoveryRef.current = 0;
         } catch (e) {
           console.warn('⚠️ Audio track reinit failed:', e);
-          failedSeekRecoveryRef.current++;
         }
-      } else {
-        failedSeekRecoveryRef.current = 0;
       }
     }).catch(() => {
       console.warn('⏱ Seek recovery failed, falling back to retry');
@@ -906,7 +910,7 @@ export function useMpvPlayer(
         if (checkVodEnd()) return;
       }
 
-      const stallTimeout = isVod ? 15000 : 8000;
+      const stallTimeout = isVod ? 20000 : 10000;
 
       if (timeSinceLastUpdate > stallTimeout) {
         handleStallRecovery(stallTimeout, now);

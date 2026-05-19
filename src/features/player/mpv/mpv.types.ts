@@ -12,7 +12,6 @@ export interface Track {
 
 export interface PlayerProps {
   url: string;
-  fallbackUrls?: string[];
   name: string;
   channelId?: number;
   client?: StalkerClient;

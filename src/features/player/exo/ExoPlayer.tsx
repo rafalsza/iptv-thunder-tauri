@@ -85,7 +85,6 @@ const validatePlayerParams = (params: any) => {
 
 export interface ExoPlayerProps {
   url: string;
-  fallbackUrls?: string[];
   name?: string;
   channelId?: number;
   client?: any;
