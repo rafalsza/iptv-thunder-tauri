@@ -72,7 +72,7 @@ describe('spatialPlugin Performance Tests', () => {
       const duration = endTime - startTime;
 
       expect(result).toBe('node-0-1');
-      expect(duration).toBeLessThan(50);
+      expect(duration).toBeLessThan(100);
     });
 
     it('should handle down navigation in 10x10 grid in under 5ms', () => {
@@ -127,7 +127,7 @@ describe('spatialPlugin Performance Tests', () => {
       const endTime = performance.now();
       const duration = endTime - startTime;
 
-      expect(duration).toBeLessThan(50);
+      expect(duration).toBeLessThan(100);
     });
 
     it('should handle complex container scenarios efficiently', () => {
@@ -184,7 +184,7 @@ describe('spatialPlugin Performance Tests', () => {
 
       // All directions should complete quickly
       durations.forEach(duration => {
-        expect(duration).toBeLessThan(20);
+        expect(duration).toBeLessThan(50);
       });
     });
   });

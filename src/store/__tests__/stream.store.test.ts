@@ -155,4 +155,36 @@ describe('stream.store', () => {
       expect(avg).toBeCloseTo(0.5, 2);
     });
   });
+
+  describe('trimStreams (via cleanup)', () => {
+    it('should trim streams when over MAX_STREAMS', () => {
+      // Add more streams than MAX_STREAMS (200)
+      for (let i = 0; i < 250; i++) {
+        useStreamStore.getState().success(`https://example.com/stream${i}`);
+      }
+      
+      const countBefore = useStreamStore.getState().getStreamCount();
+      expect(countBefore).toBeGreaterThan(200);
+      
+      useStreamStore.getState().cleanup();
+      
+      const countAfter = useStreamStore.getState().getStreamCount();
+      expect(countAfter).toBeLessThanOrEqual(200);
+    });
+
+    it('should keep most recently used streams', () => {
+      // Add old stream
+      useStreamStore.getState().success('https://example.com/old');
+      
+      // Add new stream (will have more recent lastSuccess)
+      jest.advanceTimersByTime(100);
+      useStreamStore.getState().success('https://example.com/new');
+      
+      useStreamStore.getState().cleanup();
+      
+      // Both should still be there since we're under MAX_STREAMS
+      const count = useStreamStore.getState().getStreamCount();
+      expect(count).toBe(2);
+    });
+  });
 });

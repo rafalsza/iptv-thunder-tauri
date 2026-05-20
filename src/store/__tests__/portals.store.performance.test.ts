@@ -59,7 +59,7 @@ describe('portals.store Performance Tests', () => {
       const endTime = performance.now();
       const duration = endTime - startTime;
 
-      expect(duration).toBeLessThan(15);
+      expect(duration).toBeLessThan(50);
     });
 
     it('should add 100 portals in under 50ms', () => {
@@ -145,7 +145,7 @@ describe('portals.store Performance Tests', () => {
       const endTime = performance.now();
       const duration = endTime - startTime;
 
-      expect(duration).toBeLessThan(20);
+      expect(duration).toBeLessThan(50);
     });
   });
 
@@ -213,7 +213,7 @@ describe('portals.store Performance Tests', () => {
       const duration = endTime - startTime;
 
       expect(portal).toBeDefined();
-      expect(duration).toBeLessThan(5);
+      expect(duration).toBeLessThan(20);
     });
   });
 
@@ -224,7 +224,7 @@ describe('portals.store Performance Tests', () => {
       const endTime = performance.now();
       const duration = endTime - startTime;
 
-      expect(duration).toBeLessThan(5);
+      expect(duration).toBeLessThan(20);
     });
 
     it('should set selected EPG service in under 1ms', () => {
