@@ -41,29 +41,24 @@ interface PortalCacheState {
   setHydrated: (value: boolean) => void;
 }
 
-const initialPortalData: PortalData = {
-  channelsByGenre: {},
-  allChannels: [],
-  channelCategories: [],
-  vod: [],
-  vodByCategory: {},
-  vodCategories: [],
-  epgCache: {},
-  lastUpdated: 0,
-};
-
 export const usePortalCacheStore = create<PortalCacheState>()(
   immer((set, get) => ({
-      portalsData: {},
-      isHydrated: false,
-      
-      setChannels: (portalId, genreId, channels) => {
+    portalsData: {},
+    isHydrated: false,
+
+    setChannels: (portalId, genreId, channels) => {
         set((state) => {
           if (!state.portalsData[portalId]) {
-            state.portalsData[portalId] = { ...initialPortalData };
-          }
-          if (!state.portalsData[portalId].channelsByGenre) {
-            state.portalsData[portalId].channelsByGenre = {};
+            state.portalsData[portalId] = {
+              channelsByGenre: {},
+              allChannels: [],
+              channelCategories: [],
+              vod: [],
+              vodByCategory: {},
+              vodCategories: [],
+              epgCache: {},
+              lastUpdated: 0,
+            };
           }
           state.portalsData[portalId].channelsByGenre[genreId] = channels;
           state.portalsData[portalId].lastUpdated = Date.now();
@@ -73,7 +68,16 @@ export const usePortalCacheStore = create<PortalCacheState>()(
       setAllChannels: (portalId, channels) => {
         set((state) => {
           if (!state.portalsData[portalId]) {
-            state.portalsData[portalId] = { ...initialPortalData };
+            state.portalsData[portalId] = {
+              channelsByGenre: {},
+              allChannels: [],
+              channelCategories: [],
+              vod: [],
+              vodByCategory: {},
+              vodCategories: [],
+              epgCache: {},
+              lastUpdated: 0,
+            };
           }
           state.portalsData[portalId].allChannels = channels;
           state.portalsData[portalId].lastUpdated = Date.now();
@@ -83,7 +87,16 @@ export const usePortalCacheStore = create<PortalCacheState>()(
       setChannelCategories: (portalId, categories) => {
         set((state) => {
           if (!state.portalsData[portalId]) {
-            state.portalsData[portalId] = { ...initialPortalData };
+            state.portalsData[portalId] = {
+              channelsByGenre: {},
+              allChannels: [],
+              channelCategories: [],
+              vod: [],
+              vodByCategory: {},
+              vodCategories: [],
+              epgCache: {},
+              lastUpdated: 0,
+            };
           }
           state.portalsData[portalId].channelCategories = categories;
           state.portalsData[portalId].lastUpdated = Date.now();
@@ -93,7 +106,16 @@ export const usePortalCacheStore = create<PortalCacheState>()(
       setVOD: (portalId, vod) => {
         set((state) => {
           if (!state.portalsData[portalId]) {
-            state.portalsData[portalId] = { ...initialPortalData };
+            state.portalsData[portalId] = {
+              channelsByGenre: {},
+              allChannels: [],
+              channelCategories: [],
+              vod: [],
+              vodByCategory: {},
+              vodCategories: [],
+              epgCache: {},
+              lastUpdated: 0,
+            };
           }
           state.portalsData[portalId].vod = vod;
           state.portalsData[portalId].lastUpdated = Date.now();
@@ -103,7 +125,16 @@ export const usePortalCacheStore = create<PortalCacheState>()(
       setVODForCategory: (portalId, categoryId, vod) => {
         set((state) => {
           if (!state.portalsData[portalId]) {
-            state.portalsData[portalId] = { ...initialPortalData };
+            state.portalsData[portalId] = {
+              channelsByGenre: {},
+              allChannels: [],
+              channelCategories: [],
+              vod: [],
+              vodByCategory: {},
+              vodCategories: [],
+              epgCache: {},
+              lastUpdated: 0,
+            };
           }
           if (!state.portalsData[portalId].vodByCategory) {
             state.portalsData[portalId].vodByCategory = {};
@@ -116,7 +147,16 @@ export const usePortalCacheStore = create<PortalCacheState>()(
       appendVODPage: (portalId, categoryId, page, items) => {
         set((state) => {
           if (!state.portalsData[portalId]) {
-            state.portalsData[portalId] = { ...initialPortalData };
+            state.portalsData[portalId] = {
+              channelsByGenre: {},
+              allChannels: [],
+              channelCategories: [],
+              vod: [],
+              vodByCategory: {},
+              vodCategories: [],
+              epgCache: {},
+              lastUpdated: 0,
+            };
           }
           if (!state.portalsData[portalId].vodByCategory) {
             state.portalsData[portalId].vodByCategory = {};
@@ -160,7 +200,16 @@ export const usePortalCacheStore = create<PortalCacheState>()(
       setVODCategories: (portalId, categories) => {
         set((state) => {
           if (!state.portalsData[portalId]) {
-            state.portalsData[portalId] = { ...initialPortalData };
+            state.portalsData[portalId] = {
+              channelsByGenre: {},
+              allChannels: [],
+              channelCategories: [],
+              vod: [],
+              vodByCategory: {},
+              vodCategories: [],
+              epgCache: {},
+              lastUpdated: 0,
+            };
           }
           state.portalsData[portalId].vodCategories = categories;
           state.portalsData[portalId].lastUpdated = Date.now();
@@ -170,7 +219,16 @@ export const usePortalCacheStore = create<PortalCacheState>()(
       setChannelEPG: (portalId, channelId, programs) => {
         set((state) => {
           if (!state.portalsData[portalId]) {
-            state.portalsData[portalId] = { ...initialPortalData };
+            state.portalsData[portalId] = {
+              channelsByGenre: {},
+              allChannels: [],
+              channelCategories: [],
+              vod: [],
+              vodByCategory: {},
+              vodCategories: [],
+              epgCache: {},
+              lastUpdated: 0,
+            };
           }
           if (!state.portalsData[portalId].epgCache) {
             state.portalsData[portalId].epgCache = {};

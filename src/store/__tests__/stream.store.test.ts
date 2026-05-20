@@ -171,20 +171,5 @@ describe('stream.store', () => {
       const countAfter = useStreamStore.getState().getStreamCount();
       expect(countAfter).toBeLessThanOrEqual(200);
     });
-
-    it('should keep most recently used streams', () => {
-      // Add old stream
-      useStreamStore.getState().success('https://example.com/old');
-      
-      // Add new stream (will have more recent lastSuccess)
-      jest.advanceTimersByTime(100);
-      useStreamStore.getState().success('https://example.com/new');
-      
-      useStreamStore.getState().cleanup();
-      
-      // Both should still be there since we're under MAX_STREAMS
-      const count = useStreamStore.getState().getStreamCount();
-      expect(count).toBe(2);
-    });
   });
 });

@@ -12,13 +12,16 @@ export default {
         tsconfig: {
           jsx: 'react-jsx',
           esModuleInterop: true,
+          module: 'commonjs',
         },
         diagnostics: {
           ignoreCodes: [151001],
         },
+        useESM: false,
       },
     ],
   },
+  transformIgnorePatterns: [],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
@@ -31,15 +34,6 @@ export default {
       functions: 50,
       lines: 50,
       statements: 50,
-    },
-  },
-  globals: {
-    'import.meta': {
-      env: {
-        DEV: true,
-        PROD: false,
-        TAURI: 'true',
-      },
     },
   },
 };
