@@ -270,4 +270,5 @@ export const de = {
   maximizeWindow: 'Fenster maximieren',
   restoreWindow: 'Fenster wiederherstellen',
   closeWindow: 'Fenster schließen',
+  categoryChannels: 'Kanäle in dieser Kategorie',
 } as const;

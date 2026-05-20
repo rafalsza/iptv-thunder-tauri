@@ -270,4 +270,5 @@ export const be = {
   maximizeWindow: 'Максімізаваць акно',
   restoreWindow: 'Аднавіць акно',
   closeWindow: 'Закрыць акно',
+  categoryChannels: 'Каналы ў гэтай катэгорыі',
 } as const;

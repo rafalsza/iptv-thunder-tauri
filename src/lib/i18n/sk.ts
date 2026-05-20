@@ -270,4 +270,5 @@ export const sk = {
   maximizeWindow: 'Maximalizovať okno',
   restoreWindow: 'Obnoviť okno',
   closeWindow: 'Zavrieť okno',
+  categoryChannels: 'Kanály v tejto kategórii',
 } as const;

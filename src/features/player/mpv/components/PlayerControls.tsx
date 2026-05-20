@@ -115,7 +115,7 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
               className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
                 showCategoryChannelsMenu ? 'bg-green-500/80 hover:bg-green-500' : 'bg-white/20 hover:bg-white/30'
               }`}
-              title="Kanały w tej kategorii"
+              title={t('categoryChannels')}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                 <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9h-4v4h-2v-4H9V9h4V5h2v4h4v2z"/>

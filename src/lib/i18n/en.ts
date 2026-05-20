@@ -270,4 +270,5 @@ export const en = {
   maximizeWindow: 'Maximize window',
   restoreWindow: 'Restore window',
   closeWindow: 'Close window',
+  categoryChannels: 'Channels in this category',
 } as const;
