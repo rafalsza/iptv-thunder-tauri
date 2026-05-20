@@ -29,6 +29,7 @@ export const usePlaybackManager = ({
   const autoplayTokenRef = useRef<symbol | null>(null);
   const autoPlayRef = useRef<boolean | null>(null);
   const seriesCacheRef = useRef<Record<string, any>>({});
+  const abortRef = useRef<AbortController | null>(null);
 
   // Keep ref in sync with state - CRITICAL for autoplay
   useEffect(() => {
@@ -40,9 +41,17 @@ export const usePlaybackManager = ({
     seriesCacheRef.current = {};
   }, [activePortal?.id]);
 
+  // Cleanup on unmount - cancel all pending requests
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+    };
+  }, []);
+
   // Single player manager (store)
   const player = usePlaybackStore();
-  const abortRef = useRef<AbortController | null>(null);
 
   const play = async (channel: StalkerChannel, vodFlag: boolean = false, resumePos: number = 0, movieId?: string) => {
     if (!client) return;

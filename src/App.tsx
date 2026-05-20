@@ -15,6 +15,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { useTypedRouter, isMovieDetails, isSeriesDetails } from '@/hooks/useTypedRouter';
 import { usePlaybackManager } from '@/hooks/usePlaybackManager';
 import { useNavigationMenu } from '@/hooks/useNavigationMenu';
+import { useEpgCacheManager } from '@/features/epg/epg.hooks';
 import { AppLayout } from '@/components/AppLayout';
 import { AppContent } from '@/components/AppContent';
 import { StalkerAccount } from '@/types';
@@ -53,6 +54,9 @@ function portalToStalkerAccount(portal: { id: string; name: string; portalUrl: s
 function AppInner() {
   const [search, setSearch] = React.useState('');
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+
+  // Manage EPG cache globally
+  useEpgCacheManager();
 
   const activePortal = usePortalsStore(s =>
     s.portals.find(p => p.id === s.activePortalId) ?? null

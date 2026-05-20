@@ -51,14 +51,16 @@ const fetchEPGData = async (channelId: number, isVod: boolean) => {
       result.epgTitle = currentProgram.name || '';
       result.epgStart = formatEPGTime(currentProgram.start_time);
       result.epgEnd = formatEPGTime(currentProgram.end_time);
-      logger.info('[ExoPlayer] Current program:', result.epgTitle, result.epgStart, '-', result.epgEnd);
+      result.epgCategory = currentProgram.category || '';
+      logger.info('[ExoPlayer] Current program:', result.epgTitle, result.epgStart, '-', result.epgEnd, result.epgCategory);
     }
 
     if (nextProgram) {
       result.epgNextTitle = nextProgram.name || '';
       result.epgNextStart = formatEPGTime(nextProgram.start_time);
       result.epgNextEnd = formatEPGTime(nextProgram.end_time);
-      logger.info('[ExoPlayer] Next program:', result.epgNextTitle, result.epgNextStart);
+      result.epgNextCategory = nextProgram.category || '';
+      logger.info('[ExoPlayer] Next program:', result.epgNextTitle, result.epgNextStart, result.epgNextCategory);
     }
 
     return result;

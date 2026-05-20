@@ -48,9 +48,11 @@ class NativePlayerActivity : AppCompatActivity() {
     private var epgTitle = ""
     private var epgStart = ""
     private var epgEnd = ""
+    private var epgCategory = ""
     private var epgNextTitle = ""
     private var epgNextStart = ""
     private var epgNextEnd = ""
+    private var epgNextCategory = ""
     private var initialVolume = 0.8f
 
     // Channel data for carousel
@@ -106,10 +108,12 @@ class NativePlayerActivity : AppCompatActivity() {
         epgTitle = intent.getStringExtra("epgTitle") ?: ""
         epgStart = intent.getStringExtra("epgStart") ?: ""
         epgEnd = intent.getStringExtra("epgEnd") ?: ""
+        epgCategory = intent.getStringExtra("epgCategory") ?: ""
         epgNextTitle = intent.getStringExtra("epgNextTitle") ?: ""
         epgNextStart = intent.getStringExtra("epgNextStart") ?: ""
         epgNextEnd = intent.getStringExtra("epgNextEnd") ?: ""
-        android.util.Log.d("NativePlayerActivity", "EPG data: title=$epgTitle, start=$epgStart, end=$epgEnd")
+        epgNextCategory = intent.getStringExtra("epgNextCategory") ?: ""
+        android.util.Log.d("NativePlayerActivity", "EPG data: title=$epgTitle, start=$epgStart, end=$epgEnd, category=$epgCategory")
 
         // Get volume from settings (0-100, default 80)
         initialVolume = intent.getIntExtra("volume", 80) / 100f
@@ -249,7 +253,7 @@ class NativePlayerActivity : AppCompatActivity() {
 
         // Start EPG with initial data if available
         if (epgTitle.isNotEmpty() && epgStart.isNotEmpty() && epgEnd.isNotEmpty()) {
-            epgManager.updateEpg(epgTitle, epgStart, epgEnd, epgNextTitle, epgNextStart, epgNextEnd)
+            epgManager.updateEpg(epgTitle, epgStart, epgEnd, epgNextTitle, epgNextStart, epgNextEnd, epgCategory, epgNextCategory)
         }
         epgManager.start(isVod)
 
@@ -358,8 +362,8 @@ class NativePlayerActivity : AppCompatActivity() {
         if (isVod) epgManager.stop() else epgManager.start(false)
     }
 
-    fun updateEPG(title: String, start: String, end: String, nextTitle: String = "", nextStart: String = "", nextEnd: String = "") {
-        epgManager.updateEpg(title, start, end, nextTitle, nextStart, nextEnd)
+    fun updateEPG(title: String, start: String, end: String, nextTitle: String = "", nextStart: String = "", nextEnd: String = "", category: String = "", nextCategory: String = "") {
+        epgManager.updateEpg(title, start, end, nextTitle, nextStart, nextEnd, category, nextCategory)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

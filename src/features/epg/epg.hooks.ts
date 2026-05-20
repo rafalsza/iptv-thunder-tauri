@@ -16,7 +16,8 @@ import {
   getNextProgram,
   getProgramsForTimeRange,
   getEPGTimeRange,
-  fetchExternalEPG
+  fetchExternalEPG,
+  clearEpgCache
 } from './epg.api';
 
 const EPG_SERVICE_NAME_KEYS: Record<string, TranslationKey> = {
@@ -47,52 +48,74 @@ export const useEpgServices = (): EpgService[] => {
   }));
 };
 
-export const useChannelEPG = (client: StalkerClient | undefined, channelId: number, channelName?: string, hours: number = 24, enabled: boolean = true) => {
-  const { from, to } = getEPGTimeRange(hours);
+/** Global hook to manage EPG cache invalidation - should be called only once at app root */
+export const useEpgCacheManager = () => {
+  const queryClient = useQueryClient();
   const effectiveEpgUrl = usePortalsStore((state) => state.getEffectiveEpgUrl());
   const portalId = usePortalsStore((state) => state.activePortalId);
+  const clearAllEPG = usePortalCacheStore((state) => state.clearAllEPG);
+  
+  const prevEpgUrl = React.useRef<string | null>(null);
+  const prevPortalId = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!portalId) return;
+    
+    const urlChanged = effectiveEpgUrl !== prevEpgUrl.current;
+    const portalChanged = portalId !== prevPortalId.current;
+    
+    if (urlChanged || portalChanged) {
+      clearEpgCache(); // Clear in-memory API cache
+      clearAllEPG(portalId); // Clear persistent store cache
+      queryClient.invalidateQueries({ queryKey: ['epg'] });
+      
+      prevEpgUrl.current = effectiveEpgUrl;
+      prevPortalId.current = portalId;
+    }
+  }, [effectiveEpgUrl, portalId, clearAllEPG, queryClient]);
+};
+
+export const useChannelEPG = (client: StalkerClient | undefined, channelId: number, channelName?: string, hours: number = 24, enabled: boolean = true) => {
+  const effectiveEpgUrl = usePortalsStore((state) => state.getEffectiveEpgUrl());
+  const portalId = usePortalsStore((state) => state.activePortalId);
+  
+  const { from, to } = React.useMemo(() => getEPGTimeRange(hours), [hours]);
   const getCachedEPG = usePortalCacheStore((state) => state.getChannelEPG);
   const setCachedEPG = usePortalCacheStore((state) => state.setChannelEPG);
-  const clearAllEPG = usePortalCacheStore((state) => state.clearAllEPG);
 
-  // Clear all EPG cache when switching between external EPG and API
-  React.useEffect(() => {
-    if (portalId) {
-      clearAllEPG(portalId);
-    }
-  }, [effectiveEpgUrl, portalId, clearAllEPG]);
-    
   // Get cached data immediately if available
-  const cachedData = portalId ? getCachedEPG(portalId, channelId) : null;
+  const cachedData = React.useMemo(() => 
+    portalId ? getCachedEPG(portalId, channelId) : null
+  , [portalId, channelId, getCachedEPG]);
 
   return useQuery({
-    queryKey: ['epg', 'channel', channelId, channelName, hours, effectiveEpgUrl],
-    queryFn: async () => {
+    queryKey: ['epg', 'channel', channelId, channelName, hours, effectiveEpgUrl, from],
+    queryFn: async ({ signal }) => {
       if (!client) throw new Error('StalkerClient is required');
 
-      let result: StalkerEPG[];
+      let result: StalkerEPG[] = [];
 
-      // If external EPG URL is configured, use it
-      if (effectiveEpgUrl) {
-        result = await fetchExternalEPG(effectiveEpgUrl, channelId, from, to, channelName);
-      } else {
-        // Otherwise use Stalker API
-        result = await getChannelEPG(client, channelId, from, to);
+      try {
+        if (effectiveEpgUrl) {
+          result = await fetchExternalEPG(effectiveEpgUrl, channelId, from, to, channelName, signal);
+        } else {
+          result = await getChannelEPG(client, channelId, from, to);
+        }
+      } catch (error) {
+        // Silent fail
       }
 
-
-      // Save to persistent cache
       if (portalId) {
         setCachedEPG(portalId, channelId, result);
       }
 
       return result;
     },
-    enabled: !!channelId && enabled,
-    staleTime: 30 * 60 * 1000, // 30 minutes - matches EPG cache TTL
-    placeholderData: cachedData ?? undefined, // Show cached data immediately while fetching
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    networkMode: 'online', // Only fetch when online
+    enabled: !!channelId && enabled && !!client,
+    staleTime: 30 * 60 * 1000,
+    placeholderData: cachedData ?? undefined,
+    refetchOnWindowFocus: false,
+    networkMode: 'always',
   });
 };
 

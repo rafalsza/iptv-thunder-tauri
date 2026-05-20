@@ -20,7 +20,9 @@ data class EpgInfo(
     val endMin: Int = 0,
     val nextTitle: String = "",
     val nextStart: String = "",
-    val nextEnd: String = ""
+    val nextEnd: String = "",
+    val category: String = "",
+    val nextCategory: String = ""
 )
 
 class EpgManager(
@@ -68,10 +70,10 @@ class EpgManager(
         epgJob = null
     }
 
-    fun updateEpg(title: String, start: String, end: String, nextTitle: String = "", nextStart: String = "", nextEnd: String = "") {
+    fun updateEpg(title: String, start: String, end: String, nextTitle: String = "", nextStart: String = "", nextEnd: String = "", category: String = "", nextCategory: String = "") {
         val startMin = parseTimeToMinutes(start)
         val endMin = parseTimeToMinutes(end)
-        currentEpg = EpgInfo(title, start, end, startMin, endMin, nextTitle, nextStart, nextEnd)
+        currentEpg = EpgInfo(title, start, end, startMin, endMin, nextTitle, nextStart, nextEnd, category, nextCategory)
         updateProgress()
     }
 
@@ -119,10 +121,12 @@ class EpgManager(
             val endMin = info.endMin
 
             if (startMin == 0 || endMin == 0) {
+                val categorySuffix = if (info.category.isNotEmpty()) " [${info.category}]" else ""
+                val nextCategorySuffix = if (info.nextCategory.isNotEmpty()) " [${info.nextCategory}]" else ""
                 val display = if (info.nextTitle.isNotEmpty()) {
-                    "${info.start} ${info.title}\n${info.nextStart} ${info.nextTitle}"
+                    "${info.start} ${info.title}$categorySuffix\n${info.nextStart} ${info.nextTitle}$nextCategorySuffix"
                 } else {
-                    "${info.start} - ${info.end}  ${info.title}"
+                    "${info.start} - ${info.end}  ${info.title}$categorySuffix"
                 }
                 epgTextView?.post {
                     epgTextView.text = display
@@ -144,10 +148,13 @@ class EpgManager(
             val progressBar = "█".repeat((progress / 5).toInt()) + "░".repeat(20 - (progress / 5).toInt())
             val progressText = String.format("%.0f%%", progress)
 
+            val categorySuffix = if (info.category.isNotEmpty()) " [${info.category}]" else ""
+            val nextCategorySuffix = if (info.nextCategory.isNotEmpty()) " [${info.nextCategory}]" else ""
+
             val display = if (info.nextTitle.isNotEmpty()) {
-                "${info.start} ${info.title} $progressBar $progressText\n${info.nextStart} ${info.nextTitle}"
+                "${info.start} ${info.title}$categorySuffix $progressBar $progressText\n${info.nextStart} ${info.nextTitle}$nextCategorySuffix"
             } else {
-                "${info.start} ${info.title}  $progressBar $progressText"
+                "${info.start} ${info.title}$categorySuffix  $progressBar $progressText"
             }
 
             epgTextView?.post {
@@ -168,22 +175,6 @@ class EpgManager(
         } catch (e: Exception) {
             android.util.Log.e("EpgManager", "Failed to refresh EPG", e)
         }
-    }
-
-    private fun fetchEpgForChannel(): EpgInfo {
-        // TODO: Replace with actual API implementation
-        // This is a placeholder that returns mock data
-        val now = System.currentTimeMillis()
-        val startMin = ((now / 60000) - 30).toInt()
-        val endMin = ((now / 60000) + 30).toInt()
-
-        return EpgInfo(
-            title = "Current Program",
-            start = String.format("%02d:%02d", (startMin / 60) % 24, startMin % 60),
-            end = String.format("%02d:%02d", (endMin / 60) % 24, endMin % 60),
-            startMin = startMin,
-            endMin = endMin
-        )
     }
 
     fun release() {

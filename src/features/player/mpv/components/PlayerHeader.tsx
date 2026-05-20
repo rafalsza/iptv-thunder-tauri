@@ -38,7 +38,7 @@ interface PlayerHeaderProps {
   totalRetries: number;
   currentUrlIdx: number;
   urlCount: number;
-  currentProgram: Pick<StalkerEPG, 'name' | 'description' | 'start_time' | 'end_time' | 'year' | 'rating'> | null;
+  currentProgram: Pick<StalkerEPG, 'name' | 'description' | 'start_time' | 'end_time' | 'year' | 'rating' | 'category'> | null;
   isVod: boolean;
   isLoading: boolean;
   statusMsg: string;
@@ -137,14 +137,17 @@ export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
 
       {/* Row 2: Current Program Name (Live TV only) */}
       {currentProgram && !isVod && (
-        <div className="mt-1 ml-[22px]" style={{ display: 'block' }}>
-          <span 
-            className="text-base font-medium" 
+        <div className="mt-1 ml-[22px] flex items-center gap-2 flex-wrap" style={{ display: 'block' }}>
+          <span
+            className="text-base font-medium"
             style={{ color: '#ffffff', backgroundColor: 'rgba(0,0,0,0.5)', padding: '2px 4px', borderRadius: '4px' }}
             title={currentProgram.description || currentProgram.name}
           >
             📺 {currentProgram.name}
           </span>
+          {currentProgram.category && (
+            <span className="text-xs px-2 py-0.5 rounded bg-blue-600/30 text-blue-300">{currentProgram.category}</span>
+          )}
         </div>
       )}
       {!currentProgram && !isVod && (

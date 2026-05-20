@@ -92,10 +92,15 @@ export const EPGDetailsModal = React.memo<EPGDetailsModalProps>(({ isOpen, onClo
                               {formatEPGTime(program.start_time)}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 lg:gap-3">
+                              <div className="flex items-center gap-2 lg:gap-3 flex-wrap">
                                 <span className={`font-medium text-sm lg:text-base xl:text-lg ${nowPlaying ? 'text-blue-300' : 'text-gray-200'}`}>
                                   {program.name}
                                 </span>
+                                {program.category && (
+                                  <span className="text-xs lg:text-sm xl:text-base px-2 py-0.5 lg:px-3 lg:py-1 rounded bg-blue-600/30 text-blue-300">
+                                    {program.category}
+                                  </span>
+                                )}
                                 {nowPlaying && (
                                   <span className="text-xs lg:text-sm xl:text-base px-2 py-0.5 lg:px-3 lg:py-1 rounded-full bg-blue-600 text-white animate-pulse">
                                     {t('nowPlayingLabel')}

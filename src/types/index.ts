@@ -103,6 +103,7 @@ export interface StalkerEPG {
   end_time: string;
   description?: string;
   category_id?: number;
+  category?: string;
   channel_id: number;
   ch_short_name?: string;
   display_name?: string;

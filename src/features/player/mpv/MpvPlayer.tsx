@@ -32,7 +32,10 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
   );
 
   // Derive current program from channelEPG data instead of making separate query
-  const currentProgram = channelEPG ? getCurrentProgram(channelEPG) : null;
+  // Memoize it so it only recalculates when EPG data changes, not on every time update
+  const currentProgram = useMemo(() => 
+    channelEPG ? getCurrentProgram(channelEPG) : null
+  , [channelEPG]);
 
   const [showEPGModal, setShowEPGModal] = useState(false);
 

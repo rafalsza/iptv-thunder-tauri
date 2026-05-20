@@ -22,6 +22,7 @@ export class TauriHttpClient {
   private readonly onAuthError?: () => Promise<AuthResult>;
   private refreshPromise: Promise<AuthResult> | null = null;
   private readonly inFlight = new Map<string, Promise<unknown>>();
+  private readonly activeRequestIds = new Set<string>();
 
   constructor(
     baseURL: string,
@@ -177,8 +178,13 @@ export class TauriHttpClient {
 
     const requestId = signal ? crypto.randomUUID() : undefined;
 
+    if (requestId) {
+      this.activeRequestIds.add(requestId);
+    }
+
     const onAbort = () => {
       if (requestId) {
+        this.activeRequestIds.delete(requestId);
         invoke('cancel_request', { requestId }).catch((err) => {
           logger.debug('cancel_request not available or failed', err);
         });
@@ -188,7 +194,7 @@ export class TauriHttpClient {
     signal?.addEventListener('abort', onAbort);
 
     try {
-      return await this.withTimeout(
+      const result = await this.withTimeout(
         invoke<{ status: number; headers: Record<string, string>; body: string }>('stalker_request', {
           url: url.toString(),
           method: 'GET',
@@ -199,12 +205,36 @@ export class TauriHttpClient {
         }),
         timeoutMs + 1000
       );
+
+      // Check if request was aborted after completing
+      if (signal?.aborted) {
+        throw new Error('Request aborted');
+      }
+
+      return result;
+    } catch (err) {
+      // If error is about callback not found and this was a cancelled request, it's expected
+      if (err && typeof err === 'object' && 'message' in err && 
+          typeof err.message === 'string' && err.message.includes('callback') && 
+          requestId && !this.activeRequestIds.has(requestId)) {
+        // This is an expected callback error for a cancelled request
+        throw new Error('Request cancelled');
+      }
+      throw err;
     } finally {
+      if (requestId) {
+        this.activeRequestIds.delete(requestId);
+      }
       signal?.removeEventListener('abort', onAbort);
     }
   }
 
   private parseResponse<T>(response: { status: number; headers: Record<string, string>; body: string }): T {
+
+    // Handle cancelled requests (Rust returns empty success on cancel)
+    if (response.status === 0 && !response.body) {
+      throw new Error('Request cancelled');
+    }
 
     if (response.status >= 400) {
       throw new Error(`HTTP ${response.status} - request failed`);
@@ -303,6 +333,11 @@ export class TauriHttpClient {
   }
 
   private isRetryableError(error: Error, status?: number): boolean {
+    // Don't retry cancelled requests
+    if (error.message.includes('Request cancelled') || error.message.includes('aborted')) {
+      return false;
+    }
+
     // Status code based: 5xx are retryable
     if (status && status >= 500) {
       return true;
