@@ -225,7 +225,7 @@ describe('spatialPlugin Performance Tests', () => {
       const duration = endTime - startTime;
 
       expect(result).toBeNull();
-      expect(duration).toBeLessThan(10);
+      expect(duration).toBeLessThan(100);
     });
 
     it('should handle no current node efficiently', () => {

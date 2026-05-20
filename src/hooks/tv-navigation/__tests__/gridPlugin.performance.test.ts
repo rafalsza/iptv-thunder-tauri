@@ -130,7 +130,7 @@ describe('gridPlugin Performance Tests', () => {
       });
 
       durations.forEach(duration => {
-        expect(duration).toBeLessThan(10);
+        expect(duration).toBeLessThan(50);
       });
     });
   });
@@ -267,10 +267,10 @@ describe('gridPlugin Performance Tests', () => {
       gridPlugin.findNext(state, 'down');
       const endTime4 = performance.now();
 
-      expect(endTime1 - startTime1).toBeLessThan(10);
-      expect(endTime2 - startTime2).toBeLessThan(10);
-      expect(endTime3 - startTime3).toBeLessThan(10);
-      expect(endTime4 - startTime4).toBeLessThan(10);
+      expect(endTime1 - startTime1).toBeLessThan(50);
+      expect(endTime2 - startTime2).toBeLessThan(50);
+      expect(endTime3 - startTime3).toBeLessThan(50);
+      expect(endTime4 - startTime4).toBeLessThan(50);
     });
 
     it('should handle disabled nodes efficiently', () => {

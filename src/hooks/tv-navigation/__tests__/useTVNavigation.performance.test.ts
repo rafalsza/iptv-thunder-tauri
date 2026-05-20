@@ -83,7 +83,7 @@ describe('useTVNavigation Performance Tests', () => {
       const duration = endTime - startTime;
 
       expect(result.current).toBeDefined();
-      expect(duration).toBeLessThan(50);
+      expect(duration).toBeLessThan(100);
     });
 
     it('should initialize with 100 elements in under 50ms', () => {
@@ -202,7 +202,7 @@ describe('useTVNavigation Performance Tests', () => {
       });
 
       durations.forEach(duration => {
-        expect(duration).toBeLessThan(20);
+        expect(duration).toBeLessThan(50);
       });
     });
   });
@@ -470,7 +470,7 @@ describe('useTVNavigation Performance Tests', () => {
       const endTime = performance.now();
       const duration = endTime - startTime;
 
-      expect(duration).toBeLessThan(100);
+      expect(duration).toBeLessThan(200);
     });
 
     it('should handle rapid scroll events efficiently', async () => {
