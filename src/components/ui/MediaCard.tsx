@@ -3,7 +3,7 @@
 // =========================
 import React, { useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, Play, Tv, Film, Star } from 'lucide-react';
+import { Clock, Play, Tv, Film, Star, X } from 'lucide-react';
 
 export type MediaCardType = 'live' | 'vod' | 'series';
 
@@ -34,6 +34,8 @@ interface MediaCardProps {
   tvGroup?: string;
   /** Is this the initially focused element */
   tvInitial?: boolean;
+  /** Remove callback (optional) */
+  onRemove?: () => void;
 }
 
 const getTypeIcon = (type: MediaCardType) => {
@@ -59,6 +61,7 @@ export const MediaCard = React.memo<MediaCardProps>(({
   index = 0,
   tvGroup = 'media-cards',
   tvInitial = false,
+  onRemove,
 }) => {
   const hasProgress = progressPercentage > 0 && type === 'vod';
 
@@ -68,6 +71,11 @@ export const MediaCard = React.memo<MediaCardProps>(({
       onSelect();
     }
   }, [onSelect]);
+
+  const handleRemove = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRemove?.();
+  }, [onRemove]);
 
   const handleFocus = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
     const card = e.currentTarget;
@@ -153,6 +161,19 @@ export const MediaCard = React.memo<MediaCardProps>(({
                 {typeLabel}
               </span>
             </div>
+          )}
+
+          {/* Remove button */}
+          {onRemove && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              className="absolute top-1.5 right-1.5 dark:bg-red-600/90 bg-red-600/90 backdrop-blur-sm p-1 rounded opacity-0 group-hover/card:opacity-100 transition-opacity hover:dark:bg-red-700 hover:bg-red-700 border-0 cursor-pointer z-20"
+              aria-label={`Remove ${name}`}
+              title="Usuń"
+            >
+              <X className="w-3 h-3 text-white" />
+            </button>
           )}
 
           {/* Progress indicator for movies */}

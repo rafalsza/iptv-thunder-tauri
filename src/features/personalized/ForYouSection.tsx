@@ -4,7 +4,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { usePortalsStore } from '@/store/portals.store';
-import { useRecentViewed, type RecentItem } from '@/hooks/useRecentItems';
+import { useRecentViewed, removeRecentViewed, type RecentItem } from '@/hooks/useRecentItems';
 import { useResumeStore } from '@/store/resume.store';
 import { motion } from 'framer-motion';
 import { Star, Tv, Film, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -12,6 +12,7 @@ import { MediaCard } from '@/components/ui/MediaCard';
 import { useCarousel } from '@/hooks/useCarousel';
 import { StalkerChannel, StalkerVOD } from '@/types';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface ForYouSectionProps {
   client: StalkerClient;
@@ -28,6 +29,7 @@ interface CarouselRowProps {
   icon: React.ReactNode;
   items: RecentItem[];
   onItemClick: (item: RecentItem) => void;
+  onItemRemove: (item: RecentItem) => void;
   getProgressPercentage: (item: RecentItem) => number;
   formatTimeAgo: (timestamp: number, isLive?: boolean) => string;
   tvGroup: string;
@@ -38,6 +40,7 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
   icon,
   items,
   onItemClick,
+  onItemRemove,
   getProgressPercentage,
   formatTimeAgo,
   tvGroup,
@@ -114,6 +117,7 @@ const CarouselRow: React.FC<CarouselRowProps> = ({
                 poster={item.poster}
                 type={item.type}
                 onSelect={() => onItemClick(item)}
+                onRemove={() => onItemRemove(item)}
                 timeAgo={formatTimeAgo(item.viewed_at, item.type === 'live')}
                 season={item.season}
                 episode={item.episode}
@@ -160,6 +164,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
   onMoviePlay,
 }) => {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const activePortal = usePortalsStore(s =>
     s.portals.find(p => p.id === s.activePortalId) ?? null
   );
@@ -262,6 +267,18 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
     }
   };
 
+  const handleItemRemove = useCallback(async (item: RecentItem) => {
+    if (!activePortal?.id) return;
+    
+    try {
+      await removeRecentViewed(activePortal.id, item.type, item.item_id);
+      // Invalidate the query to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['recent-viewed', activePortal.id] });
+    } catch (error) {
+      console.error('Error removing item:', error);
+    }
+  }, [activePortal?.id, queryClient]);
+
   if (isLoading) {
     return (
       <div className="p-[calc(1.5rem*var(--ui-scale))]">
@@ -349,6 +366,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
           icon={<Tv className="w-[calc(1.25rem*var(--ui-scale))] h-[calc(1.25rem*var(--ui-scale))] text-blue-500" />}
           items={liveItems}
           onItemClick={handleItemClick}
+          onItemRemove={handleItemRemove}
           getProgressPercentage={getProgressPercentage}
           formatTimeAgo={formatTimeAgo}
           tvGroup="for-you-live"
@@ -360,6 +378,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
           icon={<Film className="w-[calc(1.25rem*var(--ui-scale))] h-[calc(1.25rem*var(--ui-scale))] text-purple-500" />}
           items={vodItems}
           onItemClick={handleItemClick}
+          onItemRemove={handleItemRemove}
           getProgressPercentage={getProgressPercentage}
           formatTimeAgo={formatTimeAgo}
           tvGroup="for-you-movies"
@@ -371,6 +390,7 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
           icon={<Film className="w-[calc(1.25rem*var(--ui-scale))] h-[calc(1.25rem*var(--ui-scale))] text-orange-500" />}
           items={seriesItems}
           onItemClick={handleItemClick}
+          onItemRemove={handleItemRemove}
           getProgressPercentage={getProgressPercentage}
           formatTimeAgo={formatTimeAgo}
           tvGroup="for-you-series"

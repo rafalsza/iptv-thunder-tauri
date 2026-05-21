@@ -180,6 +180,19 @@ export async function clearRecentViewed(accountId: string): Promise<void> {
   }
 }
 
+export async function removeRecentViewed(accountId: string, type: RecentItemType, itemId: string): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.execute(
+      `DELETE FROM recently_viewed WHERE account_id = ? AND type = ? AND item_id = ?`,
+      [accountId, type, itemId]
+    );
+  } catch (error) {
+    logger.error('Error removing recent viewed:', error);
+    throw error;
+  }
+}
+
 export function useRecentViewed(accountId: string, type?: RecentItemType, limit: number = 20) {
   const tableReady = useTableReady();
 

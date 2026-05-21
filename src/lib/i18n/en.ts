@@ -75,6 +75,7 @@ export const en = {
   add: 'Add',
   edit: 'Edit',
   delete: 'Delete',
+  remove: 'Remove',
   save: 'Save',
   close: 'Close',
   loading: 'Loading...',

@@ -75,6 +75,7 @@ export const pl = {
   add: 'Dodaj',
   edit: 'Edytuj',
   delete: 'Usuń',
+  remove: 'Usuń',
   save: 'Zapisz',
   close: 'Zamknij',
   loading: 'Ładowanie...',

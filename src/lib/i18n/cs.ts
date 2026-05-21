@@ -75,6 +75,7 @@ export const cs = {
   add: 'Přidat',
   edit: 'Upravit',
   delete: 'Smazat',
+  remove: 'Odebrat',
   save: 'Uložit',
   close: 'Zavřít',
   loading: 'Načítání...',

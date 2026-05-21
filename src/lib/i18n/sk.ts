@@ -75,6 +75,7 @@ export const sk = {
   add: 'Pridať',
   edit: 'Upraviť',
   delete: 'Vymazať',
+  remove: 'Odstrániť',
   save: 'Uložiť',
   close: 'Zavrieť',
   loading: 'Načítanie...',

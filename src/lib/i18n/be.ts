@@ -75,6 +75,7 @@ export const be = {
   add: 'Дадаць',
   edit: 'Рэдагаваць',
   delete: 'Выдаліць',
+  remove: 'Выдаліць',
   save: 'Захаваць',
   close: 'Закрыць',
   loading: 'Загрузка...',
