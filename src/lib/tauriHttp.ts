@@ -93,20 +93,11 @@ export class TauriHttpClient {
     const MAX_AUTH_RETRIES = 1;
 
     while (attempt <= retries) {
-      // Check for abort before each attempt
-      if (signal?.aborted) {
-        throw new Error('Request aborted');
-      }
+      this.checkAbort(signal);
 
       await this.handleRetryDelay(attempt, retries, url);
 
-      // Build headers per attempt to get fresh auth token after refresh
-      const headers = this.buildHeaders();
-
-      // Ensure Content-Type is set
-      if (!headers.some(h => h.toLowerCase().startsWith('content-type:'))) {
-        headers.push('Content-Type: application/json');
-      }
+      const headers = this.prepareHeaders();
 
       try {
         const response = await this.executeRequest(fullUrl, headers, timeoutMs, signal);
@@ -114,21 +105,17 @@ export class TauriHttpClient {
         return this.parseResponse<T>(response);
       } catch (error) {
         lastError = error as Error;
-        const parsed = this.tryParse(lastResponse?.body ?? '');
-        const isAuth = this.isAuthError(lastResponse?.status ?? 0, lastResponse?.body ?? '', parsed);
-        if (isAuth && authRetryCount >= MAX_AUTH_RETRIES) {
-          throw error;
-        }
-        const decision = await this.handleRequestError(
+        const shouldRetry = await this.shouldRetryAfterError(
           error as Error,
           lastResponse,
           attempt,
           retries,
-          isAuth
+          authRetryCount,
+          MAX_AUTH_RETRIES
         );
         
-        if (decision === 'fail') throw lastError ?? new Error('Request failed without error details');
-        if (decision === 'auth-retry') {
+        if (shouldRetry.type === 'fail') throw lastError ?? new Error('Request failed without error details');
+        if (shouldRetry.type === 'auth-retry') {
           authRetryCount++;
           continue;
         }
@@ -138,6 +125,48 @@ export class TauriHttpClient {
     }
 
     throw lastError;
+  }
+
+  private checkAbort(signal?: AbortSignal): void {
+    if (signal?.aborted) {
+      throw new Error('Request aborted');
+    }
+  }
+
+  private prepareHeaders(): string[] {
+    const headers = this.buildHeaders();
+    if (!headers.some(h => h.toLowerCase().startsWith('content-type:'))) {
+      headers.push('Content-Type: application/json');
+    }
+    return headers;
+  }
+
+  private async shouldRetryAfterError(
+    error: Error,
+    lastResponse: { status: number; headers: Record<string, string>; body: string } | undefined,
+    attempt: number,
+    retries: number,
+    authRetryCount: number,
+    maxAuthRetries: number
+  ): Promise<{ type: 'retry' | 'auth-retry' | 'fail' }> {
+    const parsed = this.tryParse(lastResponse?.body ?? '');
+    const isAuth = this.isAuthError(lastResponse?.status ?? 0, lastResponse?.body ?? '', parsed);
+    
+    if (isAuth && authRetryCount >= maxAuthRetries) {
+      throw error;
+    }
+    
+    const decision = await this.handleRequestError(
+      error,
+      lastResponse,
+      attempt,
+      retries,
+      isAuth
+    );
+    
+    if (decision === 'fail') return { type: 'fail' };
+    if (decision === 'auth-retry') return { type: 'auth-retry' };
+    return { type: 'retry' };
   }
 
   private buildUrl(url: string, params?: Record<string, string>): URL {
@@ -334,7 +363,8 @@ export class TauriHttpClient {
 
   private isRetryableError(error: Error, status?: number): boolean {
     // Don't retry cancelled requests
-    if (error.message.includes('Request cancelled') || error.message.includes('aborted')) {
+    const message = error.message?.toLowerCase() || '';
+    if (message.includes('request cancelled') || message.includes('aborted')) {
       return false;
     }
 
@@ -344,8 +374,7 @@ export class TauriHttpClient {
     }
 
     // Fallback: string-based for network errors (no response)
-    const msg = error.message.toLowerCase();
-    return msg.includes('timeout') || msg.includes('connection') || msg.includes('network') || msg.includes('econnrefused');
+    return message.includes('timeout') || message.includes('connection') || message.includes('network') || message.includes('econnrefused');
   }
 
   private isAuthError(status: number, body: string, parsed?: any): boolean {
