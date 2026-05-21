@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAppStore } from '@/store/app.store';
+import { usePlaybackStore } from '@/store/playback.store';
 import { getCurrentWindow, LogicalSize, LogicalPosition } from '@tauri-apps/api/window';
 import { command, setProperty } from 'tauri-plugin-libmpv-api';
 
@@ -20,7 +21,9 @@ interface UsePlayerControlsReturn {
 }
 
 export function usePlayerControls(): UsePlayerControlsReturn {
-  const [volume, setVolume] = useState(80);
+  const storedVolume = usePlaybackStore(state => state.settings.volume);
+  const setStoredVolume = usePlaybackStore(state => state.setVolume);
+  const [volume, setVolume] = useState(() => Math.round(storedVolume * 100));
   const setFullscreen = useAppStore(state => state.setFullscreen);
   const isFullscreen = useAppStore(state => state.isFullscreen);
   const setPip = useAppStore(state => state.setPip);
@@ -120,8 +123,9 @@ export function usePlayerControls(): UsePlayerControlsReturn {
     try {
       await setProperty('volume', newVol);
       setVolume(newVol);
+      setStoredVolume(newVol / 100);
     } catch (e) { console.error('Volume failed:', e); }
-  }, []);
+  }, [setStoredVolume]);
 
   const handleSeek = useCallback(async (seconds: number) => {
     try {

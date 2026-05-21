@@ -10,7 +10,6 @@ import { usePortalsStore } from '@/store/portals.store';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { getChannelEPG, getCurrentProgram, getNextProgram, formatEPGTime } from '@/features/epg/epg.api';
 import { useChannels } from '@/features/tv/tv.hooks';
-import { getSetting } from '@/hooks/useSettings';
 
 const logger = createLogger('ExoPlayer');
 
@@ -151,8 +150,8 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
 
       const epgData = await fetchEPGData(channelId || 0, isVod || false);
 
-      // Load volume from settings
-      const volume = await getSetting('volume') || 80;
+      // Get volume from persisted store
+      const volume = Math.round((usePlaybackStore.getState().settings.volume) * 100) || 80;
 
       // Filter channels for carousel (exclude hidden channels starting with #####)
       const filteredChannels = categoryChannels?.filter((channel: any) => !channel.name.startsWith('#####')) || [];

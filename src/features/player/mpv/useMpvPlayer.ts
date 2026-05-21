@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react';
 import { useStreamStore } from '@/store/stream.store';
+import { usePlaybackStore } from '@/store/playback.store';
 import { getSetting } from '@/hooks/useSettings';
 import {
   init, observeProperties, command, setProperty, destroy,
@@ -105,12 +106,16 @@ export function useMpvPlayer(
   }, []);
 
   // Read settings once at hook initialization to avoid repeated API calls on retries
+  // Use persisted volume from playback store for consistency with player controls
+  const persistedVolume = usePlaybackStore(state => state.settings.volume);
+  useEffect(() => {
+    volumeRef.current = persistedVolume;
+  }, [persistedVolume]);
+
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const volume = await getSetting('volume');
         const hwAccelEnabled = await getSetting('hardwareAcceleration');
-        volumeRef.current = volume;
         hwAccelEnabledRef.current = hwAccelEnabled;
       } catch (e) {
         console.error('Failed to load settings:', e);
