@@ -35,6 +35,8 @@ export const de = {
 
   debugMode: 'Debug-Modus',
   debugModeDescription: 'Zeigt detaillierte Protokolle in der Konsole',
+  hideAdultCategories: 'Erwachsenenkategorien ausblenden',
+  hideAdultCategoriesDescription: 'Blendet Kategorien mit Erwachseneninhalt aus',
   clearWatchHistory: 'Verlauf löschen',
   clearWatchHistoryDescription: 'Entfernt gespeicherte Einträge aus dem "Für Sie"-Bereich.',
   clearHistory: 'Verlauf löschen',

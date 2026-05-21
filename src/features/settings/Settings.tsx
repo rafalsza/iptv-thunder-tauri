@@ -475,6 +475,22 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       />
                     </div>
 
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium dark:text-white text-slate-900">{t('hideAdultCategories')}</p>
+                        <p className="text-sm dark:text-slate-400 text-slate-600">{t('hideAdultCategoriesDescription')}</p>
+                      </div>
+                      <Switch
+                        data-tv-focusable="true"
+                        data-tv-id="settings-hide-adult"
+                        data-tv-group="settings-content"
+                        data-tv-index="41"
+                        tabIndex={0}
+                        checked={settings.hideAdultCategories}
+                        onCheckedChange={(v) => updateSetting('hideAdultCategories', v)}
+                      />
+                    </div>
+
                     <div className="pt-4 dark:border-t border-slate-700 border-t-gray-300">
                       <p className="font-medium dark:text-white text-slate-900 mb-2">{t('clearWatchHistory')}</p>
                       <p className="text-sm dark:text-slate-400 text-slate-600 mb-4">

@@ -1,13 +1,14 @@
 // =========================
 // ⭐ FAVORITE SERIES CATEGORIES LIST COMPONENT
 // =========================
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { StalkerClient } from "@/lib/stalkerAPI_new";
 import { StalkerGenre } from "@/types";
 import { useFavoriteCategories } from "@/hooks/useFavorites";
 import { useSeriesCategories } from "./series.hooks";
 import { useTranslation } from "@/hooks/useTranslation";
 import { CategoryCard as UICategoryCard } from "@/components/ui/CategoryCard";
+import { getSetting, isAdultCategory } from "@/hooks/useSettings";
 
 interface FavoriteSeriesCategoriesListProps {
   client: StalkerClient;
@@ -26,6 +27,14 @@ export const FavoriteSeriesCategoriesList: React.FC<
   const { categoryIds: favoriteCategories, toggleCategory } =
     useFavoriteCategories(accountId, "series");
 
+  // Load settings for adult filter
+  const [settings, setSettings] = useState<{ hideAdultCategories?: boolean } | null>(null);
+  useEffect(() => {
+    getSetting('hideAdultCategories').then(v => {
+      setSettings({ hideAdultCategories: v });
+    });
+  }, []);
+
   // Pobieranie wszystkich kategorii seriali z cache
   const {
     data: categories = [],
@@ -34,13 +43,20 @@ export const FavoriteSeriesCategoriesList: React.FC<
     refetch,
   } = useSeriesCategories(client);
 
+  // Filter out adult categories if setting is enabled
+  const filteredByAdult = useMemo(() => {
+    const hideAdult = settings?.hideAdultCategories;
+    if (!hideAdult) return categories;
+    return categories.filter(cat => !isAdultCategory(cat.title));
+  }, [categories, settings?.hideAdultCategories]);
+
   // Filtrowanie tylko ulubionych kategorii seriali
   const favoriteCategoriesList = useMemo(
     () =>
-      categories.filter((category) =>
+      filteredByAdult.filter((category) =>
         favoriteCategories.includes(String(category.id)),
       ),
-    [categories, favoriteCategories],
+    [filteredByAdult, favoriteCategories],
   );
 
   // Dodatkowe filtrowanie na podstawie wyszukiwania

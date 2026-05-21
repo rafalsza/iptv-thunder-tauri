@@ -1,13 +1,14 @@
 // =========================
 // 📺 SERIES CATEGORIES LIST COMPONENT
 // =========================
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
 import { useFavoriteCategories } from '@/hooks/useFavorites';
 import { useSeriesCategories } from './series.hooks';
 import { useTranslation } from '@/hooks/useTranslation';
 import { CategoryCard } from '@/components/ui/CategoryCard';
+import { getSetting, isAdultCategory } from '@/hooks/useSettings';
 
 interface SeriesCategoriesListProps {
   client: StalkerClient;
@@ -25,6 +26,14 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
   const accountId = client?.getAccount?.()?.id || 'default';
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'series');
 
+  // Load settings for adult filter
+  const [settings, setSettings] = useState<{ hideAdultCategories?: boolean } | null>(null);
+  useEffect(() => {
+    getSetting('hideAdultCategories').then(v => {
+      setSettings({ hideAdultCategories: v });
+    });
+  }, []);
+
   // Pobieranie kategorii seriali z cache
   const {
     data: categories = [],
@@ -33,13 +42,20 @@ export const SeriesCategoriesList: React.FC<SeriesCategoriesListProps> = ({
     refetch
   } = useSeriesCategories(client);
 
+  // Filter out adult categories if setting is enabled
+  const filteredByAdult = useMemo(() => {
+    const hideAdult = settings?.hideAdultCategories;
+    if (!hideAdult) return categories;
+    return categories.filter(cat => !isAdultCategory(cat.title));
+  }, [categories, settings?.hideAdultCategories]);
+
   // Note: "All" category is NOT added for series because there are too many (42000+)
   // Loading all series would be extremely slow
   const finalCategories = useMemo(() =>
-    categories.filter(category =>
+    filteredByAdult.filter(category =>
       category.title.toLowerCase().includes(search.toLowerCase())
     ),
-  [categories, search]);
+  [filteredByAdult, search]);
 
   // Debug: log categories count (disabled in prod)
   // logger.debug('Categories total:', categories.length, 'filtered:', filteredCategories.length, 'search:', search);

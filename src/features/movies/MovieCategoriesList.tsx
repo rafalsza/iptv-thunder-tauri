@@ -1,13 +1,14 @@
 // =========================
 // 🎬 MOVIE CATEGORIES LIST COMPONENT
 // =========================
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
 import { useFavoriteCategories } from '@/hooks/useFavorites';
 import { useMovieCategories } from './movies.hooks';
 import { useTranslation } from '@/hooks/useTranslation';
 import { CategoryCard } from '@/components/ui/CategoryCard';
+import { getSetting, isAdultCategory } from '@/hooks/useSettings';
 
 interface MovieCategoriesListProps {
   client: StalkerClient;
@@ -32,13 +33,28 @@ export const MovieCategoriesList: React.FC<MovieCategoriesListProps> = ({
     refetch
   } = useMovieCategories(client);
 
+  // Load settings for adult filter
+  const [settings, setSettings] = useState<any>(null);
+  useEffect(() => {
+    getSetting('hideAdultCategories').then(v => {
+      setSettings({ hideAdultCategories: v });
+    });
+  }, []);
+
+  // Filter out adult categories if setting is enabled
+  const filteredByAdult = useMemo(() => {
+    const hideAdult = settings?.hideAdultCategories;
+    if (!hideAdult) return categories;
+    return categories.filter(cat => !isAdultCategory(cat.title));
+  }, [categories, settings?.hideAdultCategories]);
+
   // Ensure "All" category is always present at component level
   const categoriesWithAll = useMemo(() => {
     const allCategory = { id: '*', title: t('all'), alias: 'all', parent_id: 0 };
     // Always add "All" at the beginning, remove any existing "All" to avoid duplicates
-    const withoutAll = categories.filter(cat => cat.id !== '*');
+    const withoutAll = filteredByAdult.filter(cat => cat.id !== '*');
     return [allCategory, ...withoutAll];
-  }, [categories, t]);
+  }, [filteredByAdult, t]);
 
   const finalCategories = useMemo(() =>
     categoriesWithAll.filter(category =>

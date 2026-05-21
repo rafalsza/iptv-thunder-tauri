@@ -35,6 +35,8 @@ export const pl = {
 
   debugMode: 'Tryb debugowania',
   debugModeDescription: 'Pokazuje szczegółowe logi w konsoli (Debug Mode)',
+  hideAdultCategories: 'Ukryj kategorie dla dorosłych',
+  hideAdultCategoriesDescription: 'Ukrywa kategorie zawierające treści dla dorosłych',
   clearWatchHistory: 'Wyczyść historię oglądania',
   clearWatchHistoryDescription: 'Usuwa zapisane pozycje z sekcji "Dla Ciebie". Przydatne jeśli plakaty nie wyświetlają się poprawnie.',
   clearHistory: 'Wyczyść historię',

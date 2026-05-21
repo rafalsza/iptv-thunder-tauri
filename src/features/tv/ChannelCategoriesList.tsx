@@ -1,13 +1,14 @@
 // =========================
 // 📂 CHANNEL CATEGORIES LIST COMPONENT
 // =========================
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
 import { useFavoriteCategories } from '@/hooks/useFavorites';
 import { useChannelCategories } from './tv.hooks';
 import { useTranslation } from '@/hooks/useTranslation';
 import { CategoryCard as UICategoryCard } from '@/components/ui/CategoryCard';
+import { getSetting, isAdultCategory } from '@/hooks/useSettings';
 
 interface ChannelCategoriesListProps {
   client: StalkerClient;
@@ -25,6 +26,14 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'live');
   const { t } = useTranslation();
 
+  // Load settings for adult filter
+  const [settings, setSettings] = useState<{ hideAdultCategories?: boolean } | null>(null);
+  useEffect(() => {
+    getSetting('hideAdultCategories').then(v => {
+      setSettings({ hideAdultCategories: v });
+    });
+  }, []);
+
   // Pobieranie kategorii kanałów
   const {
     data: categories = [],
@@ -33,12 +42,19 @@ export const ChannelCategoriesList: React.FC<ChannelCategoriesListProps> = ({
     refetch
   } = useChannelCategories(client);
 
+  // Filter out adult categories if setting is enabled
+  const filteredByAdult = useMemo(() => {
+    const hideAdult = settings?.hideAdultCategories;
+    if (!hideAdult) return categories;
+    return categories.filter(cat => !isAdultCategory(cat.title));
+  }, [categories, settings?.hideAdultCategories]);
+
   // Filtrowanie kategorii na podstawie wyszukiwania
   const filteredCategories = useMemo(() =>
-    categories.filter(category =>
+    filteredByAdult.filter(category =>
       category.title.toLowerCase().includes(search.toLowerCase())
     ),
-  [categories, search]);
+  [filteredByAdult, search]);
 
   const handleCategoryClick = (category: StalkerGenre) => {
     setSelectedCategory(category);

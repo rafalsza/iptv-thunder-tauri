@@ -35,6 +35,8 @@ export const sk = {
 
   debugMode: 'Režim ladenia',
   debugModeDescription: 'Zobrazuje podrobné protokoly v konzole',
+  hideAdultCategories: 'Skryť kategórie pre dospelých',
+  hideAdultCategoriesDescription: 'Skrýva kategórie obsahujúce obsah pre dospelých',
   clearWatchHistory: 'Vymazať históriu sledovania',
   clearWatchHistoryDescription: 'Odstraňuje uložené položky z sekcie "Pre vás".',
   clearHistory: 'Vymazať históriu',

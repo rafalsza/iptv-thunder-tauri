@@ -1,7 +1,7 @@
 // =========================
 // ⭐ FAVORITE CATEGORIES LIST COMPONENT
 // =========================
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerGenre } from '@/types';
@@ -9,6 +9,7 @@ import { useFavoriteCategories } from '@/hooks/useFavorites';
 import { getGenres } from './tv.api';
 import { useTranslation } from '@/hooks/useTranslation';
 import { CategoryCard as UICategoryCard } from '@/components/ui/CategoryCard';
+import { getSetting, isAdultCategory } from '@/hooks/useSettings';
 
 interface FavoriteCategoriesListProps {
   client: StalkerClient;
@@ -26,6 +27,14 @@ export const FavoriteCategoriesList: React.FC<FavoriteCategoriesListProps> = ({
   const accountId = client?.getAccount?.()?.id || 'default';
   const { categoryIds: favoriteCategories, toggleCategory } = useFavoriteCategories(accountId, 'live');
 
+  // Load settings for adult filter
+  const [settings, setSettings] = useState<{ hideAdultCategories?: boolean } | null>(null);
+  useEffect(() => {
+    getSetting('hideAdultCategories').then(v => {
+      setSettings({ hideAdultCategories: v });
+    });
+  }, []);
+
   // Pobieranie wszystkich kategorii kanałów z cache
   const {
     data: categories = [],
@@ -39,9 +48,16 @@ export const FavoriteCategoriesList: React.FC<FavoriteCategoriesListProps> = ({
     retry: 2,
   });
 
+  // Filter out adult categories if setting is enabled
+  const filteredByAdult = useMemo(() => {
+    const hideAdult = settings?.hideAdultCategories;
+    if (!hideAdult) return categories;
+    return categories.filter(cat => !isAdultCategory(cat.title));
+  }, [categories, settings?.hideAdultCategories]);
+
   const favoriteCategoriesList = useMemo(() =>
-    categories.filter(category => favoriteCategories.includes(String(category.id))),
-  [categories, favoriteCategories]);
+    filteredByAdult.filter(category => favoriteCategories.includes(String(category.id))),
+  [filteredByAdult, favoriteCategories]);
 
   const filteredCategories = useMemo(() =>
     favoriteCategoriesList.filter(category =>

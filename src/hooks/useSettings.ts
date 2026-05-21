@@ -40,6 +40,9 @@ export interface AppSettings {
   // Advanced
   hardwareAcceleration: boolean;
   debugMode: boolean;
+
+  // Content filtering
+  hideAdultCategories: boolean;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -60,6 +63,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   imageCacheMaxSize: 500,
   hardwareAcceleration: true,
   debugMode: false,
+  hideAdultCategories: false,
 };
 
 /**
@@ -156,6 +160,21 @@ export async function clearSettings(): Promise<void> {
   const store = await getStore();
   await store.clear();
   await store.save();
+}
+
+// Keywords that indicate adult content (case-insensitive)
+const ADULT_KEYWORDS = [
+  '18+', 'adult', 'erot', 'porno', 'xxx', 'sex',
+  'взросл', 'adulto', 'erotick', 'erotisch',
+  'для взрослых', 'для дорослих'
+];
+
+/**
+ * Check if a category name contains adult content keywords
+ */
+export function isAdultCategory(categoryName: string): boolean {
+  const lowerName = categoryName.toLowerCase();
+  return ADULT_KEYWORDS.some(keyword => lowerName.includes(keyword.toLowerCase()));
 }
 
 // React hook

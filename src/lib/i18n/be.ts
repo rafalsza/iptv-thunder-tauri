@@ -35,6 +35,8 @@ export const be = {
 
   debugMode: 'Рэжым адладкі',
   debugModeDescription: 'Паказвае падрабязныя логі ў кансолі',
+  hideAdultCategories: "Hide adult",
+  hideAdultCategoriesDescription: "Hide adult content",
   clearWatchHistory: 'Ачысціць гісторыю прагляду',
   clearWatchHistoryDescription: 'Выдаляе захаваныя элементы з раздзела "Для вас".',
   clearHistory: 'Ачысціць гісторыю',

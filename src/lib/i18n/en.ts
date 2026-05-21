@@ -35,6 +35,8 @@ export const en = {
 
   debugMode: 'Debug Mode',
   debugModeDescription: 'Shows detailed logs in console (Debug Mode)',
+  hideAdultCategories: 'Hide adult categories',
+  hideAdultCategoriesDescription: 'Hides categories containing adult content',
   clearWatchHistory: 'Clear watch history',
   clearWatchHistoryDescription: 'Removes saved items from "For You" section. Useful if posters are not displaying correctly.',
   clearHistory: 'Clear history',
