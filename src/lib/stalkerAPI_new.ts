@@ -59,9 +59,15 @@ export class StalkerClient {
     // Sanitize portalUrl - remove null bytes and other problematic characters
     const sanitizedPortalUrl = account.portalUrl.replaceAll('\x00', '').trim();
 
-    const baseURL = sanitizedPortalUrl.endsWith('/')
+    // Ensure URL ends with /c/ (required by Stalker middleware)
+    let baseURL = sanitizedPortalUrl.endsWith('/')
       ? sanitizedPortalUrl
       : sanitizedPortalUrl + '/';
+
+    if (!baseURL.endsWith('/c/') && !baseURL.endsWith('/stalker_portal/')) {
+      baseURL = baseURL.replace(/\/$/, '');
+      baseURL += '/c/';
+    }
 
     // Log only once per session to avoid spam
     if (!globalThis.window.__STALKER_CLIENT_LOGGED__) {

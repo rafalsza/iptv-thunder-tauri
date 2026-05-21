@@ -98,9 +98,9 @@ async function fetchRemainingBatches(
     const batch = pageNums.slice(i, i + CONCURRENCY_LIMIT);
     const newItems = await fetchBatch(client, categoryId, batch, signal);
 
-    if (newItems.length === 0) return;
-
-    allItems.push(...newItems);
+    if (newItems.length > 0) {
+      allItems.push(...newItems);
+    }
 
     if (!shouldUpdateCache(signal, queryClient, queryKey)) return;
 
