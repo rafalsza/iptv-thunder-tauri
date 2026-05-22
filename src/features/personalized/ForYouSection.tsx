@@ -216,6 +216,18 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
     return t('longTimeAgo');
   }, [t]);
 
+  const handleItemRemove = useCallback(async (item: RecentItem) => {
+    if (!activePortal?.id) return;
+
+    try {
+      await removeRecentViewed(activePortal.id, item.type, item.item_id);
+      // Invalidate the query to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['recent-viewed', activePortal.id] });
+    } catch (error) {
+      console.error('Error removing item:', error);
+    }
+  }, [activePortal?.id, queryClient]);
+
   if (!activePortal) {
     return null;
   }
@@ -266,18 +278,6 @@ export const ForYouSection: React.FC<ForYouSectionProps> = ({
         break;
     }
   };
-
-  const handleItemRemove = useCallback(async (item: RecentItem) => {
-    if (!activePortal?.id) return;
-    
-    try {
-      await removeRecentViewed(activePortal.id, item.type, item.item_id);
-      // Invalidate the query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ['recent-viewed', activePortal.id] });
-    } catch (error) {
-      console.error('Error removing item:', error);
-    }
-  }, [activePortal?.id, queryClient]);
 
   if (isLoading) {
     return (
