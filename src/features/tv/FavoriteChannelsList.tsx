@@ -1,7 +1,7 @@
 // =========================
 // ❤️ FAVORITE CHANNELS LIST
 // =========================
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
@@ -114,9 +114,18 @@ export const FavoriteChannelsList: React.FC<FavoriteChannelsListProps> = ({
   const { favorites: dbFavorites, isLoading, toggleItemFavorite } = useFavorites(accountId);
   const { t } = useTranslation();
   const [favoriteChannels, setFavoriteChannels] = useState<StalkerChannel[]>([]);
+  const prevFavoritesRef = useRef<string | null>(null);
 
   // Convert favorites to StalkerChannel format and enrich missing genre_id from SQLite
   useEffect(() => {
+    const favoritesJson = JSON.stringify(dbFavorites);
+    
+    // Only update if favorites actually changed
+    if (prevFavoritesRef.current === favoritesJson) {
+      return;
+    }
+    prevFavoritesRef.current = favoritesJson;
+
     const loadChannels = async () => {
       const baseChannels = dbFavorites
         .filter(f => f.type === 'live')

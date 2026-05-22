@@ -108,7 +108,7 @@ function AppInner() {
   // Create client only when we have an active portal (memoized to avoid recreation on every render)
   const client = useMemo(() => 
     activePortal ? new StalkerClient(portalToStalkerAccount(activePortal)) : null,
-    [activePortal]
+    [activePortal?.id]
   );
 
   // Playback manager
