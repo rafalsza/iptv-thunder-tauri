@@ -97,6 +97,7 @@ export const en = {
   active: 'Active',
   inactive: 'Inactive',
   lastUpdated: 'Last updated',
+  accountExpires: 'Account expires',
   clickPortalForActions: 'Click on a portal or press Enter to open the action menu',
   
   deletePortal: 'Delete Portal',
@@ -109,6 +110,7 @@ export const en = {
   login: 'Login',
   password: 'Password',
   macAddress: 'MAC Address',
+  accountExpiresDate: 'Account expiration date',
   nameRequired: 'Portal name is required',
   urlRequired: 'Portal URL is required',
   invalidUrl: 'Invalid URL format',

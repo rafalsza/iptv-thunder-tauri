@@ -97,6 +97,8 @@ export const cs = {
   active: 'Aktivní',
   inactive: 'Neaktivní',
   lastUpdated: 'Poslední aktualizace',
+  accountExpires: 'Účet platí do',
+  accountExpiresDate: 'Datum vypršení účtu',
   clickPortalForActions: 'Klikněte na portál nebo stiskněte Enter pro otevření nabídky akcí',
   
   deletePortal: 'Smazat portál',

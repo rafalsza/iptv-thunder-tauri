@@ -97,6 +97,8 @@ export const sk = {
   active: 'Aktívny',
   inactive: 'Neaktívny',
   lastUpdated: 'Posledná aktualizácia',
+  accountExpires: 'Účet platí do',
+  accountExpiresDate: 'Dátum vypršania účtu',
   clickPortalForActions: 'Kliknite na portál alebo stlačte Enter pre otvorenie ponuky akcií',
   
   deletePortal: 'Vymazať portál',

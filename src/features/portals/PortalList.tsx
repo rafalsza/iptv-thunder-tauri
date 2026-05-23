@@ -7,10 +7,10 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { PortalAccount } from './portals.types';
 import { PortalForm } from './PortalForm';
 import { PortalTest } from './PortalTest';
-import { CheckCircle, Circle, Plus, Target, RefreshCw, Edit, Trash2, X, Globe, User, Monitor } from 'lucide-react';
+import { CheckCircle, Circle, Plus, Target, RefreshCw, Edit, Trash2, X, Globe, Monitor } from 'lucide-react';
 
 export const PortalList: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, currentLang } = useTranslation();
   const [editingPortal, setEditingPortal] = useState<PortalAccount | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [testingPortal, setTestingPortal] = useState<string | null>(null);
@@ -329,11 +329,6 @@ export const PortalList: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2 md:gap-3">
-                <User className="dark:text-slate-400 text-slate-600 w-4 h-4 md:w-5 md:h-5" />
-                <span className="text-xs md:text-sm dark:text-slate-300 text-slate-700 font-medium truncate">{portal.login}</span>
-              </div>
-
-              <div className="flex items-center gap-2 md:gap-3">
                 <Monitor className="dark:text-slate-400 text-slate-600 w-4 h-4 md:w-5 md:h-5" />
                 <span className="text-xs md:text-sm font-mono dark:text-slate-300 text-slate-700 dark:bg-slate-900/50 bg-gray-100/50 px-2 md:px-3 py-1.5 md:py-2 rounded-lg md:rounded-xl dark:border border-slate-700/50 border-gray-300/50 break-all">{portal.mac}</span>
               </div>
@@ -364,9 +359,14 @@ export const PortalList: React.FC = () => {
             </div>
 
             {/* Last Updated */}
-            <div className="mt-4 md:mt-6 pt-3 md:pt-4 dark:border-t border-slate-700/50 border-t-gray-300/50">
+            <div className="mt-4 md:mt-6 pt-3 md:pt-4 dark:border-t border-slate-700/50 border-t-gray-300/50 space-y-1">
+              {portal.expiresAt && (
+                <p className="text-[10px] md:text-xs dark:text-slate-500 text-slate-500 font-medium">
+                  {t('accountExpires')}: {new Date(portal.expiresAt).toLocaleDateString(currentLang === 'pl' ? 'pl-PL' : currentLang === 'cs' ? 'cs-CZ' : currentLang === 'sk' ? 'sk-SK' : currentLang === 'be' ? 'be-BY' : currentLang === 'de' ? 'de-DE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                </p>
+              )}
               <p className="text-[10px] md:text-xs dark:text-slate-500 text-slate-500 font-medium">
-                {t('lastUpdated')}: {portal.updatedAt.toLocaleString()}
+                {t('lastUpdated')}: {new Date(portal.updatedAt).toLocaleDateString(currentLang === 'pl' ? 'pl-PL' : currentLang === 'cs' ? 'cs-CZ' : currentLang === 'sk' ? 'sk-SK' : currentLang === 'be' ? 'be-BY' : currentLang === 'de' ? 'de-DE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
           </div>

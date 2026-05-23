@@ -31,7 +31,7 @@ export class StalkerClient {
   token: string | null = null;
   private tokenExpiresAt: Date | null = null;
 
-  constructor(account: StalkerAccount, options?: { timezone?: string }) {
+  constructor(account: StalkerAccount, options?: { timezone?: string; timeout?: number }) {
     this.account = account;
     const timezone = options?.timezone ?? DEFAULT_TIMEZONE;
     
@@ -39,8 +39,9 @@ export class StalkerClient {
     let osPlatform: string | null;
     try {
       osPlatform = platform(); // Returns 'android' | 'ios' | 'windows' | 'macos' | 'linux' | etc.
-    } catch {
+    } catch (e) {
       // OS plugin not available - not in Tauri
+      this.logger.debug('Platform detection failed, not in Tauri', e);
       osPlatform = null;
     }
 
@@ -100,9 +101,10 @@ export class StalkerClient {
     } else {
       // Use Axios for browser development - will have CORS issues
       const cookieHeader = `mac=${this.account.mac}; stb_lang=${DEFAULT_LANGUAGE}; timezone=${timezone}`;
+      const timeout = options?.timeout ?? 15000;
       this.axios = axios.create({
         baseURL,
-        timeout: 15000,
+        timeout,
         withCredentials: true,
         headers: {
           'User-Agent': USER_AGENT,
@@ -153,7 +155,7 @@ export class StalkerClient {
         (this.account as any).token = data.js.token;
         (this.account as any).expiresAt = this.tokenExpiresAt;
       } catch (e) {
-        // Account is frozen, ignore
+        this.logger.debug('Could not update account token (frozen)', e);
       }
 
       if (!this.useTauri && this.axios.defaults) {
@@ -266,6 +268,36 @@ export class StalkerClient {
   }
 
   /**
+   * Pobieranie informacji o koncie (data ważności)
+   */
+  async getAccountInfo(): Promise<{ mac?: string; phone?: string }> {
+    await this.ensureAuthenticated();
+
+    const params = {
+      type: 'account_info',
+      action: 'get_main_info',
+      JsHttpRequest: '1-xml',
+    };
+
+    let response: any;
+
+    if (this.useTauri && this.tauriHttp) {
+      response = await this.tauriHttp.get('portal.php', params);
+    } else {
+      response = await this.axios.get('portal.php', { params });
+    }
+
+    const data = this.useTauri ? response?.js : response.data?.js;
+
+    if (!data) {
+      this.logger.debug('getAccountInfo failed - no data');
+      return {};
+    }
+
+    return data;
+  }
+
+  /**
    * Pełne logowanie (handshake + get_profile)
    */
   async login(): Promise<StalkerAccount> {
@@ -351,7 +383,7 @@ export class StalkerClient {
  * Pobieranie szczegółów pojedynczego VOD
  */
 async getVODDetails(vodId: string): Promise<StalkerVOD> {
-  if (!this.account.token) await this.handshake();
+  if (!this.token) await this.handshake();
 
   const params = {
     type: 'vod',
@@ -382,9 +414,6 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     let response: any;
     try {
       if (this.useTauri && this.tauriHttp) {
-        if (this.token) {
-          this.tauriHttp.setHeader('Authorization', `Bearer ${this.token}`);
-        }
         response = await this.tauriHttp.get(endpoint, params);
       } else {
         response = await this.axios.get(endpoint, { params, signal });
@@ -520,47 +549,51 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
   }
 
   /**
+   * Normalize portal URL to ensure it has a protocol
+   */
+  private normalizeBaseUrl(): string {
+    let baseUrl = this.account.portalUrl;
+    if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+      baseUrl = 'http://' + baseUrl;
+    }
+    return baseUrl;
+  }
+
+  /**
    * Resolve poster URL - handles different field names for VOD posters
    * Returns array of possible URLs for fallback handling
    */
   resolvePosterUrl(vod: any): string | undefined {
-    // Check for common poster field names - screenshot_uri often contains external URLs like TMDB
     const posterFields = ['screenshot_uri', 'poster', 'screenshot', 'img', 'fname', 'cover', 'thumbnail', 'picture', 'image'];
-    
+
     for (const field of posterFields) {
       const value = vod[field];
-      if (value && typeof value === 'string' && value.trim() !== '') {
+      if (this.isValidPosterValue(value)) {
         const fullValue = value.trim();
-        
-        // Construct URL based on the field value
+
         if (fullValue.startsWith('http')) {
           return fullValue;
         }
-        
-        // Try different URL patterns for local paths
-        const baseUrl = this.account.portalUrl;
-        const possibleUrls = [
-          `${baseUrl}misc/posters/${fullValue}`,
-          `${baseUrl}misc/img/${fullValue}`,
-          `${baseUrl}misc/screenshots/${fullValue}`,
-          `${baseUrl}uploads/${fullValue}`,
-          `${baseUrl}${fullValue.startsWith('/') ? fullValue.substring(1) : fullValue}`,
-        ];
 
-        // Return first possibility - caller can implement fallback if needed
-        return possibleUrls[0];
+        const baseUrl = this.normalizeBaseUrl();
+        const pathPart = fullValue.startsWith('/') ? fullValue.substring(1) : fullValue;
+        return `${baseUrl}misc/posters/${pathPart}`;
       }
     }
-    
-    // If no poster field found, try to construct URL based on VOD ID
+
     if (vod.id) {
-      const baseUrl = this.account.portalUrl;
-      const id = vod.id.toString();
-      
-      return `${baseUrl}misc/posters/${id}.jpg`;
+      const baseUrl = this.normalizeBaseUrl();
+      return `${baseUrl}misc/posters/${vod.id}.jpg`;
     }
-    
+
     return undefined;
+  }
+
+  /**
+   * Check if a value is a valid non-empty string for poster
+   */
+  private isValidPosterValue(value: unknown): value is string {
+    return typeof value === 'string' && value.trim() !== '';
   }
 
   /**
@@ -700,11 +733,11 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
 
     const response = await this._makeRequest(params, options?.signal);
     const streamUrl = this.useTauri ? response?.js?.cmd : response.data?.js?.cmd;
-    
+
     if (!streamUrl) {
       throw new Error('No stream URL in response for episode');
     }
-    
+
     return streamUrl.replace(/^ffmpeg\s+/, '');
   }
 

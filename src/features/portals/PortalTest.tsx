@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
+import { usePortalsStore } from '@/store/portals.store';
 import { PortalAccount, PortalTestResult } from './portals.types';
 
 interface PortalTestProps {
@@ -13,6 +14,7 @@ interface PortalTestProps {
 
 export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
   const { t } = useTranslation();
+  const { updatePortal } = usePortalsStore();
   const [testResult, setTestResult] = useState<PortalTestResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const testButtonRef = useRef<HTMLButtonElement>(null);
@@ -43,6 +45,9 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
       // Test profile
       const profile = await client.getProfileAndAuth();
       
+      // Get account info (includes expiration date)
+      const accountInfo = await client.getAccountInfo();
+      
       // Test channels - get first page only for quick test
       const channelsResult = await client.getChannelsWithPagination('*', 1);
 
@@ -55,14 +60,24 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
           message: t('noChannelsAvailable'),
           responseTime,
           channels: 0,
+          accountInfo,
         });
       } else {
+        // Update portal with expiration date from account info
+        if (portal && accountInfo?.phone) {
+          const parsed = new Date(accountInfo.phone);
+          if (!Number.isNaN(parsed.getTime())) {
+            updatePortal(portal.id, { expiresAt: parsed });
+          }
+        }
+        
         setTestResult({
           success: true,
           message: t('connectionSuccess'),
           responseTime,
           channels: channelsResult.totalItems,
           profile,
+          accountInfo,
         });
       }
 
@@ -198,17 +213,19 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
                         : testResult.profile.status || t('active')}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">{t('user')}:</span>
-                    <span className="font-medium text-white">
-                      {testResult.profile.login || portal.login || t('noData')}
-                    </span>
-                  </div>
                   {testResult.channels !== undefined && (
                     <div className="flex justify-between">
                       <span className="text-slate-400">{t('channelCount')}:</span>
                       <span className="font-medium text-green-700">
                         {testResult.channels.toLocaleString('pl-PL')}
+                      </span>
+                    </div>
+                  )}
+                  {testResult.accountInfo?.phone && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">{t('accountExpires')}:</span>
+                      <span className="font-medium text-white">
+                        {testResult.accountInfo.phone}
                       </span>
                     </div>
                   )}

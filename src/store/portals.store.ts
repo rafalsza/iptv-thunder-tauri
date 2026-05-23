@@ -9,6 +9,7 @@ import { clearAllDataForPortal } from '@/hooks/useDatabase';
 import { clearAllCategoriesCache } from '@/hooks/useCategories';
 import { tauriStorage } from '@/lib/tauriStorage';
 import { createLogger } from '@/lib/logger';
+import { StalkerClient } from '@/lib/stalkerAPI_new';
 const logger = createLogger('Portals');
 
 // Predefined EPG services
@@ -124,6 +125,34 @@ export const usePortalsStore = create<PortalsState>()(
         set((state) => {
           state.activePortalId = id;
         });
+        
+        // Fetch account info in background when portal becomes active
+        if (id) {
+          const portal = get().portals.find((p) => p.id === id);
+          if (portal) {
+            const client = new StalkerClient({
+              id: portal.id,
+              name: portal.name,
+              portalUrl: portal.portalUrl,
+              mac: portal.mac,
+              login: portal.login,
+              lastUsed: new Date(),
+              isActive: true,
+            });
+            
+            client.getAccountInfo().then((accountInfo) => {
+              if (accountInfo?.phone) {
+                const parsed = new Date(accountInfo.phone);
+                if (!Number.isNaN(parsed.getTime())) {
+                  get().updatePortal(id, { expiresAt: parsed });
+                  logger.debug('Updated portal expiresAt from background test:', id, parsed);
+                }
+              }
+            }).catch((err) => {
+              logger.debug('Background account info fetch failed:', err);
+            });
+          }
+        }
       },
 
       getActivePortal: () => {

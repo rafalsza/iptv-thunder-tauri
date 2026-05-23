@@ -103,6 +103,7 @@ async function fetchWithTauriHttp(url: string, timeoutMs: number = FETCH_TIMEOUT
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+
     // Use Tauri command to bypass CORS
     const response = await invoke<{
       status: number;
@@ -521,9 +522,28 @@ async function fileToAssetUrl(filePath: string): Promise<string> {
  */
 export async function getImageUrl(url: string, fallbackUrl: string = '/fallback/poster.png', signal?: AbortSignal): Promise<string> {
   try {
+    // Handle URLs that might be arrays (extract first element) or undefined/null
+    let urlStr: string | undefined;
+    if (Array.isArray(url)) {
+      urlStr = url[0];
+    } else if (typeof url === 'string') {
+      urlStr = url;
+    }
+
+    // Strip quotes and brackets if present (some APIs return URLs like "https://..." or [https://...])
+    if (urlStr) {
+      urlStr = urlStr.replace(/^[\["']+|[\]"']+$/g, '');
+    }
+
+    // Handle undefined/null/empty URLs - return fallback directly
+    if (!urlStr || typeof urlStr !== 'string') {
+      return fallbackUrl;
+    }
+
+
     if (signal?.aborted) throw new Error('Aborted');
 
-    const cachedPath = await getFilePath(url);
+    const cachedPath = await getFilePath(urlStr);
 
     try {
       await stat(cachedPath); // Use stat instead of readFile for existence check
@@ -532,8 +552,8 @@ export async function getImageUrl(url: string, fallbackUrl: string = '/fallback/
     } catch {
       if (signal?.aborted) throw new Error('Aborted');
 
-      await fetchAndCacheImage(url, signal);
-      return await fileToAssetUrl(await getFilePath(url));
+      await fetchAndCacheImage(urlStr, signal);
+      return await fileToAssetUrl(await getFilePath(urlStr));
     }
   } catch (e) {
     // Log with deduplication - expected errors (404s, network failures) are silently ignored

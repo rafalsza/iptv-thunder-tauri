@@ -33,4 +33,5 @@ export interface PortalTestResult {
   responseTime?: number;
   channels?: number;
   profile?: any;
+  accountInfo?: { phone?: string };
 }

@@ -97,6 +97,8 @@ export const de = {
   active: 'Aktiv',
   inactive: 'Inaktiv',
   lastUpdated: 'Zuletzt aktualisiert',
+  accountExpires: 'Konto gültig bis',
+  accountExpiresDate: 'Ablaufdatum des Kontos',
   clickPortalForActions: 'Klicken Sie auf ein Portal oder drücken Sie Enter, um das Aktionsmenü zu öffnen',
   
   deletePortal: 'Portal löschen',
@@ -275,3 +277,4 @@ export const de = {
   closeWindow: 'Fenster schließen',
   categoryChannels: 'Kanäle in dieser Kategorie',
 } as const;
+
