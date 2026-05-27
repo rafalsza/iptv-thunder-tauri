@@ -42,11 +42,21 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
     try {
       const client = new StalkerClient(portal as any);
       
-      // Test profile
-      const profile = await client.getProfileAndAuth();
+      // Test profile - may fail on some portals
+      let profile = null;
+      try {
+        profile = await client.getProfileAndAuth();
+      } catch (profileErr) {
+        console.warn('getProfile failed, continuing:', profileErr);
+      }
       
-      // Get account info (includes expiration date)
-      const accountInfo = await client.getAccountInfo();
+      // Get account info (includes expiration date) - may fail on some portals
+      let accountInfo: { phone?: string } = {};
+      try {
+        accountInfo = await client.getAccountInfo() || {};
+      } catch (accountErr) {
+        console.warn('getAccountInfo failed, continuing:', accountErr);
+      }
       
       // Test channels - get first page only for quick test
       const channelsResult = await client.getChannelsWithPagination('*', 1);
@@ -84,9 +94,13 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
     } catch (error: any) {
       const responseTime = Date.now() - startTime;
       
+      // Log detailed error for debugging
+      console.error('Portal test error:', error);
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+      
       setTestResult({
         success: false,
-        message: error?.message || t('connectionError'),
+        message: errorMessage,
         responseTime,
       });
     } finally {
@@ -203,16 +217,18 @@ export const PortalTest: React.FC<PortalTestProps> = ({ portal, onClose }) => {
               </div>
 
               {/* Success Details */}
-              {testResult.success && testResult.profile && (
+              {testResult.success && (
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">{t('status')}:</span>
-                    <span className="font-medium text-green-400">
-                      {testResult.profile.status === 1 || testResult.profile.status === '1' || testResult.profile.status === 'Active' || testResult.profile.status === 'active'
-                        ? t('active') 
-                        : testResult.profile.status || t('active')}
-                    </span>
-                  </div>
+                  {testResult.profile && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">{t('status')}:</span>
+                      <span className="font-medium text-green-400">
+                        {testResult.profile.status === 1 || testResult.profile.status === '1' || testResult.profile.status === 'Active' || testResult.profile.status === 'active'
+                          ? t('active') 
+                          : testResult.profile.status || t('active')}
+                      </span>
+                    </div>
+                  )}
                   {testResult.channels !== undefined && (
                     <div className="flex justify-between">
                       <span className="text-slate-400">{t('channelCount')}:</span>

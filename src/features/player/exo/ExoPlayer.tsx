@@ -2,7 +2,7 @@
 // 🎬 EXO PLAYER (Android TV Only)
 // =========================
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { platform } from '@tauri-apps/plugin-os';
 import { createLogger } from '@/lib/logger';
 import { usePlaybackStore } from '@/store/playback.store';
@@ -10,6 +10,7 @@ import { usePortalsStore } from '@/store/portals.store';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { getChannelEPG, getCurrentProgram, getNextProgram, formatEPGTime } from '@/features/epg/epg.api';
 import { useChannels } from '@/features/tv/tv.hooks';
+import { useRecentViewed } from '@/hooks/useRecentItems';
 
 const logger = createLogger('ExoPlayer');
 
@@ -108,19 +109,111 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   genreId,
   client,
   onClose,
+  onChannelChange,
   onEnded: _onEnded
 }) => {
   // Fetch channels from the same category/genre for carousel (only for TV channels, not VOD/movies)
-  // Only enable when we have a valid genreId to avoid fetching ALL channels (category: "*")
-  const { data: categoryChannels, isLoading: channelsLoading } = useChannels(
+  // Only enable when we have a valid genreId
+  const { data: categoryChannels } = useChannels(
     client!,
     isVod ? undefined : genreId,
     false, // Disable EPG prefetching when playing from for-you/recent-channels
     !isVod && !!genreId // Only enabled for TV when we have a valid genreId
   );
+  
+  logger.info('[ExoPlayer] categoryChannels:', categoryChannels?.length || 0, 'genreId:', genreId);
+
+  // Fetch recent channels for quick switching
+  const activePortalId = usePortalsStore(s => s.activePortalId);
+  const { recentItems: recentLiveItems } = useRecentViewed(activePortalId || '', 'live', 20);
+
+  // Convert recent items to channel format for player
+  const recentChannels = useMemo(() => {
+    return recentLiveItems
+      .filter(item => item.type === 'live' && item.cmd)
+      .map(item => ({
+        id: Number(item.item_id) || 0,
+        name: item.name,
+        cmd: item.cmd || '',
+        logo: item.poster,
+        number: 0,
+        censored: false,
+        tv_genre_id: item.genre_id ? Number.parseInt(item.genre_id) : undefined,
+      }));
+  }, [recentLiveItems]);
+
+  // Use refs to avoid triggering useEffect when channel data changes
+  const categoryChannelsRef = React.useRef(categoryChannels);
+  const recentChannelsRef = React.useRef(recentChannels);
 
   React.useEffect(() => {
-    const openNativePlayer = async () => {
+    categoryChannelsRef.current = categoryChannels;
+  }, [categoryChannels]);
+
+  React.useEffect(() => {
+    recentChannelsRef.current = recentChannels;
+  }, [recentChannels]);
+
+  const hasOpenedRef = React.useRef(false);
+  const lastChannelIdRef = React.useRef<number | undefined>(undefined);
+  const [playerOpened, setPlayerOpened] = React.useState(false);
+
+  // Register onChannelChange bridge for Android player - resolves URL when user switches channel
+  React.useEffect(() => {
+    if (!isAndroid()) return;
+
+    if ((globalThis.window as any).onChannelChange) return;
+
+    (globalThis.window as any).onChannelChange = async (channelId: number, cmd: string, name: string, genreId: string): Promise<string> => {
+      try {
+        logger.info('[ExoPlayer] onChannelChange called for channel:', channelId, name);
+        
+        if (!client) {
+          logger.error('[ExoPlayer] No client for onChannelChange');
+          return cmd;
+        }
+
+        // Resolve URL using create_link (this triggers the single create_link request)
+        let streamUrl = cmd;
+        if (cmd && (cmd.startsWith('ffmpeg ') || cmd.startsWith('vlc ') || cmd.startsWith('ffplay '))) {
+          try {
+            streamUrl = await client.getStreamUrl(cmd, { genreId });
+            logger.info('[ExoPlayer] URL resolved for channel:', channelId, name);
+          } catch (e) {
+            logger.warn('[ExoPlayer] Failed to resolve URL for channel:', channelId, e);
+            streamUrl = '';
+          }
+        }
+
+        // Also call React onChannelChange if provided
+        if (onChannelChange) {
+          onChannelChange({ id: channelId, cmd, name, tv_genre_id: genreId });
+        }
+
+        return streamUrl;
+      } catch (e) {
+        logger.error('[ExoPlayer] onChannelChange failed:', e);
+        return cmd;
+      }
+    };
+
+    logger.info('[ExoPlayer] onChannelChange bridge registered globally');
+  }, [client, onChannelChange]);
+
+  // Open native player first
+  React.useEffect(() => {
+    // Prevent multiple calls
+    if (hasOpenedRef.current) {
+      return;
+    }
+    hasOpenedRef.current = true;
+    
+    // Reset channel tracking on new player open
+    lastChannelIdRef.current = undefined;
+    setPlayerOpened(true);
+
+    (async () => {
+      const openNativePlayer = async () => {
       if (!isAndroid()) {
         logger.warn('ExoPlayer is only available on Android. Use MpvPlayer on desktop.');
         onClose();
@@ -148,41 +241,10 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
       const currentEpisodeIndex = player?.currentEpisodeIndex || 0;
       const autoPlayEpisodes = player?.autoPlayEpisodes ?? true;
 
-      const epgData = await fetchEPGData(channelId || 0, isVod || false);
-
       // Get volume from persisted store
       const volume = Math.round((usePlaybackStore.getState().settings.volume) * 100) || 80;
 
-      // Filter channels for carousel (exclude hidden channels starting with #####)
-      const filteredChannels = categoryChannels?.filter((channel: any) => !channel.name.startsWith('#####')) || [];
-
-      // Resolve stream URLs for channels (convert ffmpeg commands to actual URLs)
-      const channelsWithUrls = await Promise.all(
-        filteredChannels.map(async (channel: any) => {
-          let streamUrl = channel.cmd;
-          // If cmd is a ffmpeg/vlc command, try to resolve it
-          if (streamUrl && (streamUrl.startsWith('ffmpeg ') || streamUrl.startsWith('vlc ') || streamUrl.startsWith('ffplay '))) {
-            try {
-              streamUrl = await client.getStreamUrl(streamUrl, {
-                genreId: channel.tv_genre_id?.toString() || channel.genreId?.toString()
-              });
-            } catch (e) {
-              logger.warn('[ExoPlayer] Failed to resolve stream URL for channel:', channel.name, e);
-              streamUrl = ''; // Mark as unavailable
-            }
-          }
-          return {
-            ...channel,
-            stream_url: streamUrl
-          };
-        })
-      );
-
-      // Filter out channels that couldn't be resolved
-      const resolvedChannels = channelsWithUrls.filter((ch: any) => ch.stream_url && ch.stream_url.length > 0);
-
-      logger.info('[ExoPlayer] Channel data: isVod=' + isVod + ', genreId=' + genreId + ', channelsLoading=' + channelsLoading + ', categoryChannels count=' + (categoryChannels?.length || 0) + ', filtered count=' + filteredChannels.length + ', resolved count=' + resolvedChannels.length);
-
+      // Open player immediately with minimal data
       const exoPlayer = (globalThis.window as any).ExoPlayer;
       if (!exoPlayer || typeof exoPlayer.open_compose_player !== 'function') {
         logger.error('ExoPlayer.open_compose_player method not available');
@@ -201,9 +263,17 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         episodesJson: JSON.stringify(episodes),
         currentEpisodeIndex,
         autoPlayEpisodes,
-        channelsJson: JSON.stringify(resolvedChannels),
+        channelsJson: '[]',
+        recentChannelsJson: '[]',
         volume,
-        ...epgData
+        epgTitle: '',
+        epgStart: '',
+        epgEnd: '',
+        epgCategory: '',
+        epgNextTitle: '',
+        epgNextStart: '',
+        epgNextEnd: '',
+        epgNextCategory: ''
       };
 
       if (!validatePlayerParams(params)) {
@@ -217,15 +287,92 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         console.error('[ExoPlayer] Error calling open_compose_player:', error);
         logger.error(`Error calling open_compose_player: ${error}`);
         onClose();
+        return;
       }
+
+      // Load EPG data in background (non-blocking)
+      (async () => {
+        try {
+          await fetchEPGData(channelId || 0, isVod || false);
+        } catch (e) {
+          logger.warn('[ExoPlayer] Background EPG loading failed:', e);
+        }
+      })();
     };
 
-    // Wait for channels to load before opening player
-    if (!channelsLoading) {
-      openNativePlayer();
+    // Open player immediately
+    await openNativePlayer();
+    })();
+  }, [url, name, channelId, isVod, genreId, client]);
+
+  // Send channels to Android after player is opened (non-blocking)
+  React.useEffect(() => {
+    logger.info('[ExoPlayer] Channel sending useEffect triggered: isVod=' + isVod + ', genreId=' + genreId + ', client=' + !!client + ', categoryChannels=' + (categoryChannels?.length || 0) + ', playerOpened=' + playerOpened);
+    
+    if (isVod || !client) {
+      logger.warn('[ExoPlayer] Skipping channel send: isVod or no client');
+      // Close immediately if we're not sending channels
       onClose();
+      return;
     }
-  }, [url, name, channelId, isVod, genreId, client, categoryChannels, channelsLoading, onClose]);
+    
+    // Wait for player to be opened and channels to be loaded
+    if (!playerOpened) {
+      logger.warn('[ExoPlayer] Player not opened yet, waiting...');
+      return;
+    }
+    
+    // Wait for category channels to be loaded (if we have genreId)
+    if (genreId && (!categoryChannels || categoryChannels.length === 0)) {
+      logger.warn('[ExoPlayer] Category channels not loaded yet, waiting...');
+      return;
+    }
+    
+    // Send channels immediately without delay - player is already open
+    const exoPlayer = (globalThis.window as any).ExoPlayer;
+    if (!exoPlayer || typeof (exoPlayer as any).update_channels !== 'function') {
+      logger.warn('[ExoPlayer] ExoPlayer.update_channels not available yet, closing');
+      onClose();
+      return;
+    }
+    
+    // Send channels WITHOUT resolving URLs - Android player will handle URL resolution via get_order_list
+    (async () => {
+      try {
+        // Wait a bit for NativePlayerActivity to be created (reduced from 500ms to 100ms)
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        let categoryChannelsToSend: any[] = [];
+        
+        // Only send category channels if we have genreId and categoryChannels
+        if (genreId && categoryChannels && categoryChannels.length > 0) {
+          categoryChannelsToSend = categoryChannels
+            .filter((ch: any) => !ch.name.startsWith('#####'))
+            .map((channel: any) => ({
+              ...channel,
+              stream_url: channel.cmd // Send raw cmd, let Android resolve via get_order_list
+            }));
+        }
+        
+        const recentChannelsToSend = recentChannels
+          .filter((ch: any) => !ch.name.startsWith('#####') && ch.id !== channelId)
+          .map((channel: any) => ({
+            ...channel,
+            stream_url: channel.cmd // Send raw cmd, let Android resolve via get_order_list
+          })) || [];
+        
+        logger.info('[ExoPlayer] Sending channels via useEffect: category=' + categoryChannelsToSend.length + ', recent=' + recentChannelsToSend.length);
+        
+        (exoPlayer as any).update_channels(JSON.stringify(categoryChannelsToSend), JSON.stringify(recentChannelsToSend));
+        
+        // Close after sending channels
+        onClose();
+      } catch (e) {
+        logger.warn('[ExoPlayer] Failed to send channels via useEffect:', e);
+        onClose();
+      }
+    })();
+  }, [categoryChannels, recentChannels, genreId, isVod, client, channelId, onClose, playerOpened]);
 
   return null;
 };

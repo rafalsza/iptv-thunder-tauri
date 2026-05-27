@@ -15,11 +15,11 @@ import { useLongPress } from '@/hooks/useLongPress';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const getRowHeight = () => {
-  if (globalThis.window === undefined) return 280;
+  if (globalThis.window === undefined) return 360;
   const width = globalThis.window.innerWidth;
-  if (width > 3000) return 320;
-  if (width > 2000) return 280;
-  return 240;
+  if (width > 3000) return 440;
+  if (width > 2000) return 320;
+  return 280;
 };
 const IMAGE_CACHE_LIMIT = 500;
 
@@ -66,11 +66,11 @@ const MovieCard = React.memo<MovieCardProps>(({
       // Save focus before navigation for restoration when closing details
       const focusedEl = document.activeElement as HTMLElement;
       if (focusedEl?.dataset.tvId) {
-        (window as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
-        (window as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
+        (globalThis as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
+        (globalThis as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
       }
       // Check if long press was triggered - if so, don't call onSelect
-      if (!(window as any).__tvLongPressPreventClick) {
+      if (!(globalThis as any).__tvLongPressPreventClick) {
         e.preventDefault();
         onSelect(movie);
       }
@@ -81,11 +81,11 @@ const MovieCard = React.memo<MovieCardProps>(({
     // Save focus before navigation for restoration when closing details
     const focusedEl = document.activeElement as HTMLElement;
     if (focusedEl?.dataset.tvId) {
-      (window as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
-      (window as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
+      (globalThis as any).__lastFocusedMovieId = focusedEl.dataset.tvId;
+      (globalThis as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
     }
     // For mouse/touch, let useLongPress handle it
-    if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
+    if (!isLongPress && !(globalThis as any).__tvLongPressPreventClick) {
       onSelect(movie);
     }
   };
@@ -165,7 +165,7 @@ const MovieCard = React.memo<MovieCardProps>(({
           {/* Favorite button */}
           <button
             onClick={e => onToggleFavorite(e, movie)}
-            className="absolute top-2 right-2 text-xl dark:bg-slate-900/50 bg-black/20 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity dark:hover:bg-slate-900/80 hover:bg-black/30"
+            className="absolute top-1 right-1 text-xl dark:bg-slate-900/50 bg-black/20 rounded-full p-1 opacity-80 group-hover:opacity-100 focus:opacity-100 transition-opacity dark:hover:bg-slate-900/80 hover:bg-black/30"
             aria-label="Remove from favorites"
           >
             ❤️
@@ -376,7 +376,7 @@ export const FavoriteMoviesList: React.FC<FavoriteMoviesListProps> = ({
               }}
             >
               <div
-                className="grid gap-6 h-full"
+                className="grid gap-4 h-full"
                 style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, rowGap: '2px' }}
               >
                 {getRow(vRow.index).map((movie, colIndex) => {

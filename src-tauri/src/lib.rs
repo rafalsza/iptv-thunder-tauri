@@ -4,9 +4,22 @@
 use std::sync::{LazyLock, Mutex};
 use std::collections::HashMap;
 use tokio::sync::oneshot;
+use tokio::sync::Mutex as AsyncMutex;
+use tokio::time;
 
 static CANCEL_MAP: LazyLock<Mutex<HashMap<String, oneshot::Sender<()>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+// Async mutex to serialize requests to avoid server rate limiting
+static REQUEST_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
+
+// Static HTTP client shared across all requests
+static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .expect("Failed to create HTTP client")
+});
 
 #[tauri::command]
 async fn stalker_request(
@@ -14,20 +27,14 @@ async fn stalker_request(
     method: String,
     headers: Option<Vec<String>>,
     body: Option<String>,
-    timeout_ms: Option<u64>,
+    _timeout_ms: Option<u64>,
     request_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
     use reqwest;
     use serde_json::json;
 
-    let client_builder = reqwest::Client::builder();
-    let client = if let Some(timeout) = timeout_ms {
-        client_builder.timeout(std::time::Duration::from_millis(timeout))
-    } else {
-        client_builder
-    }
-    .build()
-    .map_err(|e| e.to_string())?;
+    // Use static client
+    let client = &*HTTP_CLIENT;
 
     let http_method = match method.as_str() {
         "GET" => reqwest::Method::GET,
@@ -36,8 +43,6 @@ async fn stalker_request(
         "DELETE" => reqwest::Method::DELETE,
         _ => return Err("Invalid method".to_string()),
     };
-
-    let mut request = client.request(http_method, &url);
 
     // Extract MAC from URL query parameters with proper URL decoding
     let mut mac_address = String::new();
@@ -80,8 +85,9 @@ async fn stalker_request(
         cookies.push(format!("mac={}", mac_address));
     }
     
-    // Add headers from frontend
+    // Extract token from headers first (before creating request)
     let mut token = String::new();
+    let mut custom_headers: Vec<(String, String)> = Vec::new();
     if let Some(ref headers_list) = headers {
         for header in headers_list {
             if header.starts_with("Authorization: Bearer ") {
@@ -89,32 +95,40 @@ async fn stalker_request(
                     .trim_start_matches("Authorization: Bearer ")
                     .trim()
                     .to_string();
-            }
-            if let Some((key, value)) = header.split_once(':') {
-                request = request.header(key.trim(), value.trim());
+            } else if !header.to_lowercase().starts_with("authorization:") {
+                // Skip Authorization header - token is sent via cookies
+                if let Some((key, value)) = header.split_once(':') {
+                    custom_headers.push((key.trim().to_string(), value.trim().to_string()));
+                }
             }
         }
+    }
+    
+    // Use original URL (token will be in cookies only)
+    let final_url = url;
+    
+    // Create request with final URL
+    let mut request = client.request(http_method, &final_url);
+    
+    // Add custom headers from frontend
+    for (key, value) in custom_headers {
+        request = request.header(&key, &value);
     }
     
     if !token.is_empty() {
         cookies.push(format!("stb_token={}", token));
     }
     
-    cookies.push("stb_lang=en_US".to_string());
-    cookies.push("timezone=Europe%2FWarsaw".to_string());
+    // Only add these if they were in original request
+    // cookies.push("stb_lang=en_US".to_string());
+    // cookies.push("timezone=Europe%2FWarsaw".to_string());
     
     let cookie_string = cookies.join("; ");
     request = request.header("Cookie", &cookie_string);
 
-    // Add required Stalker headers (matching desktop exactly)
-    request = request.header("Referer", &url);
-    request = request.header("X-Requested-With", "XMLHttpRequest");
+    // Minimal headers - server might be blocking based on specific headers
     request = request.header("Accept", "*/*");
-    request = request.header("Accept-Language", "en-US,en;q=0.9");
-    request = request.header("Connection", "keep-alive");
-    let user_agent = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG250 Safari/533.3";
-    request = request.header("User-Agent", user_agent);
-    request = request.header("X-User-Agent", user_agent);
+    request = request.header("User-Agent", "Mozilla/5.0");
 
     // Add body if provided
     if let Some(request_body) = body {
@@ -131,7 +145,26 @@ async fn stalker_request(
     };
 
     let do_request = async {
-        let response = request.send().await.map_err(|e| e.to_string())?;
+        // Serialize requests to avoid server rate limiting
+        let _lock = REQUEST_MUTEX.lock().await;
+        
+        // Small delay between requests
+        time::sleep(std::time::Duration::from_millis(200)).await;
+        
+        let response = request.send().await.map_err(|e| {
+            let err_msg = e.to_string();
+            if err_msg.contains("dns") || err_msg.contains("DNS") {
+                format!("DNS error - cannot resolve domain: {}", err_msg)
+            } else if err_msg.contains("connection refused") {
+                format!("Connection refused - server not reachable: {}", err_msg)
+            } else if err_msg.contains("timeout") {
+                format!("Connection timeout: {}", err_msg)
+            } else if err_msg.contains("connection closed") || err_msg.contains("connection reset") {
+                format!("Connection closed unexpectedly: {}", err_msg)
+            } else {
+                format!("Request failed: {}", e)
+            }
+        })?;
         let status = response.status().as_u16();
         let response_headers: std::collections::HashMap<String, String> = response
             .headers()
@@ -308,6 +341,7 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_sql::Builder::default().build())
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_os::init());

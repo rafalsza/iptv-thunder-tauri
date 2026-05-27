@@ -19,6 +19,7 @@ import { useEpgCacheManager } from '@/features/epg/epg.hooks';
 import { AppLayout } from '@/components/AppLayout';
 import { AppContent } from '@/components/AppContent';
 import { StalkerAccount } from '@/types';
+import { addRecentViewed } from '@/hooks/useRecentItems';
 
 // Create a client with persistent cache
 const queryClient = new QueryClient({
@@ -202,6 +203,44 @@ export const App: React.FC = () => {
       setIsAndroid(false);
     }
   }, []);
+
+  // Register addRecentViewed bridge for Android player
+  useEffect(() => {
+    // Only register on Android
+    if (!isAndroid) return;
+
+    // Only register if not already registered
+    if ((globalThis.window as any).addRecentViewed) return;
+
+    (globalThis.window as any).addRecentViewed = async (type: string, itemId: string, name: string, poster: string, cmd: string, genreId: string): Promise<void> => {
+      try {
+        console.log('[App] addRecentViewed called:', type, itemId, name);
+        
+        // Get active portal
+        const activePortal = usePortalsStore.getState().getActivePortal();
+        if (!activePortal) {
+          console.error('[App] No active portal for addRecentViewed');
+          return;
+        }
+
+        await addRecentViewed(activePortal.id, type as 'live' | 'vod' | 'series', itemId, {
+          name,
+          poster,
+          cmd,
+          genre_id: genreId
+        });
+        
+        // Invalidate recent viewed queries to update UI
+        queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });
+        
+        console.log('[App] addRecentViewed success');
+      } catch (e) {
+        console.error('[App] addRecentViewed failed:', e);
+      }
+    };
+
+    console.log('[App] addRecentViewed bridge registered globally');
+  }, [isAndroid, queryClient]);
 
   return (
     <PersistQueryClientProvider

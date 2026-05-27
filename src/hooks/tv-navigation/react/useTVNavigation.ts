@@ -116,11 +116,18 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         el.dataset.tvDisabled === undefined;
     });
 
+    // Always include season dropdown elements for navigation
+    const dropdownElements = Array.from(document.querySelectorAll('[data-tv-group="seasons"]')) as HTMLElement[];
+    const allElements = [...enabledElements, ...dropdownElements];
+    
+    // Remove duplicates (by element reference)
+    const uniqueElements = Array.from(new Set(allElements));
+    
     if (activeContainer) {
-      return enabledElements.filter(el => activeContainer.contains(el));
+      // Include elements from active container OR dropdown elements
+      return uniqueElements.filter(el => activeContainer.contains(el) || el.dataset.tvGroup === 'seasons');
     }
-
-    return enabledElements;
+    return uniqueElements;
   }, [selector, externalElements]);
 
   const isHorizontalContainer = (container: Element): boolean =>
@@ -186,7 +193,11 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
   const updateState = useCallback(() => {
     const elements = getFocusableElements();
-    const visibleElements = filterVisibleElements(elements);
+    // Filter visible elements but always include dropdown season elements
+    const visibleElements = elements.filter(el => {
+      if (el.dataset.tvGroup === 'seasons') return true; // Always include seasons
+      return filterVisibleElements([el]).length > 0;
+    });
 
     // Dirty checking: only rebuild state if elements actually changed
     const prevElements = elementsRef.current;
@@ -315,6 +326,12 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       resolveTvDivFallback();
       return;
     }
+    // Don't reset currentElementRef if we're in a dropdown (check if currentElementRef is a season element)
+    const currentRefId = currentElementRef.current?.dataset?.tvId || currentElementRef.current?.id;
+    const isInDropdown = currentRefId?.startsWith('season-');
+    if (isInDropdown) {
+      return;
+    }
     if (activeId && stateRef.current?.currentId !== activeId) {
       updateState();
       currentElementRef.current = focusableEl;
@@ -349,14 +366,13 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   };
 
   const move = useCallback((direction: Direction) => {
-    if (!stateRef.current?.currentId) {
+    const currentId = currentElementRef.current?.dataset?.tvId || currentElementRef.current?.id || stateRef.current?.currentId;
+    if (!currentId) {
       updateState();
       if (!stateRef.current) return;
     }
 
-    syncDomFocusToState();
-
-    const result = findNextNode(stateRef.current, direction, allPlugins, pluginContext);
+    const result = findNextNode(stateRef.current!, direction, allPlugins, pluginContext);
     if (!result || (!result.targetId && !result.action)) return;
 
     if (result.action === 'BACK') {
@@ -373,8 +389,10 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       : resolveElementTarget(result.targetId);
 
     if (targetEl && isValidTarget(targetEl, isGroupId)) {
-      targetEl.focus();
+      // Set currentElementRef immediately before focus
       currentElementRef.current = targetEl;
+      targetEl.focus({ preventScroll: true });
+      scrollToElement(targetEl);
       const newId = targetEl.dataset.tvId || targetEl.id || result.targetId;
       if (stateRef.current) {
         stateRef.current.currentId = newId;
@@ -410,8 +428,17 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       }, 16); // ~60fps throttling
     };
     
+    // Listen for custom rebuild event (e.g., when player closes and navigation reappears)
+    const rebuildListener = () => {
+      // Force immediate update without debouncing
+      requestAnimationFrame(() => {
+        updateState();
+      });
+    };
+    
     window.addEventListener('resize', resizeListener);
     window.addEventListener('scroll', scrollListener, true);
+    window.addEventListener('tv-navigation-rebuild', rebuildListener);
 
     // Optimized mutation observer - observe only TV containers
     let mutationScheduled = false;
@@ -451,6 +478,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     return () => {
       window.removeEventListener('resize', resizeListener);
       window.removeEventListener('scroll', scrollListener, true);
+      window.removeEventListener('tv-navigation-rebuild', rebuildListener);
       observer.disconnect();
       if (scrollTimeoutRef.current !== null) {
         cancelAnimationFrame(scrollTimeoutRef.current);
@@ -564,7 +592,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
                           document.querySelector('[data-radix-menu-content]') !== null;
 
       // If focus is moving into a Radix dropdown, save the current element
-      if (isRadixOpen && target?.closest('[data-radix-popper-content-wrapper], [data-radix-menu-content]')) {
+      if (isRadixOpen && target instanceof Element && target?.closest('[data-radix-popper-content-wrapper], [data-radix-menu-content]')) {
         // Focus moved inside dropdown - don't update
         return;
       }
@@ -609,6 +637,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       }
 
       // Check if this is a TV focusable element
+      if (!(target instanceof Element)) return;
       if (target.matches('[data-tv-focusable]') || target.closest('[data-tv-focusable]')) {
         let focusableEl = (target.matches('[data-tv-focusable]') ? target : target.closest('[data-tv-focusable]')) as HTMLElement;
 
@@ -639,8 +668,11 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   useEffect(() => {
     const keyHandler = (e: KeyboardEvent) => {
       const targetEl = e.target as HTMLElement;
+      // Use currentElementRef if available, otherwise fall back to e.target
+      const currentEl = currentElementRef.current || targetEl;
 
       // Check if Radix dropdown is open - let it handle navigation naturally
+      // But NOT for our custom seasons dropdown - we handle that with TV navigation
       const isRadixOpen = document.querySelector('[data-radix-select-viewport]') !== null ||
                           document.querySelector('[data-radix-popper-content-wrapper]') !== null ||
                           document.querySelector('[data-radix-menu-content]') !== null;
@@ -657,13 +689,15 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       }
 
       // If Enter is pressed on a Radix Select trigger, save focus before dropdown opens
-      if (e.key === 'Enter' && targetEl?.dataset?.tvId === 'series-season-select') {
-        lastFocusBeforeDropdownRef.current = targetEl;
+      if (e.key === 'Enter' && currentEl?.dataset?.tvId === 'series-season-select') {
+        lastFocusBeforeDropdownRef.current = currentEl;
       }
 
       // Block browser default navigation immediately for arrow keys
+      // But allow for HTMLSelectElement to open dropdown naturally
       const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Up', 'Down', 'Left', 'Right'];
-      if (arrowKeys.includes(e.key)) {
+      const isSelectElement = currentEl instanceof HTMLSelectElement || (currentEl instanceof Element && currentEl.closest('select') !== null);
+      if (arrowKeys.includes(e.key) && !isSelectElement) {
         e.preventDefault();
         e.stopImmediatePropagation();
       }
@@ -679,18 +713,27 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       const currentId = current?.dataset?.tvId || current?.id;
       const downElementId = (globalThis as any).__tvEnterDownElement;
       (globalThis as any).__tvEnterDownElement = null;
-      
-      if (downElementId && downElementId !== currentId) return;
+
+      // Skip check for season elements (dropdown items) - allow selection even if focus shifted
+      const isSeasonElement = downElementId?.startsWith('season-');
+
+      if (downElementId && downElementId !== currentId && !isSeasonElement) return;
       if (!current) return;
+
+      // Don't handle Enter for native select elements - let browser handle it
+      if (current instanceof HTMLSelectElement) {
+        return;
+      }
       
       onEnterRef.current?.(current);
-      if (current instanceof HTMLSelectElement) {
-        const mousedown = new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: globalThis.window });
-        current.dispatchEvent(mousedown);
-        current.focus();
-      } else {
+
+      // Special handling for season elements - trigger onClick on them
+      if (currentId?.startsWith('season-')) {
         current.click();
+        return;
       }
+
+      current.click();
     };
 
     const keyUpHandler = (e: KeyboardEvent) => {

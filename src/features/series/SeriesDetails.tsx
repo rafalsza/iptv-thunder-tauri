@@ -291,102 +291,98 @@ const SeasonSelector: React.FC<SeasonSelectorProps> = ({
   getEpisodeCountText,
   onSeasonChange,
 }) => {
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const wasFocusedRef = useRef(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const selectingSeasonRef = useRef(false);
 
+  const prevIsOpen = useRef(isOpen);
+
+  // Restore focus to trigger when dropdown closes, focus first season when opens
   useEffect(() => {
-    const handleFocus = (e: FocusEvent) => {
-      const target = e.target as HTMLElement;
-      if (target === triggerRef.current) {
-        wasFocusedRef.current = true;
-      }
-    };
-
-    const handleBlur = (e: FocusEvent) => {
-      if (e.target === triggerRef.current) {
-        wasFocusedRef.current = true;
-      }
-    };
-
-    const handleFocusIn = (e: FocusEvent) => {
-      const target = e.target as HTMLElement;
-      const isDropdownOpen = document.querySelector('[data-radix-select-viewport]') !== null;
-      
-      // Only intercept if we were previously focused on season-select
-      if (!isDropdownOpen && triggerRef.current && wasFocusedRef.current) {
-        const isTrigger = target === triggerRef.current;
-        const isDropdown = target.closest('[data-radix-select-viewport]');
-        const isBody = target === document.body;
-        const isSidebar = target.closest('[data-tv-container="navigation"]');
-        
-        if (!isTrigger && !isDropdown && (isBody || isSidebar)) {
-          e.preventDefault();
-          e.stopPropagation();
-          wasFocusedRef.current = false;
-          triggerRef.current.focus();
-        } else if (isTrigger) {
-          wasFocusedRef.current = false;
+    if (isOpen && !prevIsOpen.current) {
+      setTimeout(() => {
+        const firstSeason = document.querySelector('[data-tv-group="seasons"]') as HTMLElement;
+        if (firstSeason) {
+          firstSeason.focus();
         }
-      }
-    };
-
-    triggerRef.current?.addEventListener('focus', handleFocus);
-    triggerRef.current?.addEventListener('blur', handleBlur);
-    document.addEventListener('focusin', handleFocusIn, true);
-    
-    return () => {
-      triggerRef.current?.removeEventListener('focus', handleFocus);
-      triggerRef.current?.removeEventListener('blur', handleBlur);
-      document.removeEventListener('focusin', handleFocusIn, true);
-    };
-  }, []);
+      }, 50);
+    }
+    if (!isOpen && prevIsOpen.current) {
+      setTimeout(() => {
+        const trigger = document.querySelector('[data-tv-id="series-season-select"]') as HTMLElement;
+        if (trigger) {
+          trigger.focus();
+        }
+      }, 50);
+    }
+    selectingSeasonRef.current = false;
+    prevIsOpen.current = isOpen;
+  }, [isOpen]);
 
   if (seasons.length <= 1) return null;
 
-  const handleSeasonChange = (season: string) => {
-    onSeasonChange(season);
-  };
-
   return (
-    <Select 
-      value={selectedSeason} 
-      onValueChange={handleSeasonChange}
-    >
-      <SelectTrigger
-        ref={triggerRef}
+    <div ref={containerRef} className="relative">
+      {/* Trigger */}
+      <button
         data-tv-focusable
         data-tv-id="series-season-select"
         data-tv-group="series-controls"
         tabIndex={0}
-        className="bg-slate-800 text-white px-3 py-2 rounded-lg border border-slate-700 w-fit"
+        onClick={() => setIsOpen(!isOpen)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+            e.preventDefault();
+            setIsOpen(!isOpen);
+          }
+        }}
+        className="bg-slate-800 text-white px-3 py-2 rounded-lg border border-slate-700 w-fit cursor-pointer flex items-center gap-2"
       >
-        <SelectValue placeholder={`${t('season')} ${selectedSeason}`} />
-      </SelectTrigger>
-      <SelectContent className="bg-slate-800 text-white border border-slate-700">
-        {seasons.map((season: string) => (
-          <SelectItem
-            key={season}
-            value={season}
-            data-tv-focusable
-            data-tv-id={`season-${season}`}
-            data-tv-group="seasons"
-            className="cursor-pointer hover:bg-slate-700 data-[highlighted]:bg-slate-700 data-[state=checked]:bg-slate-600"
-          >
-            {t('season')} {season} ({episodesBySeason[season]?.length || 0} {getEpisodeCountText(episodesBySeason[season]?.length || 0)})
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+        <span>{t('season')} {selectedSeason} ({episodesBySeason[selectedSeason]?.length || 0} {getEpisodeCountText(episodesBySeason[selectedSeason]?.length || 0)})</span>
+        <span className="text-xs">{isOpen ? '▲' : '▼'}</span>
+      </button>
+
+      {/* Dropdown - always render but hide with display */}
+      <div 
+        ref={dropdownRef}
+        className={`absolute top-full left-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50 min-w-full ${isOpen ? 'block' : 'hidden'}`}
+      >
+            {seasons.map((season: string, index: number) => (
+              <button
+                key={season}
+                data-tv-focusable
+                data-tv-id={`season-${season}`}
+                data-tv-group="seasons"
+                data-tv-disabled={isOpen ? undefined : 'true'}
+                tabIndex={isOpen ? 0 : -1}
+                data-tv-initial={index === 0 ? 'true' : undefined}
+                onClick={() => {
+                  selectingSeasonRef.current = true;
+                  onSeasonChange(season);
+                  setIsOpen(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
+                    e.preventDefault();
+                    selectingSeasonRef.current = true;
+                    onSeasonChange(season);
+                    setIsOpen(false);
+                  }
+                }}
+                onFocus={(e) => {
+                  e.stopPropagation();
+                }}
+                className={`w-full px-4 py-3 cursor-pointer hover:bg-slate-700 focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${season === selectedSeason ? 'bg-slate-600' : ''}`}
+              >
+                {t('season')} {season} ({episodesBySeason[season]?.length || 0} {getEpisodeCountText(episodesBySeason[season]?.length || 0)})
+              </button>
+            ))}
+        </div>
+    </div>
   );
 };
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 interface SeriesDetailsProps {
   series: StalkerVOD;

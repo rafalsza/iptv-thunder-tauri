@@ -97,6 +97,8 @@ export const be = {
   active: 'Актыўны',
   inactive: 'Неактыўны',
   lastUpdated: 'Апошняе абнаўленне',
+  accountExpires: 'Партал дзейнічае да',
+  accountExpiresDate: 'Дата сканчэння тэрміну',
   clickPortalForActions: 'Націсніце на партал або націсніце Enter, каб адкрыць меню дзеянняў',
   
   deletePortal: 'Выдаліць партал',

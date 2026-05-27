@@ -28,6 +28,7 @@ interface PlayerControlsProps {
   onSetSubTrack: (id: string) => void;
   onSeekToBeginning?: () => void;
   categoryChannels?: any[];
+  recentChannels?: any[];
   currentChannelId?: number;
   onChannelSelect?: (channel: any) => void;
 }
@@ -37,18 +38,28 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
   currentTime, duration, tracks, currentAudioId, currentSubId,
   onPlayPause, onFullscreen, onPip, onClose,
   onVolumeChange, onProgressClick, onShowEPG, onSetAudioTrack, onSetSubTrack, onSeekToBeginning,
-  categoryChannels, currentChannelId, onChannelSelect
+  categoryChannels, recentChannels, currentChannelId, onChannelSelect
 }) => {
   const { t } = useTranslation();
   const [showTrackMenu, setShowTrackMenu] = useState(false);
   const [showCategoryChannelsMenu, setShowCategoryChannelsMenu] = useState(false);
+  const [showRecentChannelsMenu, setShowRecentChannelsMenu] = useState(false);
   const audioTracks = tracks.filter(t => t.type === 'audio');
   const subTracks = tracks.filter(t => t.type === 'sub');
   const hasTracks = audioTracks.length > 1 || subTracks.length > 0;
-  const hasCategoryChannels = categoryChannels && categoryChannels.length > 0;
+  // Filter channels for carousel (exclude hidden and current channel)
+  const filteredCategoryChannels = categoryChannels?.filter(channel => 
+    !channel.name.startsWith('#####') && channel.id !== currentChannelId
+  ) || [];
 
-  // Filter channels for carousel
-  const filteredChannels = categoryChannels?.filter(channel => !channel.name.startsWith('#####')) || [];
+  const hasCategoryChannels = filteredCategoryChannels.length > 0;
+
+  // Filter recent channels (exclude hidden channels and current channel)
+  const filteredRecentChannels = recentChannels?.filter(channel => 
+    !channel.name.startsWith('#####') && channel.id !== currentChannelId
+  ) || [];
+
+  const hasRecentChannels = filteredRecentChannels.length > 0;
 
   if (streamState !== 'playing' || (isFullscreen && !showUi)) return null;
 
@@ -76,20 +87,22 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
             </button>
           )}
 
-          {/* Play/Pause */}
-          <button
-            data-tv-focusable
-            tabIndex={0}
-            onClick={onPlayPause}
-            className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
-            title={isPaused ? 'Play' : 'Pause'}
-          >
-            {isPaused ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-            )}
-          </button>
+          {/* Play/Pause - VOD only */}
+          {isVod && (
+            <button
+              data-tv-focusable
+              tabIndex={0}
+              onClick={onPlayPause}
+              className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+              title={isPaused ? 'Play' : 'Pause'}
+            >
+              {isPaused ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              )}
+            </button>
+          )}
 
           {/* EPG Button - Live TV only */}
           {!isVod && (
@@ -111,7 +124,7 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
             <button
               data-tv-focusable
               tabIndex={0}
-              onClick={() => setShowCategoryChannelsMenu(!showCategoryChannelsMenu)}
+              onClick={() => { setShowCategoryChannelsMenu(!showCategoryChannelsMenu); setShowRecentChannelsMenu(false); }}
               className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
                 showCategoryChannelsMenu ? 'bg-green-500/80 hover:bg-green-500' : 'bg-white/20 hover:bg-white/30'
               }`}
@@ -119,6 +132,23 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                 <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9h-4v4h-2v-4H9V9h4V5h2v4h4v2z"/>
+              </svg>
+            </button>
+          )}
+
+          {/* Recent Channels Button - Live TV only */}
+          {!isVod && hasRecentChannels && (
+            <button
+              data-tv-focusable
+              tabIndex={0}
+              onClick={() => { setShowRecentChannelsMenu(!showRecentChannelsMenu); setShowCategoryChannelsMenu(false); }}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                showRecentChannelsMenu ? 'bg-blue-500/80 hover:bg-blue-500' : 'bg-white/20 hover:bg-white/30'
+              }`}
+              title={t('recentChannels') || 'Ostatnie kanały'}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
               </svg>
             </button>
           )}
@@ -265,7 +295,7 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
               scrollbarColor: '#4b5563 transparent',
             }}
           >
-            {filteredChannels.map((channel) => {
+            {filteredCategoryChannels.map((channel) => {
               const isCurrent = channel.id === currentChannelId;
               return (
                 <button
@@ -295,6 +325,57 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
                   </span>
                   {isCurrent && (
                     <span className="text-xs text-green-400">🔴</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Channels Carousel - Live TV only */}
+      {showRecentChannelsMenu && !isVod && hasRecentChannels && (
+        <div className="mt-4 border-t border-gray-700/50 pt-4">
+          <div className="px-2 pb-2 text-xs text-gray-400">
+            {t('recentChannels') || 'Ostatnie kanały'}
+          </div>
+          <div
+            className="flex items-center gap-4 overflow-x-auto px-2 pb-2"
+            style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#4b5563 transparent',
+            }}
+          >
+            {filteredRecentChannels.map((channel) => {
+              const isCurrent = channel.id === currentChannelId;
+              return (
+                <button
+                  key={`recent-${channel.id}`}
+                  onClick={() => {
+                    if (onChannelSelect && !isCurrent) {
+                      onChannelSelect(channel);
+                    }
+                    setShowRecentChannelsMenu(false);
+                  }}
+                  disabled={isCurrent}
+                  className={`flex-shrink-0 w-[140px] p-3 rounded-lg transition-all flex flex-col items-center gap-2 ${
+                    isCurrent
+                      ? 'bg-blue-600/30 border-2 border-blue-500 cursor-not-allowed'
+                      : 'bg-zinc-800/50 hover:bg-zinc-700 border border-zinc-700 hover:border-blue-500 cursor-pointer'
+                  }`}
+                  data-tv-focusable
+                  tabIndex={0}
+                >
+                  <div className="w-16 h-16 flex items-center justify-center">
+                    <ChannelLogo logo={channel.logo} name={channel.name} />
+                  </div>
+                  <span className={`text-xs text-center line-clamp-2 ${
+                    isCurrent ? 'text-blue-400 font-medium' : 'text-gray-200'
+                  }`}>
+                    {channel.name}
+                  </span>
+                  {isCurrent && (
+                    <span className="text-xs text-blue-400">🔴</span>
                   )}
                 </button>
               );

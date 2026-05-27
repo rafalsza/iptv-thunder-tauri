@@ -15,6 +15,8 @@ import { DeadState } from './components/DeadState';
 import { EPGDetailsModal } from './components/EPGDetailsModal';
 import { useChannels } from '@/features/tv/tv.hooks';
 import { StalkerChannel } from '@/types';
+import { useRecentViewed } from '@/hooks/useRecentItems';
+import { usePortalsStore } from '@/store/portals.store';
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const MpvPlayerComponent: React.FC<PlayerProps> = ({
@@ -47,6 +49,25 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
     false, // Disable EPG prefetching when playing from for-you/recent-channels
     !isVod && !!genreId // Only enabled for TV when we have a valid genreId
   );
+
+  // Fetch recent channels for quick switching
+  const activePortalId = usePortalsStore(s => s.activePortalId);
+  const { recentItems: recentLiveItems } = useRecentViewed(activePortalId || '', 'live', 20);
+
+  // Convert recent items to channel format for player
+  const recentChannels = useMemo(() => {
+    return recentLiveItems
+      .filter(item => item.type === 'live' && item.cmd)
+      .map(item => ({
+        id: Number(item.item_id) || 0,
+        name: item.name,
+        cmd: item.cmd || '',
+        logo: item.poster,
+        number: 0,
+        censored: false,
+        tv_genre_id: item.genre_id ? Number.parseInt(item.genre_id) : undefined,
+      }));
+  }, [recentLiveItems]);
   const hasResumedRef = useRef(false);
   const urlChangeIdRef = useRef(0);
 
@@ -268,6 +289,7 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
             onSetSubTrack={handleSetSubTrack}
             onSeekToBeginning={handleSeekToBeginning}
             categoryChannels={!isVod && genreId ? categoryChannels : undefined}
+            recentChannels={!isVod ? recentChannels : undefined}
             currentChannelId={channelId}
             onChannelSelect={handleChannelSelect}
           />

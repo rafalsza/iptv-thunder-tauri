@@ -29,7 +29,8 @@ class PlayerController(
     private val onError: (error: androidx.media3.common.PlaybackException, retryCount: Int, maxRetries: Int) -> Unit,
     private val onRetry: () -> Unit,
     private val onUiStateChange: (PlayerUiState) -> Unit = {},
-    private val initialChannelName: String = ""
+    private val initialChannelName: String = "",
+    private val onPlayerReady: () -> Unit = {}
 ) {
     companion object {
         private const val MAX_RETRIES = 5
@@ -138,7 +139,10 @@ class PlayerController(
             .build().apply {
                 setMediaSource(mediaSource)
                 playWhenReady = true
-                prepare()
+                // Prepare in background to avoid blocking UI
+                lifecycleOwner.lifecycleScope.launch {
+                    prepare()
+                }
             }
 
         // Update initial UI state with isVod
@@ -181,6 +185,9 @@ class PlayerController(
                         watchdogStuckCount = 0
                         lastPosition = 0L
                         lastPositionTimestamp = System.currentTimeMillis()
+
+                        // Notify that player is ready
+                        onPlayerReady()
 
                         // Detect video quality
                         detectVideoQuality()
@@ -373,7 +380,10 @@ class PlayerController(
 
         player?.setMediaSource(mediaSource)
         player?.playWhenReady = true
-        player?.prepare()
+        // Prepare in background to avoid blocking UI
+        lifecycleOwner.lifecycleScope.launch {
+            player?.prepare()
+        }
 
         currentUiState = currentUiState.copy(
             channelName = channelName,

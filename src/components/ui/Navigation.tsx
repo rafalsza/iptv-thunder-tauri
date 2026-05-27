@@ -9,6 +9,13 @@ import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import packageJson from '../../../package.json';
 
+// Detect Android platform
+const isAndroid = () => {
+  return typeof window !== 'undefined' && 
+         ((window as any).AndroidTV !== undefined || 
+          (globalThis as any).navigator?.userAgent?.toLowerCase().includes('android'));
+};
+
 export type NavigationItem = {
   id: string;
   label: string;
@@ -52,9 +59,10 @@ const getButtonClass = (isActive: boolean, isDisabled: boolean, hasSubItems: boo
 
 interface NavigationProps {
   items: NavigationItem[];
+  className?: string;
 }
 
-export const Navigation: React.FC<NavigationProps> = memo(({ items }) => {
+export const Navigation: React.FC<NavigationProps> = memo(({ items, className = '' }) => {
   const { t } = useTranslation();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const manuallyInteracted = useRef<Set<string>>(new Set());
@@ -91,7 +99,7 @@ export const Navigation: React.FC<NavigationProps> = memo(({ items }) => {
     <div
       id="navigation"
       data-tv-container="navigation"
-      className="flex flex-col h-full w-44 md:w-52 lg:w-56 xl:w-64 2xl:w-72 dark:bg-slate-900/40 bg-white/40 backdrop-blur-md border-r dark:border-slate-700/30 border-gray-200/30"
+      className={`flex flex-col h-full w-44 md:w-52 lg:w-56 xl:w-64 2xl:w-72 dark:bg-slate-900/40 bg-white/40 backdrop-blur-md border-r dark:border-slate-700/30 border-gray-200/30 ${className}`}
     >
       {/* Header */}
       <div className="p-3 md:p-4 lg:p-5 border-b dark:border-slate-700/30 border-gray-200/30">
@@ -166,37 +174,65 @@ export const Navigation: React.FC<NavigationProps> = memo(({ items }) => {
 
 
               {/* Submenu */}
-              <AnimatePresence>
-                {hasSubItems && isExpanded && item.subItems && (
-                  <motion.div
+              {isAndroid() ? (
+                // No animations on Android to prevent navigation issues
+                hasSubItems && isExpanded && item.subItems && (
+                  <div
                     data-tv-group={item.id}
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
                     className="mt-6 ml-5 gap-3 space-y-3 overflow-visible p-2"
                   >
                     {item.subItems.map((subItem, subIndex) => (
-                      <motion.button
+                      <button
                         key={subItem.id}
                         data-tv-id={subItem.id}
                         data-tv-focusable
-                        data-tv-group={subItem.id}
+                        data-tv-group={item.id}
                         data-tv-index={baseIndex + subIndex + 1}
                         data-tv-initial={subIndex === 0}
                         tabIndex={0}
                         onClick={subItem.onClick}
-                        whileHover={{ scale: 1.02, x: 4 }}
-                        whileTap={{ scale: 0.98 }}
                         className="w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 transition-all duration-200 text-base dark:bg-slate-800/20 bg-gray-100/20 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-700/40 hover:bg-gray-200/40 hover:text-white"
                       >
                         <span className="text-base dark:text-white text-slate-900">▸</span>
                         <span className="dark:text-white text-slate-900">{subItem.label}</span>
-                      </motion.button>
+                      </button>
                     ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                  </div>
+                )
+              ) : (
+                // AnimatePresence with animations on desktop
+                <AnimatePresence>
+                  {hasSubItems && isExpanded && item.subItems && (
+                    <motion.div
+                      data-tv-group={item.id}
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="mt-6 ml-5 gap-3 space-y-3 overflow-visible p-2"
+                    >
+                      {item.subItems.map((subItem, subIndex) => (
+                        <motion.button
+                          key={subItem.id}
+                          data-tv-id={subItem.id}
+                          data-tv-focusable
+                          data-tv-group={item.id}
+                          data-tv-index={baseIndex + subIndex + 1}
+                          data-tv-initial={subIndex === 0}
+                          tabIndex={0}
+                          onClick={subItem.onClick}
+                          whileHover={{ scale: 1.02, x: 4 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 transition-all duration-200 text-base dark:bg-slate-800/20 bg-gray-100/20 dark:text-slate-300 text-slate-600 dark:hover:bg-slate-700/40 hover:bg-gray-200/40 hover:text-white"
+                        >
+                          <span className="text-base dark:text-white text-slate-900">▸</span>
+                          <span className="dark:text-white text-slate-900">{subItem.label}</span>
+                        </motion.button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              )}
             </div>
           );
         })}

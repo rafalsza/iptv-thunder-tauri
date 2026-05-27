@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir, remove, readDir, rename, stat } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
-import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+import { fetch } from '@tauri-apps/plugin-http';
 import { useCallback } from 'react';
 
 // Cache configuration
@@ -96,42 +96,22 @@ function logError(url: string, error: unknown): void {
 const lruCache = new Map<string, { lastUsed: number; size: number }>();
 
 /**
- * Fetch image using Tauri HTTP backend (bypasses CORS)
+ * Fetch image using Tauri HTTP plugin (handles TLS properly on Android)
  */
 async function fetchWithTauriHttp(url: string, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
-
-    // Use Tauri command to bypass CORS
-    const response = await invoke<{
-      status: number;
-      headers: Record<string, string>;
-      body: number[];
-      error?: string;
-    }>('fetch_image', {
-      url,
-      timeout: timeoutMs,
+    // Use Tauri HTTP plugin which handles TLS properly on all platforms including Android
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'image/*,*/*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      connectTimeout: timeoutMs,
     });
 
-    clearTimeout(timeout);
-
-    // Handle network/request errors (status 0 means error occurred)
-    if (response.status === 0 && response.error) {
-      throw new Error(response.error);
-    }
-
-    // Convert number array to Uint8Array
-    const data = new Uint8Array(response.body);
-
-    // Create a Response-like object
-    return new Response(data, {
-      status: response.status,
-      headers: new Headers(response.headers),
-    });
+    return response;
   } catch (error) {
-    clearTimeout(timeout);
     throw error;
   }
 }
@@ -499,20 +479,22 @@ export async function fetchAndCacheImage(url: string, signal?: AbortSignal): Pro
 
 /**
  * Convert file path to asset URL for use in <img> src
- * Uses Tauri's convertFileSrc - avoids 33% base64 memory inflation
- * Falls back to base64 data URL if convertFileSrc fails (Tauri v2 compatibility)
+ * Uses convertFileSrc for production builds (Android), base64 for dev on Windows
  */
 async function fileToAssetUrl(filePath: string): Promise<string> {
-  try {
-    return convertFileSrc(filePath);
-  } catch {
-    // Fallback: read file and convert to base64 data URL
-    const data = await readFile(filePath);
-    const base64 = Array.from(data)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-    return `data:image/jpeg;base64,${base64}`;
+  // Use base64 for all platforms - most reliable
+  const data = await readFile(filePath);
+  let binary = '';
+  const len = data.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(data[i]);
   }
+  
+  // Detect MIME type from file extension
+  const ext = filePath.toLowerCase().split('.').pop();
+  const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+  
+  return `data:${mimeType};base64,${btoa(binary)}`;
 }
 
 /**

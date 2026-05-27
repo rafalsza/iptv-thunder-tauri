@@ -12,7 +12,10 @@
     "store:default",
     "store:allow-load",
     "shell:default",
-    "http:default",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://**" }, { "url": "http://**" }]
+    },
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",

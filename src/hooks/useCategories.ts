@@ -213,6 +213,8 @@ export function useCategories(
     staleTime: CACHE_TTL,
     gcTime: 7 * 24 * 60 * 60 * 1000,
     enabled: !!type && !!portalId,
+    retry: 3,
+    retryDelay: attempt => Math.min(1000 * 2 ** attempt, 5000),
   });
 
   const refreshMutation = useMutation({

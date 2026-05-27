@@ -166,6 +166,10 @@ class UiController(
         seekToBeginningButton?.visibility = if (isVod) View.VISIBLE else View.GONE
     }
 
+    fun updatePlayPauseButtonVisibility(isVod: Boolean) {
+        playPauseButton?.visibility = if (isVod) View.VISIBLE else View.GONE
+    }
+
     fun updateTrackInfo(info: PlayerController.PlayerUiState) {
         currentTrackInfo = info
         updateTrackButtonVisibility(info.hasMultipleTracks)

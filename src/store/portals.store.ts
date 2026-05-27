@@ -58,6 +58,15 @@ export const usePortalsStore = create<PortalsState>()(
 
       addPortal: (portalData) => {
         set((state) => {
+          // Check for duplicate portal (same MAC and URL)
+          const isDuplicate = state.portals.some(
+            p => p.mac.toLowerCase() === portalData.mac.toLowerCase() &&
+                 p.portalUrl === portalData.portalUrl
+          );
+          if (isDuplicate) {
+            return;
+          }
+
           const newPortal: PortalAccount = {
             ...portalData,
             id: crypto.randomUUID(),

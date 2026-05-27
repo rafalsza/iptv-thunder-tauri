@@ -48,7 +48,6 @@ const rules: Rule[] = [
   { match: (d, c, _) => d === 'up' && c.groupId === 'series-controls', handler: findSeriesActionsLast, log: 'up from series-controls to last action' },
   { match: (d, c, _) => d === 'down' && c.groupId === 'series-controls', handler: findSeriesEpisodesInitial, log: 'down from series-controls' },
   { match: (d, c, _) => d === 'up' && c.groupId === 'series-episodes' && c.index === 0, handler: findSeriesControlsOrActions, log: 'up from first episode' },
-  { match: (d, c, _) => d === 'down' && c.groupId === 'series-episodes', handler: checkLastEpisodeAndBlock, log: 'down from episodes (block if last)' },
 ];
 
 function getTargetContainer(
@@ -335,6 +334,7 @@ function findSeriesControlsOrActions(state: NavigationState): string | null {
   return actionsElements.find(n => n.isInitial)?.id ?? actionsElements[0]?.id ?? null;
 }
 
+
 function getSeriesActionsElements(state: NavigationState) {
   return state.nodes
     .filter(n => n.groupId === 'series-actions' && !n.disabled)
@@ -392,17 +392,3 @@ function findSeriesControlsFromAnyAction(state: NavigationState): string | null 
   return controlsElement?.id ?? null;
 }
 
-function checkLastEpisodeAndBlock(state: NavigationState, current: NavigationState['nodes'][0]): string | null {
-  // Check if current is the last episode in the group
-  const episodes = state.nodes.filter(n => n.groupId === 'series-episodes' && !n.disabled);
-  const sortedEpisodes = [...episodes].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-  const lastEpisode = sortedEpisodes.at(-1);
-
-  // If current is the last episode, block navigation (return empty string to stay on current)
-  if (current.id === lastEpisode?.id) {
-    return current.id; // Return current ID to stay on current element
-  }
-
-  // Otherwise, let spatial plugin handle it
-  return null;
-}

@@ -259,8 +259,15 @@ export const TVList: React.FC<TVListProps> = ({
 
   if (isLoading && allChannels.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-lg dark:text-white text-slate-900">{t('loading')}</div>
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="flex flex-col gap-2">
+              <div className="aspect-video dark:bg-slate-800 bg-gray-100 rounded-lg animate-pulse" />
+              <div className="h-3 w-3/4 dark:bg-slate-700 bg-gray-200 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

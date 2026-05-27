@@ -209,19 +209,27 @@ export const useSeriesAll = (client: StalkerClient, categoryId?: string) => {
         
         // Return cached data mapped to StalkerVOD format
         const sortedItems = [...cachedItems].sort((a, b) => (b.added || 0) - (a.added || 0));
-        return sortedItems.map(s => ({
-          id: Number.parseInt(s.id, 10) || 0,
-          name: s.name,
-          cmd: '', // ❗ Never use cached cmd - always fetch fresh (session-based)
-          description: s.description || '',
-          logo: s.posterUrl,
-          poster: s.posterUrl,
-          year: s.year,
-          rating_imdb: s.rating,
-          genre: s.genre,
-          added: s.added || '',
-          censored: false,
-        })) as StalkerVOD[];
+        return sortedItems.map(s => {
+          const vod = {
+            id: Number.parseInt(s.id, 10) || 0,
+            name: s.name,
+            cmd: '', // ❗ Never use cached cmd - always fetch fresh (session-based)
+            description: s.description || '',
+            logo: s.posterUrl,
+            poster: s.posterUrl,
+            year: s.year,
+          } as any;
+          // Resolve poster URL from client to ensure full URL
+          vod.poster = client.resolvePosterUrl(vod);
+          vod.logo = client.resolveLogoUrl(vod.logo);
+          return {
+            ...vod,
+            rating_imdb: s.rating,
+            genre: s.genre,
+            added: s.added || '',
+            censored: false,
+          } as StalkerVOD;
+        });
       }
 
       // 2. No cache - fetch with PROGRESSIVE loading (first page shows immediately)

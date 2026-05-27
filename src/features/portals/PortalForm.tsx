@@ -16,6 +16,10 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
   const { showToast } = useToast();
   const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+  const macInputRef = useRef<HTMLInputElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
   const [formData, setFormData] = useState<PortalFormData>({
     name: '',
     login: '',
@@ -28,7 +32,6 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
   
   const [errors, setErrors] = useState<Partial<Record<keyof PortalFormData, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const isSubmittingRef = useRef(false);
 
   const { addPortal, updatePortal, portals } = usePortalsStore();
 
@@ -122,19 +125,36 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
 
   const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     
-    // Prevent double submission on Android TV
-    if (isSubmittingRef.current) {
+    // Disable submit button immediately
+    if (submitButtonRef.current) {
+      submitButtonRef.current.disabled = true;
+    }
+    
+    // Use DOM data attribute for synchronous check
+    const form = e.currentTarget as HTMLFormElement;
+    if (form.dataset.submitting === 'true') {
       return;
     }
+    form.dataset.submitting = 'true';
+    
+    setIsSubmitting(true);
     
     if (!validateForm()) {
       showToast(t('fixErrors'), 'error');
+      setIsSubmitting(false);
+      form.dataset.submitting = 'false';
+      // Focus first invalid field
+      if (errors.name) {
+        nameInputRef.current?.focus();
+      } else if (errors.portalUrl) {
+        urlInputRef.current?.focus();
+      } else if (errors.mac) {
+        macInputRef.current?.focus();
+      }
       return;
     }
-
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
 
     try {
       if (portal) {
@@ -151,7 +171,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
       showToast(t('errorSavingPortal'), 'error');
     } finally {
       setIsSubmitting(false);
-      isSubmittingRef.current = false;
+      form.dataset.submitting = 'false';
     }
   };
 
@@ -191,6 +211,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               {t('portalName')} *
             </label>
             <input
+              ref={nameInputRef}
               id="portal-name"
               data-tv-focusable
               data-tv-initial
@@ -219,6 +240,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               {t('portalUrl')} *
             </label>
             <input
+              ref={urlInputRef}
               id="portal-url"
               data-tv-focusable
               data-tv-group="portal-form"
@@ -245,6 +267,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
                 {t('macAddress')} *
               </label>
               <input
+                ref={macInputRef}
                 id="portal-mac"
                 data-tv-focusable
                 data-tv-group="portal-form"
@@ -283,6 +306,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
               {t('cancel')}
             </button>
             <button
+              ref={submitButtonRef}
               type="submit"
               data-tv-focusable
               data-tv-group="portal-form"

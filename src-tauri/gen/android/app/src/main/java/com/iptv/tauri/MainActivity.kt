@@ -3,9 +3,10 @@ package com.iptv.tauri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.KeyEvent
+import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import android.view.KeyEvent
 import androidx.activity.enableEdgeToEdge
 import org.json.JSONObject
 
@@ -20,9 +21,9 @@ class MainActivity : TauriActivity() {
             }
     }
 
-    private var webView: WebView? = null
-    private var keyDownTime = 0L
-    private val LONG_PRESS_DELAY = 500L // 500ms for long press
+    var webView: WebView? = null
+        private set
+    private val longPressDelay = 500L // 500ms for long press
     private val handler = Handler(Looper.getMainLooper())
     private var longPressTriggered = false
     private var longPressEventSent = false
@@ -37,9 +38,6 @@ class MainActivity : TauriActivity() {
             longPressTriggered = true
             longPressEventSent = true
         }
-    }
-
-    init {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,7 +105,7 @@ class MainActivity : TauriActivity() {
                         longPressEventSent = false
 
                         handler.removeCallbacks(longPressRunnable)
-                        handler.postDelayed(longPressRunnable, LONG_PRESS_DELAY)
+                        handler.postDelayed(longPressRunnable, longPressDelay)
                     }
 
                     webView?.evaluateJavascript(
@@ -139,13 +137,10 @@ class MainActivity : TauriActivity() {
                 }
 
                 if (keyName != null) {
-                    val webView = webView
-                    if (webView != null) {
-                        webView.evaluateJavascript(
-                            "window.dispatchEvent(new KeyboardEvent('keydown', { key: '$keyName', code: '$keyName', cancelable: true }))",
-                            null
-                        )
-                    }
+                    webView?.evaluateJavascript(
+                        "window.dispatchEvent(new KeyboardEvent('keydown', { key: '$keyName', code: '$keyName', cancelable: true }))",
+                        null
+                    )
                 }
             }
         } catch (e: Exception) {
@@ -187,18 +182,22 @@ class MainActivity : TauriActivity() {
             domStorageEnabled = true
             javaScriptEnabled = true
 
+            // Security settings to mitigate XSS risks
+            // Disable file access from file URLs to prevent local file access attacks
+            allowFileAccess = false
+            // Disable content access from file URLs
+            allowContentAccess = false
+            // Block mixed content (HTTP content on HTTPS pages)
+            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            // Disable unsafe JavaScript features
+            javaScriptCanOpenWindowsAutomatically = false
+
             // Adjust text scale for high-density displays (4K TVs often report 2x-3x density)
             // Use smaller zoom for 4K to prevent oversized elements
-            when {
-                densityDpi >= 480 -> { // 4K/XXHDPI
-                    textZoom = 80
-                }
-                densityDpi >= 320 -> { // 2K/XHDPI
-                    textZoom = 90
-                }
-                else -> {
-                    textZoom = 100
-                }
+            textZoom = when {
+                densityDpi >= 480 -> 80 // 4K/XXHDPI
+                densityDpi >= 320 -> 90 // 2K/XHDPI
+                else -> 100
             }
         }
 
@@ -208,23 +207,30 @@ class MainActivity : TauriActivity() {
         // TV Interface for keyboard and other TV-specific functions
         webView.addJavascriptInterface(object {
             @JavascriptInterface
+            @Suppress("unused")
             fun showKeyboard() {
                 runOnUiThread {
-                    val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-                    imm.showSoftInput(webView, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                    val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+                    imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
                 }
             }
 
             @JavascriptInterface
+            @Suppress("unused")
             fun hideKeyboard() {
                 runOnUiThread {
-                    val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                    val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
                     imm.hideSoftInputFromWindow(webView.windowToken, 0)
                 }
             }
         }, "AndroidTV")
 
         webView.addJavascriptInterface(object {
+            @JavascriptInterface
+            fun openComposePlayer(paramsJson: String) {
+                open_compose_player(paramsJson)
+            }
+
             @JavascriptInterface
             fun open_compose_player(paramsJson: String) {
                 try {
@@ -265,7 +271,7 @@ class MainActivity : TauriActivity() {
             }
 
             @JavascriptInterface
-            fun change_channel(url: String, channelName: String) {
+            fun changeChannel(url: String, channelName: String) {
                 val instance = NativePlayerActivity.currentInstance
                 if (instance == null) {
                     runOnUiThread {
@@ -278,6 +284,27 @@ class MainActivity : TauriActivity() {
                     runOnUiThread {
                         instance.changeChannel(url, channelName, isVod = false) // Channels are never VOD
                     }
+                }
+            }
+
+            @JavascriptInterface
+            fun update_channels(categoryChannelsJson: String, recentChannelsJson: String) {
+                android.util.Log.d("MainActivity", "update_channels called: categoryChannels length=${categoryChannelsJson.length}, recentChannels length=${recentChannelsJson.length}")
+                android.util.Log.d("MainActivity", "update_channels categoryChannels sample: ${categoryChannelsJson.take(200)}")
+                val instance = NativePlayerActivity.currentInstance
+                if (instance != null) {
+                    runOnUiThread {
+                        try {
+                            val categoryChannels = instance.parseChannelsJson(categoryChannelsJson)
+                            val recentChannels = instance.parseChannelsJson(recentChannelsJson)
+                            instance.updateChannelsFromJs(categoryChannels, recentChannels)
+                            android.util.Log.d("MainActivity", "Channels updated in NativePlayerActivity")
+                        } catch (e: Exception) {
+                            android.util.Log.e("MainActivity", "Failed to update channels", e)
+                        }
+                    }
+                } else {
+                    android.util.Log.w("MainActivity", "No active NativePlayerActivity instance")
                 }
             }
         }, "ExoPlayer")

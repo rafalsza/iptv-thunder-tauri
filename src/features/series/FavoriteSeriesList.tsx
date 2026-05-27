@@ -14,11 +14,11 @@ import { useLongPress } from '@/hooks/useLongPress';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const getRowHeight = () => {
-  if (globalThis.window === undefined) return 280;
+  if (globalThis.window === undefined) return 360;
   const width = globalThis.window.innerWidth;
-  if (width > 3000) return 320;
-  if (width > 2000) return 280;
-  return 240;
+  if (width > 3000) return 440;
+  if (width > 2000) return 320;
+  return 280;
 };
 const IMAGE_CACHE_LIMIT = 500;
 
@@ -151,7 +151,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
           {/* Favorite button */}
           <button
             onClick={e => onToggleFavorite(e, series)}
-            className="absolute top-2 right-2 text-xl dark:bg-slate-900/50 bg-black/20 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity dark:hover:bg-slate-900/80 hover:bg-black/30"
+            className="absolute top-1 right-1 text-xl dark:bg-slate-900/50 bg-black/20 rounded-full p-1 opacity-80 group-hover:opacity-100 focus:opacity-100 transition-opacity dark:hover:bg-slate-900/80 hover:bg-black/30"
             aria-label="Remove from favorites"
           >
             ❤️
@@ -235,8 +235,8 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
 
   // ── Layout ────────────────────────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null);
-  // Fixed column count for consistency
-  const [columnCount] = useState(9);
+  // Fixed column count for consistency (same as SeriesList)
+  const [columnCount] = useState(6);
 
   // ── Virtualizer ───────────────────────────────────────────────────────────────
   const rowCount = Math.ceil(filteredSeries.length / columnCount);
@@ -355,7 +355,7 @@ export const FavoriteSeriesList: React.FC<FavoriteSeriesListProps> = ({
               }}
             >
               <div
-                className="grid gap-6 h-full"
+                className="grid gap-4 h-full"
                 style={{ gridTemplateColumns: `repeat(${columnCount}, 1fr)` }}
               >
                 {(() => {

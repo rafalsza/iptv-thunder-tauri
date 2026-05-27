@@ -29,7 +29,6 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
 
   // Listen for tvlongpress event to cancel pending click
   const handleTvLongPress = useCallback(() => {
-    console.log('[useTVKeyboard] tvlongpress event received, cancelling pending click');
     if (enterClickTimeoutRef.current) {
       clearTimeout(enterClickTimeoutRef.current);
       enterClickTimeoutRef.current = null;
@@ -71,7 +70,6 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
       const handleEnter = () => {
         const current = getCurrentElement?.();
         if (current) {
-          console.log('[useTVKeyboard] handleEnter called, scheduling click in 100ms');
           // Clear any pending click
           if (enterClickTimeoutRef.current) {
             clearTimeout(enterClickTimeoutRef.current);
@@ -79,16 +77,12 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
           
           // Delay the click to allow long press detection
           enterClickTimeoutRef.current = setTimeout(() => {
-            console.log('[useTVKeyboard] Click delay expired, __tvLongPressPreventClick:', (window as any).__tvLongPressPreventClick);
             // Check if long press was triggered
             if (!(window as any).__tvLongPressPreventClick) {
               const handled = onEnterRef.current?.(current);
               if (handled !== true) {
-                console.log('[useTVKeyboard] Executing click');
                 current.click();
               }
-            } else {
-              console.log('[useTVKeyboard] Click cancelled due to long press');
             }
           }, 550); // Delay longer than MainActivity's 500ms long press
         }

@@ -5,8 +5,11 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import android.widget.ProgressBar
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.toColorInt
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.ui.PlayerView
 import com.iptv.tauri.player.*
+import kotlinx.coroutines.launch
 
 class NativePlayerActivity : AppCompatActivity() {
     companion object {
@@ -30,14 +33,22 @@ class NativePlayerActivity : AppCompatActivity() {
     private var playerView: PlayerView? = null
     private var progressBar: ProgressBar? = null
     private var seekToBeginningButton: com.google.android.material.button.MaterialButton? = null
-    private var channelCarouselButton: com.google.android.material.button.MaterialButton? = null
-    private var channelCarouselContainer: android.widget.HorizontalScrollView? = null
-    private var channelCarousel: android.widget.LinearLayout? = null
+    private var categoryCarouselButton: com.google.android.material.button.MaterialButton? = null
+    private var recentCarouselButton: com.google.android.material.button.MaterialButton? = null
+    private var categoryCarouselContainer: android.widget.HorizontalScrollView? = null
+    private var recentCarouselContainer: android.widget.HorizontalScrollView? = null
+    private var categoryCarousel: android.widget.LinearLayout? = null
+    private var recentCarousel: android.widget.LinearLayout? = null
 
     // State
     private var isVod = false
     private var currentUrl = ""
     private var portalIdentifier = ""
+    private var currentChannelName = ""
+    private var currentChannelLogo = ""
+    private var currentChannelCmd = ""
+    private var currentChannelGenreId = ""
+    private var addedToRecent = false
 
     // Episode data for auto-play
     private var episodes: List<EpisodeInfo> = emptyList()
@@ -55,10 +66,12 @@ class NativePlayerActivity : AppCompatActivity() {
     private var epgNextCategory = ""
     private var initialVolume = 0.8f
 
-    // Channel data for carousel
+    // Channel data for carousel - separate lists for category and recent
     private var categoryChannels: List<ChannelInfo> = emptyList()
+    private var recentChannels: List<ChannelInfo> = emptyList()
     private var currentChannelId: String = ""
-    private var isCarouselVisible = false
+    private var isCategoryCarouselVisible = false
+    private var isRecentCarouselVisible = false
 
     data class EpisodeInfo(
         val id: String,
@@ -74,7 +87,8 @@ class NativePlayerActivity : AppCompatActivity() {
         val name: String,
         val logo: String?,
         val stream_url: String?,
-        val cmd: String?
+        val cmd: String?,
+        val tv_genre_id: String? = null
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,6 +102,10 @@ class NativePlayerActivity : AppCompatActivity() {
         currentUrl = intent.getStringExtra("url") ?: ""
         val channelName = intent.getStringExtra("channelName") ?: "Unknown Channel"
         currentChannelId = intent.getStringExtra("channelId") ?: ""
+        currentChannelName = channelName
+        currentChannelLogo = ""
+        currentChannelCmd = ""
+        currentChannelGenreId = ""
         isVod = intent.getBooleanExtra("isVod", false)
         portalIdentifier = intent.getStringExtra("mac") ?: ""
 
@@ -100,9 +118,10 @@ class NativePlayerActivity : AppCompatActivity() {
 
         // Parse category channels for carousel
         val channelsJson = intent.getStringExtra("channelsJson") ?: "[]"
-        android.util.Log.d("NativePlayerActivity", "channelsJson length: ${channelsJson.length}")
+        android.util.Log.d("NativePlayerActivity", "channelsJson length: ${channelsJson.length}, content: ${channelsJson.take(200)}")
         categoryChannels = parseChannelsJson(channelsJson)
         android.util.Log.d("NativePlayerActivity", "Category channels loaded: ${categoryChannels.size}, isVod: $isVod")
+        android.util.Log.d("NativePlayerActivity", "Channel carousel button will be visible: ${!isVod && categoryChannels.isNotEmpty()}")
 
         // Parse EPG data
         epgTitle = intent.getStringExtra("epgTitle") ?: ""
@@ -128,28 +147,50 @@ class NativePlayerActivity : AppCompatActivity() {
         playerView = findViewById(R.id.player_view)
         progressBar = findViewById(R.id.loading_spinner)
         seekToBeginningButton = findViewById(R.id.seek_to_beginning_button)
-        channelCarouselButton = findViewById(R.id.channel_carousel_button)
-        channelCarouselContainer = findViewById(R.id.channel_carousel_container)
-        channelCarousel = findViewById(R.id.channel_carousel)
+        
+        // Category carousel (green - like in MPV)
+        categoryCarouselButton = findViewById(R.id.category_carousel_button)
+        categoryCarouselContainer = findViewById(R.id.category_carousel_container)
+        categoryCarousel = findViewById(R.id.category_carousel)
+        
+        // Recent carousel (blue - like in MPV)
+        recentCarouselButton = findViewById(R.id.recent_carousel_button)
+        recentCarouselContainer = findViewById(R.id.recent_carousel_container)
+        recentCarousel = findViewById(R.id.recent_carousel)
 
-        channelCarousel?.descendantFocusability = android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS
-        channelCarousel?.isFocusable = false
-        channelCarousel?.isFocusableInTouchMode = false
-        channelCarouselContainer?.isFocusable = false
-        channelCarouselContainer?.isFocusableInTouchMode = false
-        channelCarouselContainer?.isSmoothScrollingEnabled = true
+        android.util.Log.d("NativePlayerActivity", "initializeViews: categoryCarouselButton is null: ${categoryCarouselButton == null}, recentCarouselButton is null: ${recentCarouselButton == null}")
 
-        android.util.Log.d("NativePlayerActivity", "initializeViews: isVod=$isVod, channelsCount=${categoryChannels.size}")
+        // Setup category carousel
+        categoryCarousel?.descendantFocusability = android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS
+        categoryCarousel?.isFocusable = false
+        categoryCarousel?.isFocusableInTouchMode = false
+        categoryCarouselContainer?.isFocusable = false
+        categoryCarouselContainer?.isFocusableInTouchMode = false
+        categoryCarouselContainer?.isSmoothScrollingEnabled = true
 
-        // Show channel carousel button for live TV with available channels
-        if (!isVod && categoryChannels.isNotEmpty()) {
-            android.util.Log.d("NativePlayerActivity", "Showing channel carousel button")
-            channelCarouselButton?.visibility = android.view.View.VISIBLE
-            channelCarouselButton?.setOnClickListener {
-                toggleChannelCarousel()
-            }
-        } else {
-            android.util.Log.d("NativePlayerActivity", "NOT showing channel carousel button - isVod=$isVod, channelsCount=${categoryChannels.size}")
+        // Setup recent carousel
+        recentCarousel?.descendantFocusability = android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS
+        recentCarousel?.isFocusable = false
+        recentCarousel?.isFocusableInTouchMode = false
+        recentCarouselContainer?.isFocusable = false
+        recentCarouselContainer?.isFocusableInTouchMode = false
+        recentCarouselContainer?.isSmoothScrollingEnabled = true
+
+        android.util.Log.d("NativePlayerActivity", "initializeViews: isVod=$isVod, categoryChannels=${categoryChannels.size}, recentChannels=${recentChannels.size}")
+
+        // Hide carousel buttons initially, they will be shown when channels are received
+        categoryCarouselButton?.visibility = android.view.View.GONE
+        recentCarouselButton?.visibility = android.view.View.GONE
+        
+        // Set up click listeners
+        categoryCarouselButton?.setOnClickListener {
+            android.util.Log.d("NativePlayerActivity", "Category carousel button clicked")
+            toggleCategoryCarousel()
+        }
+        
+        recentCarouselButton?.setOnClickListener {
+            android.util.Log.d("NativePlayerActivity", "Recent carousel button clicked")
+            toggleRecentCarousel()
         }
     }
 
@@ -178,7 +219,8 @@ class NativePlayerActivity : AppCompatActivity() {
             },
             onRetry = { playerController.retry() },
             onUiStateChange = ::renderUiState,
-            initialChannelName = channelName
+            initialChannelName = channelName,
+            onPlayerReady = ::onPlayerReady
         )
 
         // UI Controller
@@ -239,15 +281,18 @@ class NativePlayerActivity : AppCompatActivity() {
             focusPlayPause = { uiController.focusPlayPauseButton() }
         )
 
-        // Initialize player
+        // Initialize player (prepare is now async in PlayerController)
         playerController.initialize(currentUrl, isVod)
         playerController.setVolume(initialVolume)
         playerView?.player = playerController.player
 
-        // Initialize MediaSession for Android TV integration
+        // Initialize MediaSession for Android TV integration (async to avoid blocking)
         playerController.player?.let { player ->
-            mediaSessionManager = MediaSessionManager(this, player).apply {
-                initialize()
+            android.util.Log.d("NativePlayerActivity", "Initializing MediaSession in background")
+            lifecycleScope.launch {
+                mediaSessionManager = MediaSessionManager(this@NativePlayerActivity, player).apply {
+                    initialize()
+                }
             }
         }
 
@@ -264,8 +309,14 @@ class NativePlayerActivity : AppCompatActivity() {
     private fun setupBackButton() {
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                playerController.player?.stop()
-                finish()
+                if (isCategoryCarouselVisible) {
+                    toggleCategoryCarousel()
+                } else if (isRecentCarouselVisible) {
+                    toggleRecentCarousel()
+                } else {
+                    playerController.player?.stop()
+                    finish()
+                }
             }
         })
     }
@@ -314,6 +365,7 @@ class NativePlayerActivity : AppCompatActivity() {
         uiController.updateSeekBar(state.currentProgress, state.duration, state.currentPosition, state.isVod)
         uiController.updateTrackInfo(state)
         uiController.updateSeekToBeginningButtonVisibility(state.isVod)
+        uiController.updatePlayPauseButtonVisibility(state.isVod)
     }
 
     private fun loadResumePosition() {
@@ -353,6 +405,8 @@ class NativePlayerActivity : AppCompatActivity() {
 
         currentUrl = url
         this.isVod = isVod
+        currentChannelName = channelName
+        addedToRecent = false
         resumeManager.resetResumeLoaded()
 
         epgManager.resetEpg()
@@ -367,19 +421,12 @@ class NativePlayerActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        android.util.Log.d("NativePlayerActivity", "dispatchKeyEvent: keyCode=${event.keyCode}, action=${event.action}, isCarouselVisible=$isCarouselVisible")
+        android.util.Log.d("NativePlayerActivity", "dispatchKeyEvent: keyCode=${event.keyCode}, action=${event.action}, isCategoryCarouselVisible=$isCategoryCarouselVisible, isRecentCarouselVisible=$isRecentCarouselVisible")
 
-        if (isCarouselVisible) {
+        if (isCategoryCarouselVisible || isRecentCarouselVisible) {
             if (event.action == KeyEvent.ACTION_DOWN) {
                 uiController.showControls()
                 uiController.resetHideTimer()
-
-                when (event.keyCode) {
-                    KeyEvent.KEYCODE_BACK -> {
-                        toggleChannelCarousel()
-                        return true
-                    }
-                }
             }
             return super.dispatchKeyEvent(event)
         }
@@ -438,7 +485,7 @@ class NativePlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun parseChannelsJson(json: String): List<ChannelInfo> {
+    fun parseChannelsJson(json: String): List<ChannelInfo> {
         return try {
             val jsonArray = org.json.JSONArray(json)
             val list = mutableListOf<ChannelInfo>()
@@ -449,7 +496,8 @@ class NativePlayerActivity : AppCompatActivity() {
                     name = obj.optString("name", ""),
                     logo = obj.optString("logo", ""),
                     stream_url = obj.optString("stream_url", ""),
-                    cmd = obj.optString("cmd", "")
+                    cmd = obj.optString("cmd", ""),
+                    tv_genre_id = obj.optString("tv_genre_id", null)
                 ))
             }
             list
@@ -459,36 +507,86 @@ class NativePlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun toggleChannelCarousel() {
-        isCarouselVisible = !isCarouselVisible
+    private fun toggleCategoryCarousel() {
+        isCategoryCarouselVisible = !isCategoryCarouselVisible
+        android.util.Log.d("NativePlayerActivity", "toggleCategoryCarousel: visible=$isCategoryCarouselVisible, channels=${categoryChannels.size}")
 
-        if (isCarouselVisible) {
+        // Hide recent carousel when showing category
+        if (isCategoryCarouselVisible) {
+            isRecentCarouselVisible = false
+            recentCarouselContainer?.visibility = android.view.View.GONE
+            recentCarouselButton?.backgroundTintList = android.content.res.ColorStateList.valueOf("#40FFFFFF".toColorInt())
+        }
+
+        if (isCategoryCarouselVisible) {
             uiController.showControls()
             uiController.pauseAutoHide()
 
-            channelCarouselContainer?.visibility = android.view.View.VISIBLE
-            populateChannelCarousel()
+            categoryCarouselContainer?.visibility = android.view.View.VISIBLE
+            
+            if (categoryChannels.isEmpty()) {
+                android.util.Log.w("NativePlayerActivity", "Category carousel is EMPTY!")
+            }
+            
+            populateCategoryCarousel()
 
-            channelCarouselButton?.setBackgroundTintList(
+            categoryCarouselButton?.backgroundTintList =
                 android.content.res.ColorStateList.valueOf(
-                    android.graphics.Color.parseColor("#4CAF50")
+                    "#4CAF50".toColorInt()
                 )
-            )
         } else {
-            channelCarouselContainer?.visibility = android.view.View.GONE
+            categoryCarouselContainer?.visibility = android.view.View.GONE
 
             uiController.resumeAutoHide()
 
-            channelCarouselButton?.setBackgroundTintList(
+            categoryCarouselButton?.backgroundTintList =
                 android.content.res.ColorStateList.valueOf(
-                    android.graphics.Color.parseColor("#40FFFFFF")
+                    "#40FFFFFF".toColorInt()
                 )
-            )
         }
     }
 
-    private fun populateChannelCarousel() {
-        channelCarousel?.removeAllViews()
+    private fun toggleRecentCarousel() {
+        isRecentCarouselVisible = !isRecentCarouselVisible
+        android.util.Log.d("NativePlayerActivity", "toggleRecentCarousel: visible=$isRecentCarouselVisible, channels=${recentChannels.size}")
+
+        // Hide category carousel when showing recent
+        if (isRecentCarouselVisible) {
+            isCategoryCarouselVisible = false
+            categoryCarouselContainer?.visibility = android.view.View.GONE
+            categoryCarouselButton?.backgroundTintList = android.content.res.ColorStateList.valueOf("#40FFFFFF".toColorInt())
+        }
+
+        if (isRecentCarouselVisible) {
+            uiController.showControls()
+            uiController.pauseAutoHide()
+
+            recentCarouselContainer?.visibility = android.view.View.VISIBLE
+            
+            if (recentChannels.isEmpty()) {
+                android.util.Log.w("NativePlayerActivity", "Recent carousel is EMPTY!")
+            }
+            
+            populateRecentCarousel()
+
+            recentCarouselButton?.backgroundTintList =
+                android.content.res.ColorStateList.valueOf(
+                    "#2196F3".toColorInt()
+                )
+        } else {
+            recentCarouselContainer?.visibility = android.view.View.GONE
+
+            uiController.resumeAutoHide()
+
+            recentCarouselButton?.backgroundTintList =
+                android.content.res.ColorStateList.valueOf(
+                    "#40FFFFFF".toColorInt()
+                )
+        }
+    }
+
+    private fun populateCategoryCarousel() {
+        categoryCarousel?.removeAllViews()
 
         var currentChannelView: android.view.View? = null
 
@@ -499,14 +597,46 @@ class NativePlayerActivity : AppCompatActivity() {
                 currentChannelView = channelView
             }
 
-            channelCarousel?.addView(channelView)
+            categoryCarousel?.addView(channelView)
         }
 
-        channelCarousel?.post {
+        categoryCarousel?.post {
             currentChannelView?.let { view ->
                 view.requestFocus()
 
-                val scrollView = channelCarouselContainer ?: return@post
+                val scrollView = categoryCarouselContainer ?: return@post
+
+                val targetScroll =
+                    view.left - (scrollView.width / 2) + (view.width / 2)
+
+                scrollView.scrollTo(
+                    targetScroll.coerceAtLeast(0),
+                    0
+                )
+            }
+        }
+    }
+
+    private fun populateRecentCarousel() {
+        recentCarousel?.removeAllViews()
+
+        var currentChannelView: android.view.View? = null
+
+        for (channel in recentChannels) {
+            val channelView = createChannelItem(channel)
+
+            if (channel.id == currentChannelId) {
+                currentChannelView = channelView
+            }
+
+            recentCarousel?.addView(channelView)
+        }
+
+        recentCarousel?.post {
+            currentChannelView?.let { view ->
+                view.requestFocus()
+
+                val scrollView = recentCarouselContainer ?: return@post
 
                 val targetScroll =
                     view.left - (scrollView.width / 2) + (view.width / 2)
@@ -552,14 +682,14 @@ class NativePlayerActivity : AppCompatActivity() {
 
             background = getRoundedDrawable(
                 if (channel.id == currentChannelId)
-                    android.graphics.Color.parseColor("#1F3D2A")
+                    "#1F3D2A".toColorInt()
                 else
-                    android.graphics.Color.parseColor("#1E1E1E"),
+                    "#1E1E1E".toColorInt(),
 
                 if (channel.id == currentChannelId)
-                    android.graphics.Color.parseColor("#4CAF50")
+                    "#4CAF50".toColorInt()
                 else
-                    android.graphics.Color.parseColor("#2E2E2E"),
+                    "#2E2E2E".toColorInt(),
 
                 22f
             )
@@ -620,7 +750,7 @@ class NativePlayerActivity : AppCompatActivity() {
 
             setTextColor(
                 if (channel.id == currentChannelId)
-                    android.graphics.Color.parseColor("#7CFF8A")
+                    "#7CFF8A".toColorInt()
                 else
                     android.graphics.Color.WHITE
             )
@@ -652,26 +782,14 @@ class NativePlayerActivity : AppCompatActivity() {
                 container.elevation = 18f
 
                 container.background = getRoundedDrawable(
-                    android.graphics.Color.parseColor("#2A4735"),
-                    android.graphics.Color.parseColor("#7CFF8A"),
+                    "#2A4735".toColorInt(),
+                    "#7CFF8A".toColorInt(),
                     22f
                 )
 
                 nameView.setTextColor(
-                    android.graphics.Color.parseColor("#FFFFFF")
+                    "#FFFFFF".toColorInt()
                 )
-
-                container.post {
-                    val scrollView = channelCarouselContainer ?: return@post
-
-                    val targetScroll =
-                        container.left - (scrollView.width / 2) + (container.width / 2)
-
-                    scrollView.smoothScrollTo(
-                        targetScroll.coerceAtLeast(0),
-                        0
-                    )
-                }
             } else {
                 container.animate()
                     .scaleX(1f)
@@ -683,21 +801,21 @@ class NativePlayerActivity : AppCompatActivity() {
 
                 container.background = getRoundedDrawable(
                     if (channel.id == currentChannelId)
-                        android.graphics.Color.parseColor("#1F3D2A")
+                        "#1F3D2A".toColorInt()
                     else
-                        android.graphics.Color.parseColor("#1E1E1E"),
+                        "#1E1E1E".toColorInt(),
 
                     if (channel.id == currentChannelId)
-                        android.graphics.Color.parseColor("#4CAF50")
+                        "#4CAF50".toColorInt()
                     else
-                        android.graphics.Color.parseColor("#2E2E2E"),
+                        "#2E2E2E".toColorInt(),
 
                     22f
                 )
 
                 nameView.setTextColor(
                     if (channel.id == currentChannelId)
-                        android.graphics.Color.parseColor("#7CFF8A")
+                        "#7CFF8A".toColorInt()
                     else
                         android.graphics.Color.WHITE
                 )
@@ -715,22 +833,60 @@ class NativePlayerActivity : AppCompatActivity() {
 
     private fun handleChannelSelect(channel: ChannelInfo) {
         android.util.Log.d("NativePlayerActivity", "Channel selected: ${channel.name} (id: ${channel.id})")
-        android.util.Log.d("NativePlayerActivity", "  cmd: ${channel.cmd}")
         android.util.Log.d("NativePlayerActivity", "  stream_url: ${channel.stream_url}")
 
-        // Since URLs are resolved in React, use stream_url directly
+        // URLs are pre-resolved in React, use stream_url directly
         val url = channel.stream_url
 
-        android.util.Log.d("NativePlayerActivity", "  Using URL: $url")
-
-        if (url != null && url.isNotEmpty()) {
+        if (!url.isNullOrEmpty()) {
             android.util.Log.d("NativePlayerActivity", "  Calling changeChannel with URL")
             currentChannelId = channel.id
+            currentChannelLogo = channel.logo ?: ""
+            currentChannelCmd = channel.cmd ?: ""
+            currentChannelGenreId = channel.tv_genre_id ?: ""
             changeChannel(url, channel.name, isVod = false)
-            toggleChannelCarousel()
+            
+            // Close whichever carousel is open
+            if (isCategoryCarouselVisible) {
+                toggleCategoryCarousel()
+            } else if (isRecentCarouselVisible) {
+                toggleRecentCarousel()
+            }
         } else {
             android.util.Log.w("NativePlayerActivity", "Channel has no stream URL - cannot change channel")
         }
+    }
+
+    private fun onPlayerReady() {
+        android.util.Log.d("NativePlayerActivity", "Player ready, adding to recent viewed")
+        
+        // Only add to recent if we have full channel info (from carousel selection)
+        // Don't add for initial channel opened from UI (missing logo/cmd/genre_id)
+        if (!addedToRecent && !isVod && currentChannelId.isNotEmpty() && currentChannelCmd.isNotEmpty()) {
+            addRecentViewedViaBridge("live", currentChannelId, currentChannelName, currentChannelLogo, currentChannelCmd, currentChannelGenreId)
+            addedToRecent = true
+        }
+    }
+
+    private fun addRecentViewedViaBridge(type: String, itemId: String, name: String, poster: String, cmd: String, genreId: String) {
+        android.util.Log.d("NativePlayerActivity", "addRecentViewedViaBridge: type=$type, itemId=$itemId, name=$name")
+        
+        val mainActivity = MainActivity.currentInstance
+        if (mainActivity == null) {
+            android.util.Log.e("NativePlayerActivity", "MainActivity instance is null, cannot add recent viewed")
+            return
+        }
+        
+        // Escape quotes for JavaScript
+        val escapedName = name.replace("\\", "\\\\").replace("'", "\\'")
+        val escapedPoster = poster.replace("\\", "\\\\").replace("'", "\\'")
+        val escapedCmd = cmd.replace("\\", "\\\\").replace("'", "\\'")
+        val escapedGenreId = genreId.replace("\\", "\\\\").replace("'", "\\'")
+        
+        mainActivity.webView?.evaluateJavascript(
+            "window.addRecentViewed('$type', '$itemId', '$escapedName', '$escapedPoster', '$escapedCmd', '$escapedGenreId')",
+            null
+        )
     }
 
     private fun getRoundedDrawable(
@@ -769,5 +925,41 @@ class NativePlayerActivity : AppCompatActivity() {
         // Since ExoPlayer expects a direct URL, we need to close the activity and let JS handle it
         android.util.Log.w("NativePlayerActivity", "Episode requires URL fetching - closing activity to let JS handle it")
         finish()
+    }
+
+    fun updateChannelsFromJs(newCategoryChannels: List<ChannelInfo>, newRecentChannels: List<ChannelInfo>) {
+        android.util.Log.d("NativePlayerActivity", "updateChannelsFromJs: categoryChannels=${newCategoryChannels.size}, recentChannels=${newRecentChannels.size}")
+
+        // Only update category channels if not empty (don't overwrite with empty array)
+        if (newCategoryChannels.isNotEmpty()) {
+            categoryChannels = newCategoryChannels
+        }
+
+        // Only update recent channels if not empty (don't overwrite with empty array)
+        if (newRecentChannels.isNotEmpty()) {
+            recentChannels = newRecentChannels
+        }
+
+        // Show category button if we have category channels
+        if (categoryChannels.isNotEmpty()) {
+            categoryCarouselButton?.visibility = android.view.View.VISIBLE
+            android.util.Log.d("NativePlayerActivity", "Category carousel button now visible with ${categoryChannels.size} channels")
+        }
+
+        // Show recent button if we have recent channels
+        if (recentChannels.isNotEmpty()) {
+            recentCarouselButton?.visibility = android.view.View.VISIBLE
+            android.util.Log.d("NativePlayerActivity", "Recent carousel button now visible with ${recentChannels.size} channels")
+        }
+
+        // If category carousel is currently visible, refresh it
+        if (isCategoryCarouselVisible) {
+            populateCategoryCarousel()
+        }
+
+        // If recent carousel is currently visible, refresh it
+        if (isRecentCarouselVisible) {
+            populateRecentCarousel()
+        }
     }
 }

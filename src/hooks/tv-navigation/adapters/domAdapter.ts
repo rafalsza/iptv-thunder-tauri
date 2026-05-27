@@ -110,10 +110,10 @@ function buildIndexMap(groupNodes: NavNode[]): Map<number, NavNode> {
 const CAROUSEL_GROUPS = new Set(['for-you-live', 'for-you-movies', 'for-you-series']);
 
 // Virtualized grid groups - use index-based grid calculation instead of position-based
-const VIRTUALIZED_GRID_GROUPS = new Set(['favorite-series', 'favorite-movies', 'series', 'movies']);
+const VIRTUALIZED_GRID_GROUPS = new Set(['favorite-series', 'favorite-movies', 'series', 'movies', 'favorite-channels', 'tv-channels']);
 
 // Category grid groups - use index-based calculation with detected column count
-const CATEGORY_GRID_GROUPS = new Set(['favorite-series-categories', 'favorite-movie-categories', 'series-categories', 'movie-categories']);
+const CATEGORY_GRID_GROUPS = new Set(['favorite-series-categories', 'favorite-movie-categories', 'series-categories', 'movie-categories', 'favorite-categories', 'categories']);
 
 function buildCarouselRows(groupNodes: NavNode[]): NavNode[][] {
   const sortedByIndex = [...groupNodes].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
@@ -122,7 +122,9 @@ function buildCarouselRows(groupNodes: NavNode[]): NavNode[][] {
 
 function buildVirtualizedGridRows(groupNodes: NavNode[]): NavNode[][] {
   const sortedByIndex = [...groupNodes].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-  const columnCount = 6;
+  // Detect actual column count from DOM positions (similar to category grids)
+  const uniqueLefts = new Set(sortedByIndex.map(n => Math.round(n.rect.left)));
+  const columnCount = Math.max(1, uniqueLefts.size);
   const rowGroups: NavNode[][] = [];
   for (let i = 0; i < sortedByIndex.length; i += columnCount) {
     rowGroups.push(sortedByIndex.slice(i, i + columnCount));
@@ -132,13 +134,10 @@ function buildVirtualizedGridRows(groupNodes: NavNode[]): NavNode[][] {
 
 function buildCategoryGridRows(groupNodes: NavNode[]): NavNode[][] {
   const sortedByIndex = [...groupNodes].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-  const uniqueLefts = new Set(sortedByIndex.map(n => Math.round(n.rect.left)));
-  const columnCount = Math.max(1, uniqueLefts.size);
-  const rowGroups: NavNode[][] = [];
-  for (let i = 0; i < sortedByIndex.length; i += columnCount) {
-    rowGroups.push(sortedByIndex.slice(i, i + columnCount));
-  }
-  return rowGroups;
+  // Category grids use position-based clustering to detect rows
+  // This handles variable category sizes better than fixed column counting
+  const ROW_THRESHOLD = 20;
+  return clusterNodesIntoRows(sortedByIndex, ROW_THRESHOLD);
 }
 
 function buildPositionBasedRows(groupNodes: NavNode[], threshold: number): NavNode[][] {

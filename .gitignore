@@ -33,6 +33,8 @@ src-tauri/gen/android/.gradle/
 src-tauri/gen/android/local.properties
 src-tauri/gen/android/app/release/
 src-tauri/gen/android/app/debug/
+src-tauri/gen/android/app/src/main/assets/
+src-tauri/gen/android/app/src/main/res/drawable/
 *.keystore
 *.jks
 

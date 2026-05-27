@@ -190,7 +190,6 @@ export class StalkerClient {
       action: 'get_profile',
       mac: this.account.mac,
       hd: '1',
-      ver: 'ImageDescription:0.2.18-r14-pub-250; ImageDate:Fri Jan 15 15:20:44 EET 2016; PORTAL version:5.3.0; API Version:JS API version:328; STB API version:134; Player Engine version:0x566',
       JsHttpRequest: '1-xml',
     };
 
@@ -596,41 +595,6 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     return typeof value === 'string' && value.trim() !== '';
   }
 
-  /**
-   * Get all possible poster URLs for a VOD item (for fallback handling)
-   */
-  getPosterUrls(vod: any): string[] {
-    const urls: string[] = [];
-    const posterFields = ['screenshot_uri', 'poster', 'screenshot', 'img', 'fname', 'cover', 'thumbnail', 'picture', 'image'];
-    const baseUrl = this.account.portalUrl;
-
-    for (const field of posterFields) {
-      const value = vod[field];
-      if (value && typeof value === 'string' && value.trim() !== '') {
-        const fullValue = value.trim();
-        if (fullValue.startsWith('http')) {
-          urls.push(fullValue);
-        } else {
-          urls.push(
-            `${baseUrl}misc/posters/${fullValue}`,
-            `${baseUrl}misc/img/${fullValue}`,
-            `${baseUrl}misc/screenshots/${fullValue}`,
-            `${baseUrl}uploads/${fullValue}`,
-            `${baseUrl}${fullValue.startsWith('/') ? fullValue.substring(1) : fullValue}`,
-          );
-        }
-        break; // Found a field, no need to check others
-      }
-    }
-
-    if (urls.length === 0 && vod.id) {
-      urls.push(`${baseUrl}misc/posters/${vod.id}.jpg`);
-    }
-
-    return urls;
-  }
-
-  // Nowa metoda do pobierania kanałów z informacjami o paginacji
   async getChannelsWithPagination(genreId: string = '*', page: number = 1, signal?: AbortSignal): Promise<{channels: StalkerChannel[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
     await this.ensureAuthenticated();
     
