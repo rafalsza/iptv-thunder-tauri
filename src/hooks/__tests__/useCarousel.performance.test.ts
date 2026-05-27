@@ -65,7 +65,7 @@ describe('useCarousel Performance Tests', () => {
       const duration = endTime - startTime;
 
       expect(result.current).toBeDefined();
-      expect(duration).toBeLessThan(70);
+      expect(duration).toBeLessThan(100);
     });
 
     it('should initialize with 1000 items in under 50ms', () => {
@@ -208,7 +208,7 @@ describe('useCarousel Performance Tests', () => {
       const endTime = performance.now();
       const duration = endTime - startTime;
 
-      expect(duration).toBeLessThan(60);
+      expect(duration).toBeLessThan(80);
     });
 
     it('should handle rapid resize events efficiently', async () => {

@@ -47,7 +47,7 @@ export class StalkerClient {
 
     // Fallback detection methods
     const hasTauriAPI = globalThis.window !== undefined && '__TAURI__' in globalThis.window;
-    const isTauriBuild = import.meta.env?.TAURI === 'true';
+    const isTauriBuild = (globalThis as any).__TAURI_BUILD__ === true;
     const isLocalhost = globalThis.window !== undefined &&
                        (globalThis.window.location.hostname === 'localhost' ||
                         globalThis.window.location.hostname === '127.0.0.1' ||
@@ -80,7 +80,7 @@ export class StalkerClient {
         isLocalhost,
         hostname: globalThis.window.location.hostname,
         protocol: globalThis.window.location.protocol,
-        tauriEnv: import.meta.env?.TAURI
+        tauriEnv: (globalThis as any).__TAURI_BUILD__
       });
       globalThis.window.__STALKER_CLIENT_LOGGED__ = true;
     }
