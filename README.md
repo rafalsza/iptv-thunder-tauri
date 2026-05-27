@@ -7,6 +7,7 @@ A modern, feature-rich IPTV client built with Tauri 2, React 19, and TypeScript.
 ## Features
 
 ### Core Functionality
+- **Cross-Platform**: Windows, Linux, macOS, and Android (including Android TV)
 - **Multi-Account Management**: Manage up to 15 IPTV portal accounts
 - **Quick Account Switching**: Fast switching between portals via navbar dropdown
 - **Stalker API Integration**: Full support for Stalker Middleware portals
@@ -15,6 +16,7 @@ A modern, feature-rich IPTV client built with Tauri 2, React 19, and TypeScript.
 - **Import/Export**: Backup and restore accounts via JSON files
 
 ### Content Features
+- **Android TV Support**: Full remote control navigation, focus graph system, and D-pad navigation
 - **Live TV**: Virtualized channel list with categories, search, and filtering
 - **Movies (VOD)**: Movie catalog with categories, pagination, and details
 - **Series (VOD)**: TV series browser with seasons and episodes
@@ -48,6 +50,10 @@ A modern, feature-rich IPTV client built with Tauri 2, React 19, and TypeScript.
 - Rust toolchain
 - MPV media player (optional, for external playback)
 
+#### Android Build Requirements
+- Android SDK
+- Android NDK
+
 ### Development Setup
 
 1. Clone the repository:
@@ -64,6 +70,12 @@ npm install
 3. Start development server:
 ```bash
 npm run tauri dev
+```
+
+#### Android Development
+```bash
+npm run tauri android dev     # Start Android emulator with dev server
+npm run tauri android build   # Build APK
 ```
 
 ### Building for Production
@@ -138,7 +150,7 @@ src/
 │   ├── player/             # Video player feature
 │   │   ├── Player.tsx
 │   │   ├── player.hooks.ts
-│   │   ├── mpv/            # MPV player integration
+│   │   ├── mpv/            # MPV player integration (Desktop)
 │   │   └── exo/            # ExoPlayer integration (Android)
 │   ├── portals/            # Portal management
 │   │   ├── PortalList.tsx
@@ -157,15 +169,14 @@ src/
 │   └── ui/                 # Shared UI components
 ├── store/                  # Global state management
 │   ├── app.store.ts
-│   ├── accountStore.ts
 │   ├── playback.store.ts
 │   ├── portalCache.store.ts
 │   ├── portals.store.ts
 │   ├── resume.store.ts
 │   └── stream.store.ts
 ├── hooks/                  # Shared React hooks
+│   ├── db.ts               # Database operations (Drizzle ORM)
 │   ├── useSecureStorage.ts
-│   ├── useDatabase.ts
 │   ├── useImageCache.ts
 │   ├── useSettings.ts
 │   ├── usePlaybackManager.ts
@@ -187,12 +198,10 @@ src/
 │   ├── stalkerAPI_new.ts
 │   ├── tauriHttp.ts
 │   ├── tauriStorage.ts
-│   ├── schema.ts
-│   ├── services.ts
 │   ├── logger.ts
 │   ├── translations.ts
-│   ├── db.ts
-│   └── utils.ts
+│   ├── utils.ts
+│   └── i18n/                 # Internationalization
 ├── types/                  # TypeScript definitions
 │   └── index.ts
 └── App.tsx                 # Main application component
@@ -202,10 +211,9 @@ src/
 ```typescript
 // Multiple Zustand stores for different concerns
 // app.store.ts - Global app state (fullscreen, etc.)
-// accountStore.ts - Account management
+// portals.store.ts - Portal and account management
 // playback.store.ts - Playback state
 // portalCache.store.ts - Portal data caching
-// portals.store.ts - Portal management
 // resume.store.ts - Resume playback state
 // stream.store.ts - Stream URL management
 ```
@@ -257,12 +265,16 @@ src/
 ### Available Scripts
 
 ```bash
-npm run dev           # Start Vite dev server
-npm run build         # Build for production
-npm run tauri dev     # Start Tauri in dev mode
-npm run tauri build   # Build Tauri application
-npm test              # Run Jest tests
-npm run test:watch    # Run tests in watch mode
+npm run dev                    # Start Vite dev server
+npm run build                  # Build for production
+npm run preview                # Preview production build
+npm run tauri dev              # Start Tauri in dev mode
+npm run tauri build            # Build Tauri application
+npm run android:dev            # Start Android emulator with dev server
+npm run android:build          # Build Android APK
+npm run generate:android-icons # Generate Android app icons
+npm test                       # Run Jest tests
+npm run test:watch             # Run tests in watch mode
 ```
 
 ## Contributing
@@ -276,6 +288,15 @@ npm run test:watch    # Run tests in watch mode
 ## Recommended IDE Setup
 
 - [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+
+## Troubleshooting
+
+### Common Issues
+
+- **Build fails on Windows**: Ensure Visual Studio Build Tools with C++ workload are installed
+- **Android APK not building**: Verify ANDROID_HOME and ANDROID_NDK_HOME environment variables
+- **Video playback issues**: Check MPV is in PATH or configure custom path in settings
+- **Portal connection fails**: Verify MAC address format and portal URL accessibility
 
 ## License
 
