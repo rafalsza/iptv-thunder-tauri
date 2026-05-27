@@ -12,14 +12,14 @@ interface WindowControls {
 export const useWindowControls = (): WindowControls => {
   const [isMaximized, setIsMaximized] = useState(false);
   const unlistenRef = useRef<(() => void) | null>(null);
+  const windowRef = useRef(getCurrentWindow());
 
   useEffect(() => {
     let isMounted = true;
 
     const init = async () => {
       try {
-        const currentWindow = getCurrentWindow();
-        const maximized = await currentWindow.isMaximized();
+        const maximized = await windowRef.current.isMaximized();
         if (isMounted) {
           setIsMaximized(maximized);
         }
@@ -32,8 +32,7 @@ export const useWindowControls = (): WindowControls => {
       try {
         const unlisten = await listen('tauri://resize', async () => {
           try {
-            const currentWindow = getCurrentWindow();
-            const maximized = await currentWindow.isMaximized();
+            const maximized = await windowRef.current.isMaximized();
             if (isMounted) {
               setIsMaximized(maximized);
             }
@@ -49,8 +48,10 @@ export const useWindowControls = (): WindowControls => {
       }
     };
 
-    init();
-    setupWindowListener();
+    (async () => {
+      await init();
+      await setupWindowListener();
+    })();
 
     return () => {
       isMounted = false;
@@ -63,11 +64,12 @@ export const useWindowControls = (): WindowControls => {
 
   const handleMaximize = useCallback(async () => {
     try {
-      const currentWindow = getCurrentWindow();
       if (isMaximized) {
-        await currentWindow.unmaximize();
+        await windowRef.current.unmaximize();
+        setIsMaximized(false);
       } else {
-        await currentWindow.maximize();
+        await windowRef.current.maximize();
+        setIsMaximized(true);
       }
     } catch {
       // Silent fail - user can try again
@@ -76,8 +78,7 @@ export const useWindowControls = (): WindowControls => {
 
   const handleMinimize = useCallback(async () => {
     try {
-      const currentWindow = getCurrentWindow();
-      await currentWindow.minimize();
+      await windowRef.current.minimize();
     } catch {
       // Silent fail - user can try again
     }
@@ -85,8 +86,7 @@ export const useWindowControls = (): WindowControls => {
 
   const handleClose = useCallback(async () => {
     try {
-      const currentWindow = getCurrentWindow();
-      await currentWindow.close();
+      await windowRef.current.close();
     } catch {
       // Silent fail - user can try again
     }

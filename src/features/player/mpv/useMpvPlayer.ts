@@ -458,7 +458,8 @@ export function useMpvPlayer(
   // Helper: generate status message based on retry/fallback state
   const getStatusMessage = useCallback((retry: number, urlIdx: number) => {
     if (retry > 0) {
-      return `Retry ${retry}/${MAX_RETRIES_PER_URL}${urlIdx > 0 ? ` (fallback ${urlIdx})` : ''}…`;
+      const fallbackMsg = urlIdx > 0 ? ` (fallback ${urlIdx})` : '';
+      return `Retry ${retry}/${MAX_RETRIES_PER_URL}${fallbackMsg}…`;
     }
     if (urlIdx > 0) {
       return `Fallback ${urlIdx}…`;
@@ -523,7 +524,7 @@ export function useMpvPlayer(
 
     videoParamsReceivedRef.current = false;
     firstTimePosRef.current = 0;
-    currentCacheSecsRef.current = 10;
+    currentCacheSecsRef.current = 20;
     isEndedRef.current = false;
     lastStallPositionRef.current = 0;
     stallCountAtPositionRef.current = 0;
@@ -630,7 +631,7 @@ export function useMpvPlayer(
         'hwdec': hwdecValue,
         'keep-open': 'yes',
         'cache': 'yes',
-        'cache-secs': '20',
+        'cache-secs': '25',
         'demuxer-readahead-secs': '5',
         'demuxer-max-bytes': '100MiB',
         'demuxer-max-back-bytes': '50MiB',
@@ -849,7 +850,7 @@ export function useMpvPlayer(
 
   // Helper: handle stall recovery with seek and audio reinit
   const handleStallRecovery = useCallback((stallTimeout: number, now: number) => {
-    if (now - lastRetryRef.current < 10000) return;
+    if (now - lastRetryRef.current < 15000) return;
     lastRetryRef.current = now;
 
     const currentPos = currentTimeRef.current || 0;
@@ -891,8 +892,8 @@ export function useMpvPlayer(
     const recoveryCacheSecs = Math.min(currentCacheSecsRef.current + 10, 60);
     void setProperty('cache-secs', recoveryCacheSecs.toString());
 
-    // Seek forward by 10 seconds to skip potentially bad segment
-    const seekTarget = Math.max(0, currentPos + 10);
+    // Seek forward by 5 seconds to skip potentially bad segment
+    const seekTarget = Math.max(0, currentPos + 5);
 
     void command('seek', [seekTarget, 'absolute']).then(async () => {
       setStreamState('playing');
