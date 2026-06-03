@@ -15,6 +15,7 @@ export const sk = {
   autoPlay: 'Automatické prehrávanie',
   autoPlayDescription: 'Automaticky prehrávať po kliknutí na kanál',
   autoPlayEpisodes: 'Automatické prehrávanie epizód',
+  nextEpisode: 'Ďalšia epizóda',
   autoPlayEpisodesDescription: 'Automaticky prehrávať ďalšiu epizódu po skončení aktuálnej',
 
   videoQuality: 'Predvolená kvalita videa',

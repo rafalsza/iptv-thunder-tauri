@@ -170,7 +170,7 @@ function sortAndDedupe(items: StalkerVOD[]): StalkerVOD[] {
 }
 
 // ─── Main hook: useSeriesAll (SQLite first, then API refresh with progressive loading) ─────────────────
-export const useSeriesAll = (client: StalkerClient, categoryId?: string) => {
+export const useSeriesAll = (client: StalkerClient, categoryId?: string, search?: string) => {
   const accountId = client?.getAccount()?.id ?? 'default';
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
@@ -178,9 +178,27 @@ export const useSeriesAll = (client: StalkerClient, categoryId?: string) => {
   // Treat undefined, empty, or '*' as "all series" - use consistent cache key
   const effectiveCategoryId = (!categoryId || categoryId === '*') ? '' : categoryId;
 
+  // Debounce search to avoid too many API calls while typing
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search?.trim() || '');
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Include search in cache key to separate cached results from search results
+  const effectiveSearch = debouncedSearch;
+
   const query = useQuery({
-    queryKey: ['series-all', accountId, categoryId],
+    queryKey: ['series-all', accountId, categoryId, effectiveSearch],
     queryFn: async ({ signal }) => {
+      // When search is active, bypass SQLite cache and query API directly
+      if (effectiveSearch) {
+        const result = await getSeriesWithPagination(client, effectiveCategoryId, 1, signal, effectiveSearch);
+        return result.items;
+      }
+
       // 1. First, try to load from SQLite (fast, offline-friendly)
       const cachedItems = await getSeries(accountId, effectiveCategoryId);
       const hasCache = cachedItems.length > 0;
@@ -189,7 +207,7 @@ export const useSeriesAll = (client: StalkerClient, categoryId?: string) => {
         // 🔥 Background refresh (SWR) - silent, no progressive UI updates
         // Only run once per day (24 hours)
         const needsRefresh = shouldBackgroundRefresh(accountId, effectiveCategoryId);
-        const queryKey = ['series-all', accountId, effectiveCategoryId];
+        const queryKey = ['series-all', accountId, effectiveCategoryId, ''];
 
         if (needsRefresh) {
           setIsRefreshing(true);
@@ -356,13 +374,14 @@ export const useSeriesInfo = (client: StalkerClient, seriesId: string) => {
     queryKey: ['series-info', seriesId],
     queryFn: async () => {
       if (!seriesId) {
-        console.log('📺 No seriesId provided, returning empty data');
         return { series: null as any, seasons: [], episodes: [] };
       }
       return await getSeriesInfo(client, seriesId);
     },
     enabled: !!seriesId,
     staleTime: 15 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 };
 
@@ -405,21 +424,17 @@ export const usePrefetchSeriesStream = (client: StalkerClient) => {
 
       // Per-episode debounce
       const lastTime = lastSeriesPrefetch.get(episodeId);
-      if (lastTime && now - lastTime < SERIES_PREFETCH_DEBOUNCE_MS) {
-        return;
-      }
+      if (lastTime && now - lastTime < SERIES_PREFETCH_DEBOUNCE_MS) return;
 
       // Limit concurrent prefetches
-      if (inFlightSeriesPrefetches.size >= MAX_CONCURRENT_SERIES_PREFETCHES) {
-        return;
-      }
+      if (inFlightSeriesPrefetches.size >= MAX_CONCURRENT_SERIES_PREFETCHES) return;
 
       lastSeriesPrefetch.set(episodeId, now);
       inFlightSeriesPrefetches.add(episodeId);
 
       queryClient.prefetchQuery({
         queryKey,
-        queryFn: () => getSeriesStream(client, episode.cmd).finally(() => {
+        queryFn: () => getSeriesStream(client, episode.cmd, episode.episode).finally(() => {
           inFlightSeriesPrefetches.delete(episodeId);
         }),
         staleTime: 5 * 60 * 1000,

@@ -128,10 +128,10 @@ export const useTypedRouter = () => {
       if (savedFocusId) {
         setTimeout(() => {
           const savedElement = document.getElementById(savedFocusId) || document.querySelector(`[data-tv-id="${savedFocusId}"]`);
-          const isSubmenuItem = savedElement && (savedElement as HTMLElement).dataset.tvGroup &&
-                               (savedElement as HTMLElement).dataset.tvGroup !== 'navbar' &&
-                               (savedElement as HTMLElement).dataset.tvGroup !== 'portals-content';
-          const isSavedNavbarElement = savedElement && (savedElement as HTMLElement).dataset.tvGroup === 'navbar';
+          const isSubmenuItem = savedElement?.dataset?.tvGroup &&
+                               savedElement.dataset.tvGroup !== 'navbar' &&
+                               savedElement.dataset.tvGroup !== 'portals-content';
+          const isSavedNavbarElement = savedElement?.dataset?.tvGroup === 'navbar';
 
           if (isNavbarRoute && isSubmenuItem) {
             const navbarElement = document.querySelector(`[data-tv-id="${currentRouteType}"]`) as HTMLElement;
@@ -147,7 +147,6 @@ export const useTypedRouter = () => {
 
           if (savedElement && 'focus' in savedElement) {
             savedElement.focus();
-          } else {
           }
         }, 50);
       } else if (isNavbarRoute) {

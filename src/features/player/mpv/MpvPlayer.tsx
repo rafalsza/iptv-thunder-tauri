@@ -17,14 +17,15 @@ import { useChannels } from '@/features/tv/tv.hooks';
 import { StalkerChannel } from '@/types';
 import { useRecentViewed } from '@/hooks/useRecentItems';
 import { usePortalsStore } from '@/store/portals.store';
+import { usePlaybackStore } from '@/store/playback.store';
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const MpvPlayerComponent: React.FC<PlayerProps> = ({
-  url, name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, genreId, onClose, onEnded, onChannelChange,
+  url, name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, genreId, onClose, onEnded, onNextEpisode, onChannelChange,
 }) => {
 
   const { setPosition, markAsWatched } = useResumeStore();
-  const mpv = useMpvPlayer(url, isVod, movieId, setPosition, onEnded, markAsWatched);
+  const mpv = useMpvPlayer(url, isVod, movieId, setPosition, onEnded, markAsWatched, resumePosition);
   const controls = usePlayerControls();
 
   // Single EPG query for 24 hours - used by both current program and EPG modal
@@ -33,11 +34,18 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
     client, channelId ?? 0, name, 24, !isVod && !!channelId && !!client
   );
 
+  // Force current program recalculation every 30 seconds to handle program end transitions
+  const [epgTick, setEpgTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setEpgTick(t => t + 1), 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Derive current program from channelEPG data instead of making separate query
-  // Memoize it so it only recalculates when EPG data changes, not on every time update
-  const currentProgram = useMemo(() => 
+  // Memoize it so it only recalculates when EPG data changes OR when epgTick updates (every 30s)
+  const currentProgram = useMemo(() =>
     channelEPG ? getCurrentProgram(channelEPG) : null
-  , [channelEPG]);
+  , [channelEPG, epgTick]);
 
   const [showEPGModal, setShowEPGModal] = useState(false);
 
@@ -74,23 +82,20 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
   // Cleanup on unmount and before page unload - empty deps to run once
   useEffect(() => {
     const cleanupRef = mpv.cleanup;
-    const handleBeforeUnload = () => void cleanupRef();
+    const handleBeforeUnload = () => void cleanupRef(true); // Save position on close
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      void cleanupRef();
+      void cleanupRef(true); // Save position on unmount
     };
   }, []);
 
   // Initial load on URL change
   useEffect(() => {
-    const { cleanup, loadUrl, getRankedUrls, setStreamState, setStatusMsg, usingMpv } = mpv;
+    const { cleanup, loadUrl, getRankedUrls, setStreamState, setStatusMsg } = mpv;
     hasResumedRef.current = false;
 
     const requestId = ++urlChangeIdRef.current;
-
-    // Skip cleanup if MPV is not running - nothing to clean
-    const skipCleanup = !usingMpv;
 
     const doLoad = async () => {
       if (requestId !== urlChangeIdRef.current) {
@@ -105,13 +110,10 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
       void loadUrl(ranked[0], 0, 0);
     };
 
-    if (skipCleanup) {
-      void doLoad();
-      return;
-    }
-
-    // Cleanup old MPV before loading new URL
-    void cleanup().then(() => doLoad()).catch(err => {
+    // Always cleanup before loading new URL to reset currentTimeRef
+    // This prevents old time values from being used for new episodes
+    // Don't save position on URL change (only on player close)
+    void cleanup(false).then(() => doLoad()).catch(err => {
       console.error(`❌ cleanup failed: requestId=${requestId}`, err);
     });
 
@@ -121,21 +123,20 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
     };
   }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Seek to resume position when playing and duration is available
-  const { seekTo } = controls;
-  useEffect(() => {
-    if (isVod && resumePosition > 0 && mpv.streamState === 'playing' && mpv.duration > 0 && !hasResumedRef.current) {
-      hasResumedRef.current = true;
-      // Small delay to ensure MPV is fully ready
-      const timer = setTimeout(() => {
-        void seekTo(resumePosition, mpv.duration);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isVod, resumePosition, mpv.streamState, mpv.duration, seekTo]);
-
   // Simple URL list
   const allUrls = useMemo(() => [url], [url]);
+
+  // Determine if this is a series with a next episode available
+  const contentType = usePlaybackStore(s => s.contentType);
+  const episodes = usePlaybackStore(s => s.current?.episodes);
+  const currentEpisodeIndex = usePlaybackStore(s => s.current?.currentEpisodeIndex);
+  const hasNextEpisode = contentType === 'series' && episodes && currentEpisodeIndex !== undefined && currentEpisodeIndex < episodes.length - 1;
+
+  const handleNextEpisode = useCallback(() => {
+    if (onNextEpisode && hasNextEpisode) {
+      onNextEpisode();
+    }
+  }, [onNextEpisode, hasNextEpisode]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -160,7 +161,11 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
       e.preventDefault();
       void controls.handleSeek(10);
     }
-  }, [controls.isFullscreen, controls.handleFullscreen, controls.handleClose, controls.handlePlayPause, controls.handleSeek, isVod, onClose]);
+    if ((e.key === 'n' || e.key === 'N') && hasNextEpisode && onNextEpisode) {
+      e.preventDefault();
+      onNextEpisode();
+    }
+  }, [controls.isFullscreen, controls.handleFullscreen, controls.handleClose, controls.handlePlayPause, controls.handleSeek, isVod, onClose, hasNextEpisode, onNextEpisode]);
 
   // Global keyboard handling
   useEffect(() => {
@@ -288,6 +293,7 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
             onSetAudioTrack={handleSetAudioTrack}
             onSetSubTrack={handleSetSubTrack}
             onSeekToBeginning={handleSeekToBeginning}
+            onNextEpisode={hasNextEpisode ? handleNextEpisode : undefined}
             categoryChannels={!isVod && genreId ? categoryChannels : undefined}
             recentChannels={!isVod ? recentChannels : undefined}
             currentChannelId={channelId}

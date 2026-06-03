@@ -14,7 +14,8 @@
     "android:dev": "tauri android dev",
     "android:build": "tauri android build",
     "android:init": "tauri android init",
-    "generate:android-icons": "node scripts/generate-android-icons.js"
+    "generate:android-icons": "node scripts/generate-android-icons.js",
+    "tauri:dev": "GDK_BACKEND=x11 pnpm tauri dev"
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",
@@ -26,7 +27,7 @@
     "@tanstack/query-sync-storage-persister": "^5.100.10",
     "@tanstack/react-query": "^5.100.10",
     "@tanstack/react-query-persist-client": "^5.100.10",
-    "@tanstack/react-virtual": "^3.13.24",
+    "@tanstack/react-virtual": "^3.13.26",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-http": "^2.5.9",
@@ -41,16 +42,14 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
-    "framer-motion": "^12.39.0",
-    "hls.js": "^1.6.16",
+    "framer-motion": "^12.40.0",
     "immer": "^11.1.8",
-    "lucide-react": "^1.16.0",
+    "lucide-react": "^1.17.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "tailwind-merge": "^3.6.0",
     "tauri-plugin-libmpv-api": "^0.3.2",
-    "video.js": "^8.23.8",
-    "zustand": "^5.0.13"
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
@@ -59,17 +58,17 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/jest": "^30.0.0",
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.5.0",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
-    "postcss": "^8.5.14",
+    "postcss": "^8.5.15",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.3.0",
     "ts-jest": "^29.4.9",
     "typescript": "~6.0.3",
-    "vite": "^8.0.13"
+    "vite": "^8.0.14"
   }
 }

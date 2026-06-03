@@ -256,7 +256,7 @@ export const MovieList: React.FC<MovieListProps> = ({
 }) => {
   const { t } = useTranslation();
   // ── Data ──────────────────────────────────────────────────────────────────────
-  const { movies, isLoading, isFetching, error, streamingState } = useMoviesAll(client, selectedCategory?.id);
+  const { movies, isLoading, isFetching, error, streamingState } = useMoviesAll(client, selectedCategory?.id, search);
 
   // ── Favorites ─────────────────────────────────────────────────────────────────
   const accountId = usePortalsStore(s =>
@@ -270,18 +270,7 @@ export const MovieList: React.FC<MovieListProps> = ({
     [favorites],
   );
 
-  // ── Search (debounced) ────────────────────────────────────────────────────────
-  const [debouncedSearch, setDebouncedSearch] = useState(search);
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 200);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  const filtered = useMemo(() => {
-    if (!debouncedSearch) return movies;
-    const lower = debouncedSearch.toLowerCase();
-    return movies.filter((m: StalkerVOD) => m.name.toLowerCase().includes(lower));
-  }, [movies, debouncedSearch]);
+  // Search is now handled server-side via API (useMoviesAll hook)
 
   // ── Layout ────────────────────────────────────────────────────────────────────
   const parentRef    = useRef<HTMLDivElement>(null);
@@ -295,7 +284,7 @@ export const MovieList: React.FC<MovieListProps> = ({
 
   
   // ── Virtualizer ───────────────────────────────────────────────────────────────
-  const rowCount = Math.ceil(filtered.length / cols);
+  const rowCount = Math.ceil(movies.length / cols);
 
   const virtualizer = useVirtualizer({
     count: rowCount,
@@ -319,8 +308,8 @@ export const MovieList: React.FC<MovieListProps> = ({
   // Stable row getter — avoids pre-building a rows array for large datasets
   const getRow = useCallback(
     (rowIndex: number): StalkerVOD[] =>
-      filtered.slice(rowIndex * cols, rowIndex * cols + cols),
-    [filtered, cols],
+      movies.slice(rowIndex * cols, rowIndex * cols + cols),
+    [movies, cols],
   );
 
 
@@ -439,15 +428,12 @@ export const MovieList: React.FC<MovieListProps> = ({
             <div className="flex-1">
               <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.id === '*' ? t('all') : selectedCategory.title}</h2>
               <p className="text-xs dark:text-slate-400 text-slate-600">
-                {filtered.length} {(() => {
-                  const count = filtered.length;
+                {movies.length} {(() => {
+                  const count = movies.length;
                   if (count === 1) return t('moviesCount_1');
                   if (count >= 2 && count <= 4) return t('moviesCount_2_4');
                   return t('moviesCount_5_plus');
                 })()}
-                {debouncedSearch && movies.length !== filtered.length
-                  ? ` (z ${movies.length})`
-                  : ''}
               </p>
             </div>
             {/* Favorite Category Button */}

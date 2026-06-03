@@ -11,11 +11,24 @@ import { fetchVODPages, normalizeVod, normalizeDbVod, persistVodQueue } from './
 
 // ─── Main hook ────────────────────────────────────────────────────────────────
 
-export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
+export const useMoviesAll = (client: StalkerClient, categoryId?: string, search?: string) => {
   const account = client?.getAccount();
   const accountId = account?.id ?? 'default';
   const enabled = !!client; // Require client, allow loading all movies when categoryId is undefined/empty
   const queryClient = useQueryClient();
+
+  const effectiveCategoryId = (!categoryId || categoryId === '*') ? '' : categoryId;
+
+  // Debounce search to avoid too many API calls while typing
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search?.trim() || '');
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const effectiveSearch = debouncedSearch;
 
   // Streaming state for progressive loading
   const [streamingState, setStreamingState] = React.useState({
@@ -25,16 +38,68 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
   });
 
   const query = useQuery({
-    queryKey: ['movies-all', accountId, categoryId],
+    queryKey: ['movies-all', accountId, categoryId, effectiveSearch],
     queryFn: async ({ signal }) => {
-      // Treat undefined, empty, or '*' as "all movies" - use consistent cache key
-      const effectiveCategoryId = (!categoryId || categoryId === '*') ? '' : categoryId;
+      // When search is active, bypass SQLite cache and query API directly
+      if (effectiveSearch) {
+        const result = await fetchVODPages(client, effectiveCategoryId, { signal, search: effectiveSearch });
+        return result.map(v => ({
+          id: v.id?.toString() || '',
+          name: v.o_name || v.name || '',
+          description: v.description || '',
+          posterUrl: v.logo || v.poster || '',
+          streamUrl: v.cmd || '',
+          year: v.year,
+          rating: v.rating_imdb || v.rating_kinopoisk,
+          duration: v.length,
+          genre: v.genres_str || '',
+          director: v.director,
+          actors: v.actors,
+          added: v.added ? new Date(v.added).getTime() : undefined,
+        }));
+      }
 
-      // Try SQLite cache first
+      // Try SQLite cache first - return immediately if exists
       const cached = await getVod(accountId, effectiveCategoryId);
 
       if (cached.length > 0) {
-        // Return raw cached data - transformation happens in useMemo
+        // Return cached data immediately, then fetch fresh data in background
+        fetchVODPages(client, effectiveCategoryId, { signal })
+          .then(items => {
+            const normalized = normalizeVod(items);
+            if (normalized.length > 0) {
+              // Compare cache with API results
+              const cachedIds = new Set(cached.map((c: any) => c.id));
+              const apiIds = new Set(normalized.map((v: any) => String(v.id)));
+              
+              // Find new items (in API but not in cache)
+              const newItems = normalized.filter((v: any) => !cachedIds.has(String(v.id)));
+              // Find removed items (in cache but not in API)
+              const removedItems = cached.filter((c: any) => !apiIds.has(c.id));
+              
+              if (newItems.length > 0 || removedItems.length > 0) {
+                // Save to DB silently - don't update UI, next visit will use fresh cache
+                const vodData = normalized.map(vod => ({
+                  id: vod.id?.toString() || '',
+                  name: vod.o_name || vod.name || '',
+                  description: vod.description || '',
+                  posterUrl: vod.logo || vod.poster || '',
+                  streamUrl: vod.cmd || '',
+                  year: vod.year,
+                  rating: vod.rating_imdb || vod.rating_kinopoisk,
+                  duration: vod.length,
+                  genre: vod.genres_str || '',
+                  director: vod.director,
+                  actors: vod.actors,
+                  added: vod.added ? new Date(vod.added).getTime() : undefined,
+                }));
+                persistVodQueue(vodData, accountId, effectiveCategoryId, saveVod)
+                  .catch(() => {});
+              }
+            }
+          })
+          .catch(() => {});
+        
         return cached;
       }
 
@@ -44,6 +109,7 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
       // Layer 1: Fetch from API with progressive hydration
       const items = await fetchVODPages(client, effectiveCategoryId, {
         signal,
+        search: effectiveSearch,
         onProgress: (progressItems, loadedPages, totalPages) => {
           // Layer 2: Normalize and update UI progressively
           if (signal?.aborted) return;
@@ -91,7 +157,6 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string) => {
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
   });
 
   // Transform cached data in useMemo to prevent GC spikes on mount

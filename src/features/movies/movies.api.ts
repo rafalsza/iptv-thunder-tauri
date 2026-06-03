@@ -9,6 +9,7 @@ import { StalkerVOD, StalkerGenre } from '@/types';
 export interface FetchVODPagesOptions {
   signal?: AbortSignal;
   onProgress?: (items: StalkerVOD[], loadedPages: number, totalPages: number) => void;
+  search?: string;
 }
 
 /**
@@ -20,14 +21,14 @@ export async function fetchVODPages(
   categoryId: string,
   options?: FetchVODPagesOptions,
 ): Promise<StalkerVOD[]> {
-  const { signal, onProgress } = options || {};
+  const { signal, onProgress, search } = options || {};
 
   // Check if aborted before starting
   if (signal?.aborted) {
     throw new Error('Request cancelled');
   }
 
-  const first = await client.getVODListWithPagination(categoryId, 1, { signal });
+  const first = await client.getVODListWithPagination(categoryId, 1, { signal, search });
 
   if (!first.hasMore || first.items.length === 0) {
     return first.items;
@@ -50,7 +51,6 @@ export async function fetchVODPages(
 
     // Parallel fetching with conservative concurrency to avoid 503 errors
     const CONCURRENCY_LIMIT = 3;
-    const results: { page: number; items: StalkerVOD[] }[] = [];
 
     for (let i = 0; i < pageNums.length; i += CONCURRENCY_LIMIT) {
       const batch = pageNums.slice(i, i + CONCURRENCY_LIMIT);
@@ -62,7 +62,7 @@ export async function fetchVODPages(
       try {
         const batchPromises = batch.map(async (page) => {
           try {
-            const pageData = await client.getVODListWithPagination(categoryId, page, { signal });
+            const pageData = await client.getVODListWithPagination(categoryId, page, { signal, search });
             return { page, items: pageData.items };
           } catch (e) {
             console.error(`Failed to fetch page ${page}:`, e);
@@ -71,7 +71,6 @@ export async function fetchVODPages(
         });
 
         const batchResults = await Promise.all(batchPromises);
-        results.push(...batchResults);
 
         // Merge results and emit progress
         const newItems = batchResults.flatMap(r => r.items);

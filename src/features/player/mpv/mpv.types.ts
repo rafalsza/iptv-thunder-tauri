@@ -22,5 +22,6 @@ export interface PlayerProps {
   genreId?: string;
   onClose: () => void;
   onEnded?: () => void;
+  onNextEpisode?: () => void;
   onChannelChange?: (channel: any) => void;
 }

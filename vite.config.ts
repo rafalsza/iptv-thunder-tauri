@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -14,5 +13,8 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     host: true,
+  },
+  css: {
+    devSourcemap: false,
   },
 });

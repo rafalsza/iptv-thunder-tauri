@@ -73,6 +73,12 @@ class NativePlayerActivity : AppCompatActivity() {
     private var isCategoryCarouselVisible = false
     private var isRecentCarouselVisible = false
 
+    // Scroll position preservation
+    private var categoryScrollPosition = 0
+    private var recentScrollPosition = 0
+    private var categoryCarouselOpenedOnce = false
+    private var recentCarouselOpenedOnce = false
+
     data class EpisodeInfo(
         val id: String,
         val url: String,
@@ -201,7 +207,16 @@ class NativePlayerActivity : AppCompatActivity() {
         // EPG Manager
         epgManager = EpgManager(
             lifecycleOwner = this,
-            epgTextView = findViewById(R.id.epg_text),
+            epgCard = findViewById(R.id.epg_card),
+            epgCurrentTime = findViewById(R.id.epg_current_time),
+            epgCurrentTitle = findViewById(R.id.epg_current_title),
+            epgCurrentCategory = findViewById(R.id.epg_current_category),
+            epgCurrentProgressText = findViewById(R.id.epg_current_progress_text),
+            epgProgressBar = findViewById(R.id.epg_progress_bar),
+            epgNextContainer = findViewById(R.id.epg_next_container),
+            epgNextTime = findViewById(R.id.epg_next_time),
+            epgNextTitle = findViewById(R.id.epg_next_title),
+            epgNextCategory = findViewById(R.id.epg_next_category),
             getPlayerPosition = { playerController.player?.currentPosition ?: 0L },
             getPlayerDuration = { playerController.player?.duration ?: 0L },
             isLive = { playerController.player?.isCurrentMediaItemLive == true },
@@ -516,6 +531,11 @@ class NativePlayerActivity : AppCompatActivity() {
             isRecentCarouselVisible = false
             recentCarouselContainer?.visibility = android.view.View.GONE
             recentCarouselButton?.backgroundTintList = android.content.res.ColorStateList.valueOf("#40FFFFFF".toColorInt())
+        } else {
+            // Save scroll position when closing
+            categoryCarouselContainer?.let {
+                categoryScrollPosition = it.scrollX
+            }
         }
 
         if (isCategoryCarouselVisible) {
@@ -523,11 +543,11 @@ class NativePlayerActivity : AppCompatActivity() {
             uiController.pauseAutoHide()
 
             categoryCarouselContainer?.visibility = android.view.View.VISIBLE
-            
+
             if (categoryChannels.isEmpty()) {
                 android.util.Log.w("NativePlayerActivity", "Category carousel is EMPTY!")
             }
-            
+
             populateCategoryCarousel()
 
             categoryCarouselButton?.backgroundTintList =
@@ -555,6 +575,11 @@ class NativePlayerActivity : AppCompatActivity() {
             isCategoryCarouselVisible = false
             categoryCarouselContainer?.visibility = android.view.View.GONE
             categoryCarouselButton?.backgroundTintList = android.content.res.ColorStateList.valueOf("#40FFFFFF".toColorInt())
+        } else {
+            // Save scroll position when closing
+            recentCarouselContainer?.let {
+                recentScrollPosition = it.scrollX
+            }
         }
 
         if (isRecentCarouselVisible) {
@@ -562,11 +587,11 @@ class NativePlayerActivity : AppCompatActivity() {
             uiController.pauseAutoHide()
 
             recentCarouselContainer?.visibility = android.view.View.VISIBLE
-            
+
             if (recentChannels.isEmpty()) {
                 android.util.Log.w("NativePlayerActivity", "Recent carousel is EMPTY!")
             }
-            
+
             populateRecentCarousel()
 
             recentCarouselButton?.backgroundTintList =
@@ -601,18 +626,27 @@ class NativePlayerActivity : AppCompatActivity() {
         }
 
         categoryCarousel?.post {
+            // Always focus on current channel
             currentChannelView?.let { view ->
                 view.requestFocus()
+            }
 
-                val scrollView = categoryCarouselContainer ?: return@post
+            // Restore scroll position if carousel was opened before, otherwise scroll to current channel
+            if (categoryCarouselOpenedOnce && categoryScrollPosition > 0) {
+                categoryCarouselContainer?.scrollTo(categoryScrollPosition, 0)
+            } else {
+                currentChannelView?.let { view ->
+                    val scrollView = categoryCarouselContainer ?: return@post
 
-                val targetScroll =
-                    view.left - (scrollView.width / 2) + (view.width / 2)
+                    val targetScroll =
+                        view.left - (scrollView.width / 2) + (view.width / 2)
 
-                scrollView.scrollTo(
-                    targetScroll.coerceAtLeast(0),
-                    0
-                )
+                    scrollView.scrollTo(
+                        targetScroll.coerceAtLeast(0),
+                        0
+                    )
+                }
+                categoryCarouselOpenedOnce = true
             }
         }
     }
@@ -633,18 +667,27 @@ class NativePlayerActivity : AppCompatActivity() {
         }
 
         recentCarousel?.post {
+            // Always focus on current channel
             currentChannelView?.let { view ->
                 view.requestFocus()
+            }
 
-                val scrollView = recentCarouselContainer ?: return@post
+            // Restore scroll position if carousel was opened before, otherwise scroll to current channel
+            if (recentCarouselOpenedOnce && recentScrollPosition > 0) {
+                recentCarouselContainer?.scrollTo(recentScrollPosition, 0)
+            } else {
+                currentChannelView?.let { view ->
+                    val scrollView = recentCarouselContainer ?: return@post
 
-                val targetScroll =
-                    view.left - (scrollView.width / 2) + (view.width / 2)
+                    val targetScroll =
+                        view.left - (scrollView.width / 2) + (view.width / 2)
 
-                scrollView.scrollTo(
-                    targetScroll.coerceAtLeast(0),
-                    0
-                )
+                    scrollView.scrollTo(
+                        targetScroll.coerceAtLeast(0),
+                        0
+                    )
+                }
+                recentCarouselOpenedOnce = true
             }
         }
     }

@@ -5,7 +5,6 @@ use std::sync::{LazyLock, Mutex};
 use std::collections::HashMap;
 use tokio::sync::oneshot;
 use tokio::sync::Mutex as AsyncMutex;
-use tokio::time;
 
 static CANCEL_MAP: LazyLock<Mutex<HashMap<String, oneshot::Sender<()>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -128,7 +127,9 @@ async fn stalker_request(
 
     // Minimal headers - server might be blocking based on specific headers
     request = request.header("Accept", "*/*");
-    request = request.header("User-Agent", "Mozilla/5.0");
+    request = request.header("Accept-Language", "en-US,en;q=0.9");
+    request = request.header("Connection", "keep-alive");
+    request = request.header("User-Agent", "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG250 Safari/533.3");
 
     // Add body if provided
     if let Some(request_body) = body {
@@ -148,8 +149,8 @@ async fn stalker_request(
         // Serialize requests to avoid server rate limiting
         let _lock = REQUEST_MUTEX.lock().await;
         
-        // Small delay between requests
-        time::sleep(std::time::Duration::from_millis(200)).await;
+        // Small delay to avoid rate limiting
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         
         let response = request.send().await.map_err(|e| {
             let err_msg = e.to_string();

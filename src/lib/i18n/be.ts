@@ -15,6 +15,7 @@ export const be = {
   autoPlay: 'Аўтаўзнаўленне',
   autoPlayDescription: 'Аўтаматычна ўзнаўляць пасля націскання на канал',
   autoPlayEpisodes: 'Аўтапрайграванне эпізодаў',
+  nextEpisode: 'Наступны эпізод',
   autoPlayEpisodesDescription: 'Аўтаматычна прайграваць наступны эпізод пасля завяршэння бягучага',
 
   videoQuality: 'Якасць відэа па змаўчанні',

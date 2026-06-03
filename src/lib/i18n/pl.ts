@@ -16,6 +16,7 @@ export const pl = {
   autoPlayDescription: 'Automatycznie odtwarzaj po kliknięciu kanału',
   autoPlayEpisodes: 'Automatyczne odtwarzanie odcinków',
   autoPlayEpisodesDescription: 'Automatycznie odtwarzaj kolejny odcinek po zakończeniu obecnego',
+  nextEpisode: 'Następny odcinek',
 
   videoQuality: 'Domyślna jakość wideo',
   auto: 'Automatyczna',

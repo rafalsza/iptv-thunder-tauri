@@ -33,8 +33,8 @@ class PlayerController(
     private val onPlayerReady: () -> Unit = {}
 ) {
     companion object {
-        private const val MAX_RETRIES = 5
-        private val RETRY_DELAYS_MS = longArrayOf(1000, 2000, 5000, 10000)
+        private const val MAX_RETRIES = 3
+        private val RETRY_DELAYS_MS = longArrayOf(1000, 2000, 4000)
     }
 
     init {
@@ -110,8 +110,8 @@ class PlayerController(
 
         // Configure data source with longer timeouts for IPTV
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(20000)  // 20s connection timeout
-            .setReadTimeoutMs(20000)     // 20s read timeout
+            .setConnectTimeoutMs(5000)   // 5s connection timeout
+            .setReadTimeoutMs(5000)      // 5s read timeout
 
         // Detect HLS streams - check for m3u8 in URL or query parameters
         val isHls = url.contains(".m3u8", ignoreCase = true) ||
@@ -362,8 +362,8 @@ class PlayerController(
 
         // Create appropriate media source for the URL
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(20000)
-            .setReadTimeoutMs(20000)
+            .setConnectTimeoutMs(5000)
+            .setReadTimeoutMs(5000)
 
         // Detect HLS streams
         val isHls = url.contains(".m3u8", ignoreCase = true) ||

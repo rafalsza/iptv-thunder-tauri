@@ -42,6 +42,7 @@ interface AppLayoutProps {
   setIsSettingsOpen: (open: boolean) => void;
   setSearch: (search: string) => void;
   handleEpisodeEnded: () => void;
+  playNextEpisode: () => void;
   handleChannelSelect: (channel: StalkerChannel) => void;
 }
 
@@ -59,6 +60,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   setIsSettingsOpen,
   setSearch,
   handleEpisodeEnded,
+  playNextEpisode,
   handleChannelSelect,
 }) => {
   const [currentPlatform, setCurrentPlatform] = useState<string>('desktop');
@@ -226,6 +228,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               onChannelChange={handleChannelSelect}
               onClose={closePlayer}
               onEnded={handleEpisodeEnded}
+              onNextEpisode={playNextEpisode}
             />
           </Suspense>
         )}

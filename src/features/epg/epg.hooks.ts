@@ -115,6 +115,7 @@ export const useChannelEPG = (client: StalkerClient | undefined, channelId: numb
     staleTime: 30 * 60 * 1000,
     placeholderData: cachedData ?? undefined,
     refetchOnWindowFocus: false,
+    refetchInterval: 60 * 1000, // Refetch every 60 seconds to update EPG when programs change
     networkMode: 'always',
   });
 };

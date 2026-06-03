@@ -99,21 +99,15 @@ const lruCache = new Map<string, { lastUsed: number; size: number }>();
  * Fetch image using Tauri HTTP plugin (handles TLS properly on Android)
  */
 async function fetchWithTauriHttp(url: string, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
-  try {
-    // Use Tauri HTTP plugin which handles TLS properly on all platforms including Android
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'image/*,*/*',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-      connectTimeout: timeoutMs,
-    });
-
-    return response;
-  } catch (error) {
-    throw error;
-  }
+  // Use Tauri HTTP plugin which handles TLS properly on all platforms including Android
+  return await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'image/*,*/*',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    },
+    connectTimeout: timeoutMs,
+  });
 }
 
 async function getCacheDir(): Promise<string> {
@@ -487,7 +481,7 @@ async function fileToAssetUrl(filePath: string): Promise<string> {
   let binary = '';
   const len = data.byteLength;
   for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(data[i]);
+    binary += String.fromCodePoint(data[i]);
   }
   
   // Detect MIME type from file extension
@@ -514,7 +508,7 @@ export async function getImageUrl(url: string, fallbackUrl: string = '/fallback/
 
     // Strip quotes and brackets if present (some APIs return URLs like "https://..." or [https://...])
     if (urlStr) {
-      urlStr = urlStr.replace(/^[\["']+|[\]"']+$/g, '');
+      urlStr = urlStr.replaceAll(/^[\["']+|[\]"']+$/g, '');
     }
 
     // Handle undefined/null/empty URLs - return fallback directly

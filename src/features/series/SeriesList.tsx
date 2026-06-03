@@ -194,7 +194,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
 }) => {
   const { t } = useTranslation();
   // ── Data ──────────────────────────────────────────────────────────────────────
-  const { series: seriesData, isLoading, error } = useSeriesAll(client, selectedCategory?.id);
+  const { series: seriesData, isLoading, error } = useSeriesAll(client, selectedCategory?.id, search);
 
   // ── Favorites ─────────────────────────────────────────────────────────────────
   const accountId = usePortalsStore(s =>
@@ -208,21 +208,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
     [favorites]
   );
 
-  // ── Search (debounced) ────────────────────────────────────────────────────────
-  const [debouncedSearch, setDebouncedSearch] = useState<string>(search);
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 200);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  const filteredSeries = useMemo(() => {
-    if (!seriesData) return [];
-    if (!debouncedSearch) return seriesData;
-    const lower = debouncedSearch.toLowerCase();
-    return seriesData.filter((s: StalkerVOD) =>
-      ((s.name || s.series || '') as string).toLowerCase().includes(lower)
-    );
-  }, [seriesData, debouncedSearch]);
+  // Search is now handled server-side via API (useSeriesAll hook)
 
   // ── Layout ────────────────────────────────────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null);
@@ -236,7 +222,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
 
   
   // ── Virtualizer ───────────────────────────────────────────────────────────────
-  const rowCount = Math.ceil(filteredSeries.length / columnCount);
+  const rowCount = Math.ceil(seriesData.length / columnCount);
 
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
@@ -341,15 +327,12 @@ export const SeriesList: React.FC<SeriesListProps> = ({
               <div className="flex-1">
                 <h2 className="text-[calc(1.25rem*var(--ui-scale))] font-bold dark:text-white text-slate-900">{selectedCategory.id === '*' ? t('all') : selectedCategory.title}</h2>
                 <p className="text-xs dark:text-slate-400 text-slate-600">
-                  {filteredSeries.length} {(() => {
-                    const count = filteredSeries.length;
+                  {seriesData.length} {(() => {
+                    const count = seriesData.length;
                     if (count === 1) return t('seriesCount_1');
                     if (count >= 2 && count <= 4) return t('seriesCount_2_4');
                     return t('seriesCount_5_plus');
                   })()}
-                  {debouncedSearch && seriesData && seriesData.length !== filteredSeries.length
-                    ? ` (z ${seriesData.length})`
-                    : ''}
                 </p>
               </div>
               {/* Favorite Category Button */}
@@ -391,8 +374,8 @@ export const SeriesList: React.FC<SeriesListProps> = ({
                 >
                   {(() => {
                     const startIndex = vRow.index * columnCount;
-                    const endIndex = Math.min(startIndex + columnCount, filteredSeries.length);
-                    const items = filteredSeries.slice(startIndex, endIndex);
+                    const endIndex = Math.min(startIndex + columnCount, seriesData.length);
+                    const items = seriesData.slice(startIndex, endIndex);
                     return items.map((series: StalkerVOD, idx) => {
                       const seriesId = String(series.id);
                       const seriesIndex = startIndex + idx;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { StreamState, Track } from '../mpv.types';
 import { formatDurationTime } from '../mpv.utils';
@@ -27,6 +27,7 @@ interface PlayerControlsProps {
   onSetAudioTrack: (id: string) => void;
   onSetSubTrack: (id: string) => void;
   onSeekToBeginning?: () => void;
+  onNextEpisode?: () => void;
   categoryChannels?: any[];
   recentChannels?: any[];
   currentChannelId?: number;
@@ -38,6 +39,7 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
   currentTime, duration, tracks, currentAudioId, currentSubId,
   onPlayPause, onFullscreen, onPip, onClose,
   onVolumeChange, onProgressClick, onShowEPG, onSetAudioTrack, onSetSubTrack, onSeekToBeginning,
+  onNextEpisode,
   categoryChannels, recentChannels, currentChannelId, onChannelSelect
 }) => {
   const { t } = useTranslation();
@@ -47,6 +49,74 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
   const audioTracks = tracks.filter(t => t.type === 'audio');
   const subTracks = tracks.filter(t => t.type === 'sub');
   const hasTracks = audioTracks.length > 1 || subTracks.length > 0;
+
+  // Refs for scroll position preservation
+  const categoryCarouselRef = useRef<HTMLDivElement>(null);
+  const recentCarouselRef = useRef<HTMLDivElement>(null);
+  const categoryScrollPosRef = useRef(0);
+  const recentScrollPosRef = useRef(0);
+  const categoryOpenedOnceRef = useRef(false);
+  const recentOpenedOnceRef = useRef(false);
+
+  // Save scroll position when category menu closes
+  useEffect(() => {
+    if (!showCategoryChannelsMenu && categoryCarouselRef.current) {
+      categoryScrollPosRef.current = categoryCarouselRef.current.scrollLeft;
+    }
+  }, [showCategoryChannelsMenu]);
+
+  // Restore scroll position when category menu opens
+  useEffect(() => {
+    if (showCategoryChannelsMenu && categoryCarouselRef.current) {
+      if (categoryOpenedOnceRef.current && categoryScrollPosRef.current > 0) {
+        // Restore saved position
+        categoryCarouselRef.current.scrollLeft = categoryScrollPosRef.current;
+      } else {
+        // First open - scroll to current channel
+        const currentChannelElement = categoryCarouselRef.current.querySelector(
+          `[data-tv-id*="tv-channel-${currentChannelId}"]`
+        ) as HTMLElement;
+        if (currentChannelElement) {
+          const containerWidth = categoryCarouselRef.current.clientWidth;
+          const elementLeft = currentChannelElement.offsetLeft;
+          const elementWidth = currentChannelElement.clientWidth;
+          const targetScroll = elementLeft - (containerWidth / 2) + (elementWidth / 2);
+          categoryCarouselRef.current.scrollLeft = Math.max(0, targetScroll);
+        }
+        categoryOpenedOnceRef.current = true;
+      }
+    }
+  }, [showCategoryChannelsMenu, currentChannelId]);
+
+  // Save scroll position when recent menu closes
+  useEffect(() => {
+    if (!showRecentChannelsMenu && recentCarouselRef.current) {
+      recentScrollPosRef.current = recentCarouselRef.current.scrollLeft;
+    }
+  }, [showRecentChannelsMenu]);
+
+  // Restore scroll position when recent menu opens
+  useEffect(() => {
+    if (showRecentChannelsMenu && recentCarouselRef.current) {
+      if (recentOpenedOnceRef.current && recentScrollPosRef.current > 0) {
+        // Restore saved position
+        recentCarouselRef.current.scrollLeft = recentScrollPosRef.current;
+      } else {
+        // First open - scroll to current channel
+        const currentChannelElement = recentCarouselRef.current.querySelector(
+          `[data-tv-id*="recent-${currentChannelId}"]`
+        ) as HTMLElement;
+        if (currentChannelElement) {
+          const containerWidth = recentCarouselRef.current.clientWidth;
+          const elementLeft = currentChannelElement.offsetLeft;
+          const elementWidth = currentChannelElement.clientWidth;
+          const targetScroll = elementLeft - (containerWidth / 2) + (elementWidth / 2);
+          recentCarouselRef.current.scrollLeft = Math.max(0, targetScroll);
+        }
+        recentOpenedOnceRef.current = true;
+      }
+    }
+  }, [showRecentChannelsMenu, currentChannelId]);
   // Filter channels for carousel (exclude hidden and current channel)
   const filteredCategoryChannels = categoryChannels?.filter(channel => 
     !channel.name.startsWith('#####') && channel.id !== currentChannelId
@@ -101,6 +171,21 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
               ) : (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
               )}
+            </button>
+          )}
+
+          {/* Next Episode Button - Series only */}
+          {isVod && onNextEpisode && (
+            <button
+              data-tv-focusable
+              tabIndex={0}
+              onClick={onNextEpisode}
+              className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+              title={t('nextEpisode')}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+              </svg>
             </button>
           )}
 
@@ -289,6 +374,7 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
       {showCategoryChannelsMenu && !isVod && hasCategoryChannels && (
         <div className="mt-4 border-t border-gray-700/50 pt-4">
           <div
+            ref={categoryCarouselRef}
             className="flex items-center gap-4 overflow-x-auto px-2 pb-2"
             style={{
               scrollbarWidth: 'thin',
@@ -340,6 +426,7 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
             {t('recentChannels') || 'Ostatnie kanały'}
           </div>
           <div
+            ref={recentCarouselRef}
             className="flex items-center gap-4 overflow-x-auto px-2 pb-2"
             style={{
               scrollbarWidth: 'thin',

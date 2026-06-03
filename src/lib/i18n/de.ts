@@ -15,6 +15,7 @@ export const de = {
   autoPlay: 'Automatische Wiedergabe',
   autoPlayDescription: 'Automatisch nach Klick auf einen Kanal abspielen',
   autoPlayEpisodes: 'Automatische Episodenwiedergabe',
+  nextEpisode: 'Nächste Episode',
   autoPlayEpisodesDescription: 'Automatisch nächste Episode abspielen, wenn die aktuelle endet',
 
   videoQuality: 'Standard-Videoqualität',

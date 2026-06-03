@@ -1,10 +1,9 @@
 // =========================
-// ❤️ FAVORITES HOOK - SQLite Storage (Optimized) v5
-// Cache-bust: 2024-04-01-005-no-migration
+// ❤️ FAVORITES HOOK - SQLite Storage
 // =========================
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { getDB } from './db';
+import { getDB, dbExecute } from './db';
 import { createLogger } from '../lib/logger';
 
 type FavoriteType = 'live' | 'vod' | 'series';
@@ -26,96 +25,27 @@ interface FavoriteItem {
 }
 
 // Singleton state
-let isInitializing = false;
-let initPromise: Promise<void> | null = null;
-let isTableReady = false;
+let dbReady = false;
+let dbReadyPromise: Promise<void> | null = null;
 
 const logger = createLogger('Favorites');
 
-// Shared hook for table initialization
+// Shared hook for table initialization - relies on db.ts getDB() which already initializes all tables
 function useTableReady() {
-  const [ready, setReady] = useState(isTableReady);
+  const [ready, setReady] = useState(dbReady);
   useEffect(() => {
-    if (isTableReady) return;
-    initFavoritesTable().then(() => setReady(true)).catch(err => logger.error('Error initializing table:', err));
+    if (dbReady) return;
+    dbReadyPromise ??= getDB().then(() => { dbReady = true; }).catch(err => logger.error('DB init error:', err));
+    dbReadyPromise.then(() => setReady(true)).catch(err => logger.error('Error waiting for DB:', err));
   }, []);
   return ready;
 }
 
-// Note: getDB is imported from ./db - unified singleton
+// Note: getDB is imported from ./db - unified singleton, already initializes favorites table
 
-// Initialize favorites table
+// Initialize favorites table (kept for backward compatibility, delegates to getDB)
 export async function initFavoritesTable(): Promise<void> {
-  // Return existing promise if initialization is in progress
-  if (isInitializing && initPromise) {
-    return initPromise;
-  }
-
-  // Skip if already initialized
-  if (isTableReady) {
-    return;
-  }
-
-  isInitializing = true;
-
-  initPromise = (async () => {
-    try {
-      const db = await getDB();
-
-      // Check if old table exists without account_id column
-      try {
-        const tableInfo = await db.select<{name: string}[]>(`PRAGMA table_info(favorites)`);
-        const hasAccountId = tableInfo.some(col => col.name === 'account_id');
-        const hasKind = tableInfo.some(col => col.name === 'kind');
-
-        if (tableInfo.length > 0 && (!hasAccountId || !hasKind)) {
-          await db.execute(`DROP TABLE IF EXISTS favorites`);
-        }
-      } catch (e) {
-        // Table doesn't exist yet, continue with creation
-        logger.debug('Table check failed (expected if table does not exist):', e);
-      }
-
-      // Create unified favorites table with kind field
-      await db.execute(`
-        CREATE TABLE IF NOT EXISTS favorites (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          account_id TEXT NOT NULL,
-          kind TEXT NOT NULL,
-          type TEXT NOT NULL,
-          item_id TEXT NOT NULL,
-          parent_id TEXT,
-          name TEXT NOT NULL,
-          poster TEXT,
-          cmd TEXT,
-          season INTEGER,
-          episode INTEGER,
-          extra JSON,
-          created_at INTEGER NOT NULL,
-          UNIQUE(account_id, kind, type, item_id)
-        )
-      `);
-
-      await db.execute(`CREATE INDEX IF NOT EXISTS idx_fav_account ON favorites(account_id)`);
-      await db.execute(`CREATE INDEX IF NOT EXISTS idx_fav_kind ON favorites(kind)`);
-      await db.execute(`CREATE INDEX IF NOT EXISTS idx_fav_type ON favorites(type)`);
-      await db.execute(`CREATE INDEX IF NOT EXISTS idx_fav_parent ON favorites(parent_id)`);
-
-      // Drop old tables if exist
-      await db.execute(`DROP TABLE IF EXISTS favorite_categories`);
-
-      isTableReady = true;
-    } catch (error) {
-      logger.error('Error initializing table:', error);
-      throw error;
-    } finally {
-      isInitializing = false;
-    }
-  })().finally(() => {
-    initPromise = null;
-  });
-
-  return initPromise;
+  await getDB();
 }
 
 // Load favorites (items only, not categories)
@@ -141,10 +71,9 @@ export async function addFavorite(
   metadata?: { name?: string; poster?: string; cmd?: string; parent_id?: string; season?: number; episode?: number; extra?: any }
 ): Promise<void> {
   try {
-    const db = await getDB();
     const now = Date.now();
     const extraJson = metadata?.extra ? JSON.stringify(metadata.extra) : null;
-    await db.execute(
+    await dbExecute(
       `INSERT INTO favorites (account_id, kind, type, item_id, parent_id, name, poster, cmd, season, episode, extra, created_at) 
        VALUES (?, 'item', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(account_id, kind, type, item_id)
@@ -171,15 +100,13 @@ export async function removeFavorite(
   itemId: string
 ): Promise<void> {
   try {
-    const db = await getDB();
     // Normalize: remove .0 suffix for comparison since item_id may be stored with or without it
     const normalizedId = itemId.replace(/\.0$/, '');
     // Delete where item_id matches either format (with or without .0)
-    await db.execute(
+    await dbExecute(
       "DELETE FROM favorites WHERE account_id = ? AND kind = 'item' AND type = ? AND item_id IN (?, ?)",
       [accountId, type, normalizedId, `${normalizedId}.0`]
     );
-    logger.info('Removed favorite:', { accountId, type, itemId: normalizedId });
   } catch (error) {
     logger.error('Error removing favorite:', error);
     throw error;

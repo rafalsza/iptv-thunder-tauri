@@ -27,7 +27,16 @@ data class EpgInfo(
 
 class EpgManager(
     private val lifecycleOwner: LifecycleOwner,
-    private val epgTextView: TextView?,
+    private val epgCard: androidx.cardview.widget.CardView?,
+    private val epgCurrentTime: TextView?,
+    private val epgCurrentTitle: TextView?,
+    private val epgCurrentCategory: TextView?,
+    private val epgCurrentProgressText: TextView?,
+    private val epgProgressBar: android.widget.ProgressBar?,
+    private val epgNextContainer: android.view.View?,
+    private val epgNextTime: TextView?,
+    private val epgNextTitle: TextView?,
+    private val epgNextCategory: TextView?,
     private val getPlayerPosition: () -> Long,
     private val getPlayerDuration: () -> Long,
     private val isLive: () -> Boolean,
@@ -79,7 +88,7 @@ class EpgManager(
 
     fun resetEpg() {
         currentEpg = null
-        epgTextView?.text = "Loading program..."
+        epgCard?.visibility = android.view.View.GONE
     }
 
     private fun parseTimeToMinutes(time: String): Int {
@@ -103,11 +112,15 @@ class EpgManager(
         // VOD progress
         if (duration > 0 && duration != C.TIME_UNSET && !isLive()) {
             val progress = ((position.toFloat() / duration) * 100).coerceIn(0f, 100f)
-            val display = "${String.format("%.0f%%", progress)}"
 
-            epgTextView?.post {
-                epgTextView.text = display
-                epgTextView.visibility = View.VISIBLE
+            epgCard?.post {
+                epgCard.visibility = View.VISIBLE
+                epgCurrentTime?.text = formatTime(position)
+                epgCurrentTitle?.text = "Video Playback"
+                epgCurrentCategory?.visibility = View.GONE
+                epgCurrentProgressText?.text = "${String.format("%.0f%%", progress)}"
+                epgProgressBar?.progress = progress.toInt()
+                epgNextContainer?.visibility = View.GONE
             }
             return
         }
@@ -120,46 +133,52 @@ class EpgManager(
             val startMin = info.startMin
             val endMin = info.endMin
 
-            if (startMin == 0 || endMin == 0) {
-                val categorySuffix = if (info.category.isNotEmpty()) " [${info.category}]" else ""
-                val nextCategorySuffix = if (info.nextCategory.isNotEmpty()) " [${info.nextCategory}]" else ""
-                val display = if (info.nextTitle.isNotEmpty()) {
-                    "${info.start} ${info.title}$categorySuffix\n${info.nextStart} ${info.nextTitle}$nextCategorySuffix"
-                } else {
-                    "${info.start} - ${info.end}  ${info.title}$categorySuffix"
-                }
-                epgTextView?.post {
-                    epgTextView.text = display
-                    epgTextView.visibility = View.VISIBLE
-                }
-                return
-            }
-
-            val adjustedEndMin = if (endMin < startMin) endMin + 24 * 60 else endMin
-            val adjustedNow = if (now < startMin && endMin < startMin) now + 24 * 60 else now
-
-            val progress = when {
-                adjustedNow >= startMin && adjustedNow <= adjustedEndMin ->
-                    ((adjustedNow - startMin).toFloat() / (adjustedEndMin - startMin)) * 100
-                adjustedNow > adjustedEndMin -> 100f
-                else -> 0f
-            }.coerceIn(0f, 100f)
-
-            val progressBar = "█".repeat((progress / 5).toInt()) + "░".repeat(20 - (progress / 5).toInt())
-            val progressText = String.format("%.0f%%", progress)
-
-            val categorySuffix = if (info.category.isNotEmpty()) " [${info.category}]" else ""
-            val nextCategorySuffix = if (info.nextCategory.isNotEmpty()) " [${info.nextCategory}]" else ""
-
-            val display = if (info.nextTitle.isNotEmpty()) {
-                "${info.start} ${info.title}$categorySuffix $progressBar $progressText\n${info.nextStart} ${info.nextTitle}$nextCategorySuffix"
+            val progress = if (startMin == 0 || endMin == 0) {
+                0f
             } else {
-                "${info.start} ${info.title}$categorySuffix  $progressBar $progressText"
+                val adjustedEndMin = if (endMin < startMin) endMin + 24 * 60 else endMin
+                val adjustedNow = if (now < startMin && endMin < startMin) now + 24 * 60 else now
+
+                when {
+                    adjustedNow >= startMin && adjustedNow <= adjustedEndMin ->
+                        ((adjustedNow - startMin).toFloat() / (adjustedEndMin - startMin)) * 100
+                    adjustedNow > adjustedEndMin -> 100f
+                    else -> 0f
+                }.coerceIn(0f, 100f)
             }
 
-            epgTextView?.post {
-                epgTextView.text = display
-                epgTextView.visibility = View.VISIBLE
+            epgCard?.post {
+                epgCard.visibility = View.VISIBLE
+
+                // Current program
+                epgCurrentTime?.text = info.start
+                epgCurrentTitle?.text = info.title
+
+                if (info.category.isNotEmpty()) {
+                    epgCurrentCategory?.text = info.category
+                    epgCurrentCategory?.visibility = View.VISIBLE
+                } else {
+                    epgCurrentCategory?.visibility = View.GONE
+                }
+
+                epgCurrentProgressText?.text = "${String.format("%.0f%%", progress)}"
+                epgProgressBar?.progress = progress.toInt()
+
+                // Next program
+                if (info.nextTitle.isNotEmpty()) {
+                    epgNextContainer?.visibility = View.VISIBLE
+                    epgNextTime?.text = info.nextStart
+                    epgNextTitle?.text = info.nextTitle
+
+                    if (info.nextCategory.isNotEmpty()) {
+                        epgNextCategory?.text = info.nextCategory
+                        epgNextCategory?.visibility = View.VISIBLE
+                    } else {
+                        epgNextCategory?.visibility = View.GONE
+                    }
+                } else {
+                    epgNextContainer?.visibility = View.GONE
+                }
             }
         }
     }

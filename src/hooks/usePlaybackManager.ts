@@ -77,9 +77,11 @@ export const usePlaybackManager = ({
       }
       sessionStorage.setItem('playerLastAccountId', accountId);
 
+      const queryKey = vodFlag ? ['series-stream', channel.id] : ['stream', channel.id, accountId];
+
       const url = await queryClient.fetchQuery({
-        queryKey: ['stream', channel.id, accountId],
-        queryFn: () => client.getStreamUrl(channel.cmd, { 
+        queryKey,
+        queryFn: () => client.getStreamUrl(channel.cmd, {
           signal: controller.signal,
           genreId: channel.tv_genre_id?.toString() || (channel as any).genreId?.toString()
         }),
@@ -274,16 +276,21 @@ export const usePlaybackManager = ({
     const controller = new AbortController();
     abortRef.current = controller;
 
+    player.setBuffering(true);
+
     const result = await updateEpisodesList(episode, explicitIndex);
 
     // Reset autoplay index when manually selecting an episode
     autoplayEpisodeIndexRef.current = explicitIndex ?? currentEpisodeIndexRef.current;
 
     try {
+      // Ensure authentication before getting stream URL
+      await client.ensureAuthenticated();
+
       const url = await queryClient.fetchQuery({
-        queryKey: ['series', episode.cmd, episode.episode],
+        queryKey: ['series-stream', String(episode.id)],
         queryFn: () => fetchStreamUrl(episode, controller.signal),
-        staleTime: 0,
+        staleTime: 5 * 60 * 1000, // 5 minutes - allows prefetch to work
       });
 
       if (controller.signal.aborted) return;
@@ -331,6 +338,53 @@ export const usePlaybackManager = ({
       console.error('❌ Failed to play episode:', error);
     }
   }, [client, queryClient, selectedSeries, activePortal, t]);
+
+  const playNextEpisode = useCallback(async () => {
+    const episodes = episodesRef.current;
+    if (!selectedSeries || episodes.length === 0) {
+      return;
+    }
+
+    const autoplayEpisodeIndex = autoplayEpisodeIndexRef.current;
+    const originalCurrentIndex = currentEpisodeIndexRef.current;
+    
+    if (autoplayEpisodeIndex >= episodes.length - 1) {
+      return;
+    }
+
+    const nextEpisode = episodes[autoplayEpisodeIndex + 1];
+    if (!nextEpisode) {
+      return;
+    }
+
+    autoplayEpisodeIndexRef.current = autoplayEpisodeIndex + 1;
+
+    const nextIndex = episodes.findIndex(ep => 
+      ep.id === nextEpisode.id || 
+      (ep.season === nextEpisode.season && ep.episode === nextEpisode.episode)
+    );
+
+    if (nextIndex === -1) {
+      return;
+    }
+
+    const currentAutoplayToken = Symbol();
+    autoplayTokenRef.current = currentAutoplayToken;
+
+    try {
+      setCurrentEpisodeIndex(nextIndex);
+      currentEpisodeIndexRef.current = nextIndex;
+      await handleEpisodeSelect(nextEpisode, 0, nextIndex);
+
+      if (autoplayTokenRef.current !== currentAutoplayToken) {
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to play next episode:', error);
+      autoplayEpisodeIndexRef.current = autoplayEpisodeIndex;
+      currentEpisodeIndexRef.current = originalCurrentIndex;
+    }
+  }, [selectedSeries, handleEpisodeSelect]);
 
   const handleEpisodeEnded = useCallback(async () => {
     // Cache autoplay setting to avoid repeated async calls
@@ -403,6 +457,7 @@ export const usePlaybackManager = ({
     handleMoviePlay,
     handleEpisodeSelect,
     handleEpisodeEnded,
+    playNextEpisode,
     close,
   };
 };

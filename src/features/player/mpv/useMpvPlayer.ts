@@ -28,7 +28,7 @@ interface UseMpvPlayerReturn {
   currentSubId: string | null;
   handleManualRetry: (preserveIndex?: boolean) => void;
   loadUrl: (streamUrl: string, urlIdx: number, retry: number) => Promise<void>;
-  cleanup: () => Promise<void>;
+  cleanup: (savePosition?: boolean) => Promise<void>;
   getRankedUrls: () => string[];
   setAudioTrack: (id: string) => Promise<void>;
   setSubTrack: (id: string) => Promise<void>;
@@ -40,7 +40,8 @@ export function useMpvPlayer(
   movieId: string | undefined,
   setPosition: (id: string, pos: number, duration?: number) => void,
   onEnded?: () => void,
-  markAsWatched?: (movieId: string, duration: number) => void
+  markAsWatched?: (movieId: string, duration: number) => void,
+  resumePosition: number = 0
 ): UseMpvPlayerReturn {
   const isMountedRef = useRef(true);
   const mpvRunningRef = useRef(false);
@@ -69,6 +70,10 @@ export function useMpvPlayer(
   const volumeRef = useRef(0.8);
   const failedSeekRecoveryRef = useRef(0);
   const hwAccelEnabledRef = useRef(true);
+  const movieIdRef = useRef(movieId);
+  const isVodRef = useRef(isVod);
+  const lastSavedMovieIdRef = useRef<string | null>(null);
+  const resumePositionRef = useRef(resumePosition);
 
   // Smart retry metrics per URL
   interface UrlMetrics {
@@ -123,6 +128,19 @@ export function useMpvPlayer(
     };
     void loadSettings();
   }, []);
+
+  // Update refs when props change to avoid stale closure values
+  useEffect(() => {
+    movieIdRef.current = movieId;
+  }, [movieId]);
+
+  useEffect(() => {
+    isVodRef.current = isVod;
+  }, [isVod]);
+
+  useEffect(() => {
+    resumePositionRef.current = resumePosition;
+  }, [resumePosition]);
 
   // Simple URL return - no ranking needed for single URL
   const getRankedUrls = useCallback(() => {
@@ -374,9 +392,11 @@ export function useMpvPlayer(
     if (isEndedRef.current) return;
     isEndedRef.current = true;
 
-    // Mark as watched for VOD
-    if (isVod && movieId && markAsWatched && durationRef.current > 0) {
-      markAsWatched(movieId, durationRef.current);
+    // Mark as watched for VOD when video ended (end-file) or near-end detected
+    // near-end sets isEndedRef=true which blocks the subsequent end-file event, so both must mark as watched
+    // Use refs instead of props to avoid stale closure when movieId changes during autoplay
+    if (isVodRef.current && movieIdRef.current && markAsWatched && durationRef.current > 0) {
+      markAsWatched(movieIdRef.current, durationRef.current);
     }
 
     // Trigger onEnded callback
@@ -384,7 +404,7 @@ export function useMpvPlayer(
       onEndedRef.current();
     }
 
-  }, [isVod, movieId, markAsWatched]);
+  }, [markAsWatched]);
 
   const handleEndFile = useCallback((data: unknown) => {
     if (!data || typeof data !== 'object') return;
@@ -407,17 +427,14 @@ export function useMpvPlayer(
     try { await destroy(); } catch { /* already dead */ }
   }, []);
 
-  const cleanup = useCallback(async () => {
-    const currentToken = loadingTokenRef.current;
-    
-    // Skip if there's an active loading token - another load is in progress
-    if (currentToken) {
-      return;
-    }
-    
-    // Save position BEFORE resetting refs
-    if (isVod && movieId && currentTimeRef.current > 30) {
-      setPosition(movieId, currentTimeRef.current, durationRef.current);
+  const cleanup = useCallback(async (savePosition: boolean = false) => {
+    // Save position ONLY when explicitly requested (player close, not URL change)
+    // This prevents saving old time from previous episode when autoplay changes episode
+    if (savePosition && isVodRef.current && movieIdRef.current && currentTimeRef.current > 30) {
+      if (lastSavedMovieIdRef.current !== movieIdRef.current) {
+        setPosition(movieIdRef.current, currentTimeRef.current, durationRef.current);
+        lastSavedMovieIdRef.current = movieIdRef.current;
+      }
     }
     // Reset refs after setPosition to prevent old values being used for next stream
     currentTimeRef.current = 0;
@@ -431,7 +448,7 @@ export function useMpvPlayer(
     await safeDestroyMpv();
     // Clear loading token - cleanup complete
     loadingTokenRef.current = null;
-  }, [isVod, movieId, setPosition, clearAllTimers, safeDestroyMpv]);
+  }, [setPosition, clearAllTimers, safeDestroyMpv]);
 
   // Success callback - defined outside loadUrl to avoid closure staleness
   const onSuccessRef = useRef<(() => void) | null>(null);
@@ -506,6 +523,7 @@ export function useMpvPlayer(
     lastTimeUpdateRef.current = Date.now();
     successCalledRef.current = false;
     failedSeekRecoveryRef.current = 0;
+    lastSavedMovieIdRef.current = null; // Reset saved movieId for new episode
 
     clearAllTimers();
     if (unobserveRef.current) {
@@ -603,10 +621,8 @@ export function useMpvPlayer(
     retryCountRef.current++;
     setTotalRetries(prev => prev + 1);
 
-    // Clear loading token before retry - new load will set new token
-    loadingTokenRef.current = null;
-
     // Delegate to scheduleRetry for retry/fallback logic
+    // Don't clear loading token here - scheduleRetry will handle it properly
     scheduleRetry(streamUrl, urlIdx, requestId, loadingToken);
   }, [isRequestCurrent, isTokenCurrent, scheduleRetry]);
 
@@ -696,6 +712,14 @@ export function useMpvPlayer(
       return false;
     }
 
+    // Use start option to begin at resume position, avoiding flash of first second
+    const startTime = resumePositionRef.current > 0 ? resumePositionRef.current : 0;
+    if (startTime > 0) {
+      await setProperty('start', startTime.toString());
+      // Reduce cache for faster resume
+      await setProperty('cache-secs', '5');
+      await setProperty('demuxer-readahead-secs', '2');
+    }
     await command('loadfile', [streamUrl]);
     await setProperty('volume', Math.round(volume * 100));
     return true;

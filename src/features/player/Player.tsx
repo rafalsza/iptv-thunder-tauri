@@ -22,12 +22,13 @@ interface PlayerProps {
   genreId?: string;
   onClose: () => void;
   onEnded?: () => void;
+  onNextEpisode?: () => void;
   onChannelChange?: (channel: any) => void;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const PlayerComponent: React.FC<PlayerProps> = ({
-  url, name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, genreId, onClose, onEnded, onChannelChange,
+  url, name, channelId, client, buffering = false, isVod = false, movieId, resumePosition = 0, genreId, onClose, onEnded, onNextEpisode, onChannelChange,
 }) => {
   const { setPosition } = useResumeStore();
   const [currentPlatform, setCurrentPlatform] = useState<string>('desktop');
@@ -94,6 +95,7 @@ const PlayerComponent: React.FC<PlayerProps> = ({
       onChannelChange={onChannelChange}
       onClose={onClose}
       onEnded={onEnded}
+      onNextEpisode={onNextEpisode}
     />
   );
 };

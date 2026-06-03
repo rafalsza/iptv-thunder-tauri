@@ -119,6 +119,7 @@ function AppInner() {
     handleMoviePlay,
     handleEpisodeSelect,
     handleEpisodeEnded,
+    playNextEpisode,
     close: closePlayer,
   } = usePlaybackManager({
     client,
@@ -171,6 +172,7 @@ function AppInner() {
       setIsSettingsOpen={setIsSettingsOpen}
       setSearch={setSearch}
       handleEpisodeEnded={handleEpisodeEnded}
+      playNextEpisode={playNextEpisode}
       handleChannelSelect={handleChannelSelect}
     >
       <AppContent

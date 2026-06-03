@@ -308,10 +308,22 @@ export class StalkerClient {
   /**
    * Pobieranie listy VOD z informacjami o paginacji
    */
-  async getVODListWithPagination(categoryId: string = '', page: number = 1, options?: { signal?: AbortSignal }): Promise<{items: StalkerVOD[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
+  async getVODListWithPagination(categoryId: string = '', page: number = 1, options?: { signal?: AbortSignal; search?: string }): Promise<{items: StalkerVOD[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
     await this.ensureAuthenticated();
 
-    const params: any = {
+    const params = this.buildVODListParams(categoryId, page, options?.search);
+    const response = await this._makeRequest(params, options?.signal);
+    const parsed = this.parseVODResponse(response);
+
+    if (options?.search?.trim()) {
+      return this.fetchAllSearchResults(params, parsed, categoryId, options.signal);
+    }
+
+    return this.buildVODResult(parsed, page);
+  }
+
+  private buildVODListParams(categoryId: string, page: number, search?: string): Record<string, string> {
+    const params: Record<string, string> = {
       type: 'vod',
       action: 'get_ordered_list',
       p: page.toString(),
@@ -326,35 +338,72 @@ export class StalkerClient {
       params.category = categoryId;
     }
 
-    const response = await this._makeRequest(params, options?.signal);
+    const searchTrimmed = search?.trim();
+    if (searchTrimmed) {
+      params.search = searchTrimmed.toLowerCase();
+    }
 
-    const vods = this.useTauri ?
-      (response?.js?.data || response?.js || []) :
-      (response.data?.js?.data || response.data?.js || []);
+    return params;
+  }
 
-    const totalItems = this.useTauri ?
-      response?.js?.total_items :
-      response.data?.js?.total_items || 0;
-    const maxPageItems = this.useTauri ?
-      response?.js?.max_page_items :
-      response.data?.js?.max_page_items || 30;
-    // API returns cur_page: 0 for all pages, so we calculate currentPage ourselves
-    const currentPage = page - 1; // 0-based indexing
+  private parseVODResponse(response: any): { vods: any[], totalItems: number, maxPageItems: number } {
+    const js = this.useTauri ? response?.js : response?.data?.js;
+    const vods = js?.data || js || [];
+    return {
+      vods,
+      totalItems: js?.total_items ?? 0,
+      maxPageItems: js?.max_page_items ?? 30,
+    };
+  }
 
+  private async fetchAllSearchResults(params: Record<string, string>, parsed: { vods: any[], totalItems: number, maxPageItems: number }, categoryId: string, signal?: AbortSignal): Promise<{items: StalkerVOD[], totalItems: number, maxPageItems: number, currentPage: number, hasMore: boolean}> {
+    const { vods, totalItems, maxPageItems } = parsed;
+    const totalPages = Math.ceil(totalItems / maxPageItems);
+
+    let allVods = [...vods];
+
+    if (totalPages > 1) {
+      for (let p = 2; p <= totalPages; p++) {
+        const pageResp = await this._makeRequest({ ...params, p: p.toString() }, signal);
+        const pageParsed = this.parseVODResponse(pageResp);
+        allVods.push(...pageParsed.vods);
+      }
+    }
+
+    const filteredVods = categoryId
+      ? allVods.filter((v: any) => String(v.category_id) === String(categoryId))
+      : allVods;
+
+    return {
+      items: this.enrichVODs(filteredVods),
+      totalItems: filteredVods.length,
+      maxPageItems,
+      currentPage: 0,
+      hasMore: false
+    };
+  }
+
+  private buildVODResult(parsed: { vods: any[], totalItems: number, maxPageItems: number }, page: number) {
+    const { vods, totalItems, maxPageItems } = parsed;
+    const currentPage = page - 1;
     const totalPages = Math.ceil(totalItems / maxPageItems);
     const hasMore = currentPage < totalPages - 1 && vods.length > 0;
 
     return {
-      items: vods.map((vod: StalkerVOD) => ({
-        ...vod,
-        logo: this.resolveLogoUrl(vod.logo),
-        poster: this.resolvePosterUrl(vod),
-      })),
+      items: this.enrichVODs(vods),
       totalItems,
       maxPageItems,
       currentPage,
       hasMore
     };
+  }
+
+  private enrichVODs(vods: any[]): StalkerVOD[] {
+    return vods.map((vod: StalkerVOD) => ({
+      ...vod,
+      logo: this.resolveLogoUrl(vod.logo),
+      poster: this.resolvePosterUrl(vod),
+    }));
   }
 
   /**
@@ -502,7 +551,7 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
    * Ensure we have a valid token (handshake if needed)
    */
   async ensureAuthenticated(): Promise<void> {
-    if (this.token) {
+    if (this.token && this.isTokenValid()) {
       return;
     }
     await this.handshake();

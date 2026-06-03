@@ -69,6 +69,7 @@ export const getSeriesWithPagination = async (
   categoryId: string = '',
   page: number = 1,
   signal?: AbortSignal,
+  search?: string,
 ): Promise<{
   items: StalkerVOD[];
   totalItems: number;
@@ -94,6 +95,10 @@ export const getSeriesWithPagination = async (
 
   if (categoryId && categoryId !== '*' && categoryId !== '') {
     params.category = categoryId;
+  }
+
+  if (search && search.trim()) {
+    params.search = search.trim();
   }
 
   const response = await client._makeRequest(params, signal);
@@ -159,7 +164,7 @@ export const getSeriesInfo = async (
   const normalizedId = normalizeSeriesId(seriesId);
 
   const account = client.getAccount();
-  
+
   // Primary: use get_ordered_list with movie_id (matches MAG box behavior)
   const response = await client._makeRequest({
     type: 'series',
@@ -202,7 +207,6 @@ export const getSeriesInfo = async (
 
   // Fallback: try get_series_info if no episodes
   if (episodesList.length === 0) {
-
     const fallback = await client._makeRequest({
       type: 'series',
       action: 'get_series_info',
@@ -219,7 +223,7 @@ export const getSeriesInfo = async (
     } else if (fallbackData?.episodes && typeof fallbackData.episodes === 'object') {
       episodesList = Object.values(fallbackData.episodes).flat();
     }
-    
+
     if (!seriesInfo?.name && fallbackData?.series) {
       seriesInfo = fallbackData.series;
     }
@@ -281,8 +285,8 @@ export const getSeriesInfo = async (
   };
 };
 
-export const getSeriesStream = async (client: StalkerClient, cmd: string): Promise<string> => {
-  return client.getVODUrl(cmd);
+export const getSeriesStream = async (client: StalkerClient, cmd: string, episodeNum?: string | number): Promise<string> => {
+  return client.getEpisodeStream(cmd, episodeNum || '1');
 };
 
 // Group episodes by season

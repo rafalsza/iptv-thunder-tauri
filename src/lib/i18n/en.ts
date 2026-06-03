@@ -16,6 +16,7 @@ export const en = {
   autoPlayDescription: 'Automatically play after clicking a channel',
   autoPlayEpisodes: 'Auto-play episodes',
   autoPlayEpisodesDescription: 'Automatically play next episode when current one ends',
+  nextEpisode: 'Next episode',
 
   videoQuality: 'Default Video Quality',
   auto: 'Automatic',

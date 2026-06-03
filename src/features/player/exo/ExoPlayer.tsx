@@ -85,6 +85,65 @@ const validatePlayerParams = (params: any) => {
   return true;
 };
 
+// Helper to load and send EPG data to Android player
+const loadEpgData = async (channelId: number | undefined, isVod: boolean | undefined) => {
+  try {
+    const epgData = await fetchEPGData(channelId || 0, isVod || false);
+
+    if (!epgData || Object.keys(epgData).length === 0) {
+      return;
+    }
+
+    const exoPlayer = (globalThis.window as any).ExoPlayer;
+    if (!exoPlayer || typeof exoPlayer.update_epg !== 'function') {
+      return;
+    }
+
+    exoPlayer.update_epg(
+      epgData.epgTitle || '',
+      epgData.epgStart || '',
+      epgData.epgEnd || '',
+      epgData.epgNextTitle || '',
+      epgData.epgNextStart || '',
+      epgData.epgNextEnd || '',
+      epgData.epgCategory || '',
+      epgData.epgNextCategory || ''
+    );
+    logger.info('[ExoPlayer] EPG data sent to Android player');
+  } catch (e) {
+    logger.warn('[ExoPlayer] Background EPG loading failed:', e);
+  }
+};
+
+// Helper to refresh EPG data periodically
+const refreshEpgData = async (channelId: number) => {
+  try {
+    const epgData = await fetchEPGData(channelId, false);
+    if (!epgData || Object.keys(epgData).length === 0) {
+      return;
+    }
+
+    const exoPlayer = (globalThis.window as any).ExoPlayer;
+    if (!exoPlayer || typeof exoPlayer.update_epg !== 'function') {
+      return;
+    }
+
+    exoPlayer.update_epg(
+      epgData.epgTitle || '',
+      epgData.epgStart || '',
+      epgData.epgEnd || '',
+      epgData.epgNextTitle || '',
+      epgData.epgNextStart || '',
+      epgData.epgNextEnd || '',
+      epgData.epgCategory || '',
+      epgData.epgNextCategory || ''
+    );
+    logger.info('[ExoPlayer] EPG data refreshed and sent to Android player');
+  } catch (e) {
+    logger.warn('[ExoPlayer] Periodic EPG refresh failed:', e);
+  }
+};
+
 export interface ExoPlayerProps {
   url: string;
   name?: string;
@@ -106,8 +165,11 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   name = 'Unknown Channel',
   channelId,
   isVod,
+  movieId,
+  resumePosition = 0,
   genreId,
   client,
+  setPosition,
   onClose,
   onChannelChange,
   onEnded: _onEnded
@@ -157,6 +219,8 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   const hasOpenedRef = React.useRef(false);
   const lastChannelIdRef = React.useRef<number | undefined>(undefined);
   const [playerOpened, setPlayerOpened] = React.useState(false);
+  const lastSavedMovieIdRef = React.useRef<string | null>(null);
+  const epgIntervalRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Register onChannelChange bridge for Android player - resolves URL when user switches channel
   React.useEffect(() => {
@@ -167,7 +231,7 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
     (globalThis.window as any).onChannelChange = async (channelId: number, cmd: string, name: string, genreId: string): Promise<string> => {
       try {
         logger.info('[ExoPlayer] onChannelChange called for channel:', channelId, name);
-        
+
         if (!client) {
           logger.error('[ExoPlayer] No client for onChannelChange');
           return cmd;
@@ -200,6 +264,36 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
     logger.info('[ExoPlayer] onChannelChange bridge registered globally');
   }, [client, onChannelChange]);
 
+  // Register onSavePosition bridge for Android player - saves position when player closes
+  React.useEffect(() => {
+    if (!isAndroid()) return;
+
+    if ((globalThis.window as any).onSavePosition) return;
+
+    (globalThis.window as any).onSavePosition = (movieId: string, time: number, duration: number) => {
+      try {
+        logger.info('[ExoPlayer] onSavePosition called:', { movieId, time, duration });
+
+        // Prevent saving the same movieId twice (e.g., when autoplay changes episode)
+        if (lastSavedMovieIdRef.current === movieId) {
+          logger.info('[ExoPlayer] Skipping save - already saved for:', movieId);
+          return;
+        }
+
+        // Only save if watched more than 30 seconds
+        if (time > 30 && movieId && setPosition) {
+          setPosition(movieId, time, duration);
+          lastSavedMovieIdRef.current = movieId;
+          logger.info('[ExoPlayer] Position saved for:', movieId);
+        }
+      } catch (e) {
+        logger.error('[ExoPlayer] onSavePosition failed:', e);
+      }
+    };
+
+    logger.info('[ExoPlayer] onSavePosition bridge registered globally');
+  }, [setPosition]);
+
   // Open native player first
   React.useEffect(() => {
     // Prevent multiple calls
@@ -207,13 +301,13 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
       return;
     }
     hasOpenedRef.current = true;
-    
-    // Reset channel tracking on new player open
+
+    // Reset tracking on new player open
     lastChannelIdRef.current = undefined;
+    lastSavedMovieIdRef.current = null; // Reset saved movieId for new session
     setPlayerOpened(true);
 
-    (async () => {
-      const openNativePlayer = async () => {
+    const openNativePlayer = async () => {
       if (!isAndroid()) {
         logger.warn('ExoPlayer is only available on Android. Use MpvPlayer on desktop.');
         onClose();
@@ -260,6 +354,8 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         mac,
         token,
         isVod: isVod || false,
+        movieId: movieId || '',
+        resumePosition: resumePosition || 0,
         episodesJson: JSON.stringify(episodes),
         currentEpisodeIndex,
         autoPlayEpisodes,
@@ -291,18 +387,16 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
       }
 
       // Load EPG data in background (non-blocking)
-      (async () => {
-        try {
-          await fetchEPGData(channelId || 0, isVod || false);
-        } catch (e) {
-          logger.warn('[ExoPlayer] Background EPG loading failed:', e);
-        }
-      })();
+      loadEpgData(channelId, isVod);
+
+      // Start periodic EPG refresh (every 30 seconds for live TV)
+      if (!isVod && channelId) {
+        epgIntervalRef.current = setInterval(() => refreshEpgData(channelId), 30000);
+      }
     };
 
     // Open player immediately
-    await openNativePlayer();
-    })();
+    openNativePlayer();
   }, [url, name, channelId, isVod, genreId, client]);
 
   // Send channels to Android after player is opened (non-blocking)
@@ -373,6 +467,17 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
       }
     })();
   }, [categoryChannels, recentChannels, genreId, isVod, client, channelId, onClose, playerOpened]);
+
+  // Cleanup EPG interval on unmount
+  React.useEffect(() => {
+    return () => {
+      if (epgIntervalRef.current) {
+        clearInterval(epgIntervalRef.current);
+        epgIntervalRef.current = null;
+        logger.info('[ExoPlayer] EPG refresh interval cleared');
+      }
+    };
+  }, []);
 
   return null;
 };

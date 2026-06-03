@@ -455,23 +455,18 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const episodes = seriesInfo?.episodes || [];
   const seasons = seriesInfo?.seasons || [];
 
-  // Prefetch stream URL for the newest episode when data loads
+  // Prefetch stream URL for all episodes when data loads
   const prefetchStream = usePrefetchSeriesStream(client);
   useEffect(() => {
     if (episodes.length > 0) {
-      // Find newest episode (highest season, highest episode number)
-      const sortedEpisodes = [...episodes].sort((a, b) => {
-        const seasonA = Number.parseInt(String(a.season ?? 1));
-        const seasonB = Number.parseInt(String(b.season ?? 1));
-        const episodeA = Number.parseInt(String(a.episode ?? 1));
-        const episodeB = Number.parseInt(String(b.episode ?? 1));
-        if (seasonA !== seasonB) return seasonB - seasonA;
-        return episodeB - episodeA;
+      // Prefetch all episodes with delay to avoid server overload
+      episodes.forEach((episode, index) => {
+        if (episode?.cmd) {
+          setTimeout(() => {
+            prefetchStream(episode);
+          }, index * 500); // 500ms delay between each prefetch
+        }
       });
-      const newestEpisode = sortedEpisodes[0];
-      if (newestEpisode?.cmd) {
-        prefetchStream(newestEpisode);
-      }
     }
   }, [episodes, prefetchStream]);
 

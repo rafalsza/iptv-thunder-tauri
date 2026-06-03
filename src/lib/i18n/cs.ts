@@ -15,6 +15,7 @@ export const cs = {
   autoPlay: 'Automatické přehrávání',
   autoPlayDescription: 'Automaticky přehrávat po kliknutí na kanál',
   autoPlayEpisodes: 'Automatické přehrávání epizod',
+  nextEpisode: 'Další epizoda',
   autoPlayEpisodesDescription: 'Automaticky přehrávat další epizodu po skončení aktuální',
 
   videoQuality: 'Výchozí kvalita videa',
