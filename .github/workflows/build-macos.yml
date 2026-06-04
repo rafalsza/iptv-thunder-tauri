@@ -65,6 +65,6 @@ jobs:
           tagName: macos-build
           releaseName: 'macOS App'
           releaseBody: 'macOS build from GitHub Actions'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}
