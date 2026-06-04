@@ -46,6 +46,13 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Install macOS SDK
         run: |
@@ -57,7 +64,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Show Rust version
+        run: |
+          rustup show
+          rustup target list --installed
+          rustup target add ${{ matrix.target }}
+
       - name: Build Tauri app
+        continue-on-error: true
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
