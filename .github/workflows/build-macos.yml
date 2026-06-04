@@ -26,6 +26,8 @@ on:
 jobs:
   build-macos:
     runs-on: macos-latest
+    permissions:
+      contents: write
     strategy:
       matrix:
         target: [x86_64-apple-darwin, aarch64-apple-darwin]
@@ -71,13 +73,13 @@ jobs:
           rustup target add ${{ matrix.target }}
 
       - name: Build Tauri app
-        continue-on-error: true
+        if: startsWith(github.ref, 'refs/tags/')
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: macos-build
-          releaseName: 'macOS App'
+          tagName: macos-build-${{ matrix.target }}
+          releaseName: 'macOS App (${{ matrix.target }})'
           releaseBody: 'macOS build from GitHub Actions'
           releaseDraft: false
           prerelease: false
