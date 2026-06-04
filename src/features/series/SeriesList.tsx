@@ -204,7 +204,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'series');
 
   const favoriteIds = useMemo(
-    () => new Set(favorites.filter(f => f.type === 'series').map(f => String(f.item_id))),
+    () => new Set(favorites.filter(f => f.type === 'series').map(f => String(f.item_id).replace(/\.0$/, ''))),
     [favorites]
   );
 

@@ -266,7 +266,7 @@ export const MovieList: React.FC<MovieListProps> = ({
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'vod');
 
   const favoriteIds = useMemo(
-    () => new Set(favorites.filter(f => f.type === 'vod').map(f => String(f.item_id))),
+    () => new Set(favorites.filter(f => f.type === 'vod').map(f => String(f.item_id).replace(/\.0$/, ''))),
     [favorites],
   );
 

@@ -478,7 +478,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   }, [seasons, selectedSeason]);
 
   const isFavorite = favorites.some(
-    (f) => f.type === 'series' && String(f.item_id) === String(series.id)
+    (f) => f.type === 'series' && f.item_id.replace(/\.0$/, '') === String(series.id).replace(/\.0$/, '')
   );
 
   // Group episodes by season
