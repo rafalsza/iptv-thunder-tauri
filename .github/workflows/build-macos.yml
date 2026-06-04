@@ -1,0 +1,70 @@
+name: Build macOS
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Build target'
+        required: true
+        default: 'x86_64-apple-darwin'
+        type: choice
+        options:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+      release:
+        description: 'Build as release'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-action@stable
+
+      - name: Install macOS SDK
+        run: |
+          # Install Xcode command line tools if needed
+          if ! xcode-select -p > /dev/null 2>&1; then
+            xcode-select --install
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: macos-build
+          releaseName: 'macOS App'
+          releaseBody: 'macOS build from GitHub Actions'
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}
