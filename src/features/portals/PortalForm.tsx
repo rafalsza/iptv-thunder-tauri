@@ -145,6 +145,10 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
       showToast(t('fixErrors'), 'error');
       setIsSubmitting(false);
       form.dataset.submitting = 'false';
+      // Re-enable submit button
+      if (submitButtonRef.current) {
+        submitButtonRef.current.disabled = false;
+      }
       // Focus first invalid field
       if (errors.name) {
         nameInputRef.current?.focus();
