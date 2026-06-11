@@ -424,7 +424,10 @@ export function useMpvPlayer(
   const safeDestroyMpv = useCallback(async () => {
     if (!mpvRunningRef.current) return;
     mpvRunningRef.current = false;
-    try { await destroy(); } catch { /* already dead */ }
+    try {
+      await command('quit');
+      await destroy();
+    } catch { /* already dead */ }
   }, []);
 
   const cleanup = useCallback(async (savePosition: boolean = false) => {

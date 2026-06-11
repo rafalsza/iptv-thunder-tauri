@@ -134,9 +134,9 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
 
   const handleNextEpisode = useCallback(() => {
     if (onNextEpisode && hasNextEpisode) {
-      onNextEpisode();
+      void mpv.cleanup(true).then(() => onNextEpisode());
     }
-  }, [onNextEpisode, hasNextEpisode]);
+  }, [onNextEpisode, hasNextEpisode, mpv.cleanup]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -163,9 +163,9 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
     }
     if ((e.key === 'n' || e.key === 'N') && hasNextEpisode && onNextEpisode) {
       e.preventDefault();
-      onNextEpisode();
+      handleNextEpisode();
     }
-  }, [controls.isFullscreen, controls.handleFullscreen, controls.handleClose, controls.handlePlayPause, controls.handleSeek, isVod, onClose, hasNextEpisode, onNextEpisode]);
+  }, [controls.isFullscreen, controls.handleFullscreen, controls.handleClose, controls.handlePlayPause, controls.handleSeek, isVod, onClose, hasNextEpisode, onNextEpisode, handleNextEpisode]);
 
   // Global keyboard handling
   useEffect(() => {

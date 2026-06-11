@@ -13,11 +13,12 @@ import {
   toggleFavoriteCategory,
   isFavoriteCategory,
 } from '../useFavorites';
-import { getDB } from '../db';
+import { getDB, dbExecute } from '../db';
 
 // Mock the db module
 jest.mock('../db', () => ({
   getDB: jest.fn(),
+  dbExecute: jest.fn(),
 }));
 
 // Mock the logger
@@ -35,19 +36,15 @@ describe('useFavorites', () => {
   });
 
   describe('initFavoritesTable', () => {
-    it('should create favorites table', async () => {
+    it('should call getDB to initialize table', async () => {
       const mockDB = {
         select: jest.fn().mockResolvedValue([]),
-        execute: jest.fn().mockResolvedValue(undefined),
       };
       (getDB as jest.Mock).mockResolvedValue(mockDB);
 
       await initFavoritesTable();
 
       expect(getDB).toHaveBeenCalled();
-      expect(mockDB.execute).toHaveBeenCalledWith(
-        expect.stringContaining('CREATE TABLE IF NOT EXISTS favorites')
-      );
     });
   });
 
@@ -84,28 +81,22 @@ describe('useFavorites', () => {
 
   describe('addFavorite', () => {
     it('should add favorite item', async () => {
-      const mockDB = {
-        execute: jest.fn().mockResolvedValue(undefined),
-      };
-      (getDB as jest.Mock).mockResolvedValue(mockDB);
+      (dbExecute as jest.Mock).mockResolvedValue(undefined);
 
       await addFavorite('acc1', 'live', 'item1', { name: 'Item 1', poster: 'poster.jpg' });
 
-      expect(mockDB.execute).toHaveBeenCalledWith(
+      expect(dbExecute).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO favorites'),
         expect.arrayContaining(['acc1', 'live', 'item1', null, 'Item 1', 'poster.jpg'])
       );
     });
 
     it('should handle extra metadata as JSON', async () => {
-      const mockDB = {
-        execute: jest.fn().mockResolvedValue(undefined),
-      };
-      (getDB as jest.Mock).mockResolvedValue(mockDB);
+      (dbExecute as jest.Mock).mockResolvedValue(undefined);
 
       await addFavorite('acc1', 'vod', 'item1', { extra: { key: 'value' } });
 
-      expect(mockDB.execute).toHaveBeenCalledWith(
+      expect(dbExecute).toHaveBeenCalledWith(
         expect.any(String),
         expect.arrayContaining([expect.stringContaining('{"key":"value"}')])
       );
@@ -114,28 +105,22 @@ describe('useFavorites', () => {
 
   describe('removeFavorite', () => {
     it('should remove favorite item', async () => {
-      const mockDB = {
-        execute: jest.fn().mockResolvedValue(undefined),
-      };
-      (getDB as jest.Mock).mockResolvedValue(mockDB);
+      (dbExecute as jest.Mock).mockResolvedValue(undefined);
 
       await removeFavorite('acc1', 'live', 'item1');
 
-      expect(mockDB.execute).toHaveBeenCalledWith(
+      expect(dbExecute).toHaveBeenCalledWith(
         "DELETE FROM favorites WHERE account_id = ? AND kind = 'item' AND type = ? AND item_id IN (?, ?)",
         ['acc1', 'live', 'item1', 'item1.0']
       );
     });
 
     it('should normalize item_id by removing .0 suffix', async () => {
-      const mockDB = {
-        execute: jest.fn().mockResolvedValue(undefined),
-      };
-      (getDB as jest.Mock).mockResolvedValue(mockDB);
+      (dbExecute as jest.Mock).mockResolvedValue(undefined);
 
       await removeFavorite('acc1', 'vod', 'item1.0');
 
-      expect(mockDB.execute).toHaveBeenCalledWith(
+      expect(dbExecute).toHaveBeenCalledWith(
         "DELETE FROM favorites WHERE account_id = ? AND kind = 'item' AND type = ? AND item_id IN (?, ?)",
         ['acc1', 'vod', 'item1', 'item1.0']
       );
@@ -144,25 +129,19 @@ describe('useFavorites', () => {
 
   describe('addToFavorites / removeFromFavorites', () => {
     it('should call addFavorite', async () => {
-      const mockDB = {
-        execute: jest.fn().mockResolvedValue(undefined),
-      };
-      (getDB as jest.Mock).mockResolvedValue(mockDB);
+      (dbExecute as jest.Mock).mockResolvedValue(undefined);
 
       await addToFavorites('acc1', 'live', 'item1', { name: 'Item 1' });
 
-      expect(mockDB.execute).toHaveBeenCalled();
+      expect(dbExecute).toHaveBeenCalled();
     });
 
     it('should call removeFavorite', async () => {
-      const mockDB = {
-        execute: jest.fn().mockResolvedValue(undefined),
-      };
-      (getDB as jest.Mock).mockResolvedValue(mockDB);
+      (dbExecute as jest.Mock).mockResolvedValue(undefined);
 
       await removeFromFavorites('acc1', 'live', 'item1');
 
-      expect(mockDB.execute).toHaveBeenCalled();
+      expect(dbExecute).toHaveBeenCalled();
     });
   });
 

@@ -252,6 +252,11 @@ describe('usePlaybackManager - handleEpisodeEnded', () => {
   });
 
   it('should handle errors during autoplay gracefully', async () => {
+    const freshQueryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    (mockClient.getEpisodeStream as jest.MockedFunction<any>).mockReset();
     (mockClient.getEpisodeStream as jest.MockedFunction<any>).mockRejectedValue(new Error('Stream error'));
 
     const { result } = renderHook(() =>
@@ -259,7 +264,7 @@ describe('usePlaybackManager - handleEpisodeEnded', () => {
         client: mockClient,
         activePortal: mockActivePortal,
         selectedSeries: mockSelectedSeries,
-        queryClient: mockQueryClient,
+        queryClient: freshQueryClient,
       })
     );
 
@@ -407,6 +412,11 @@ describe('usePlaybackManager - handleEpisodeEnded', () => {
   });
 
   it('should revert refs on autoplay error', async () => {
+    const freshQueryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    (mockClient.getEpisodeStream as jest.MockedFunction<any>).mockReset();
     (mockClient.getEpisodeStream as jest.MockedFunction<any>).mockRejectedValueOnce(new Error('Stream error'));
 
     const { result } = renderHook(() =>
@@ -414,7 +424,7 @@ describe('usePlaybackManager - handleEpisodeEnded', () => {
         client: mockClient,
         activePortal: mockActivePortal,
         selectedSeries: mockSelectedSeries,
-        queryClient: mockQueryClient,
+        queryClient: freshQueryClient,
       })
     );
 
@@ -426,6 +436,7 @@ describe('usePlaybackManager - handleEpisodeEnded', () => {
     mockPlayer.setMedia.mockClear();
 
     // Reset the mock to reject on the next call (autoplay)
+    (mockClient.getEpisodeStream as jest.MockedFunction<any>).mockReset();
     (mockClient.getEpisodeStream as jest.MockedFunction<any>).mockRejectedValueOnce(new Error('Stream error'));
 
     // Trigger episode ended - should handle error

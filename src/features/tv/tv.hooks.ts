@@ -10,6 +10,66 @@ import { saveChannels, upsertChannels, getChannels as getChannelsFromDB, searchC
 import { getChannelEPG, getEPGTimeRange } from '@/features/epg/epg.api';
 import { getGenres, getChannels } from './tv.api';
 
+// Safe localStorage helpers with quota handling
+const cleanupOldIPTVCache = (): void => {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('iptv-channels-')) {
+        keysToRemove.push(key);
+      }
+    }
+    // Sort by age (if we stored timestamps) or just remove oldest half
+    // Since we don't have timestamps, remove half of them
+    const toRemove = keysToRemove.slice(0, Math.ceil(keysToRemove.length / 2));
+    toRemove.forEach(key => localStorage.removeItem(key));
+    console.warn('[TV] Cleaned up old IPTV cache keys due to quota:', toRemove.length);
+  } catch (e) {
+    console.error('[TV] Failed to cleanup cache:', e);
+  }
+};
+
+const safeSetItem = (key: string, value: string): boolean => {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    if (errorMessage.includes('quota') || errorMessage.includes('QuotaExceededError')) {
+      console.warn('[TV] localStorage quota exceeded, cleaning up old cache...');
+      cleanupOldIPTVCache();
+      // Retry once after cleanup
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (retryErr) {
+        console.error('[TV] Failed to set item even after cleanup:', retryErr);
+        return false;
+      }
+    }
+    console.error('[TV] localStorage error:', err);
+    return false;
+  }
+};
+
+const safeGetItem = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch (err) {
+    console.error('[TV] Failed to get item from localStorage:', err);
+    return null;
+  }
+};
+
+const safeRemoveItem = (key: string): void => {
+  try {
+    localStorage.removeItem(key);
+  } catch (err) {
+    console.error('[TV] Failed to remove item from localStorage:', err);
+  }
+};
+
 export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG: boolean = true, enabled: boolean = true) => {
   const accountId = client?.['account']?.id || 'default';
   const prevSignatureRef = useRef<string>('');
@@ -108,7 +168,7 @@ export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG
 
     // Check if we already saved this exact data (prevents re-save after player close)
     const savedSignatureKey = `iptv-channels-saved-${accountId}-${genreId || '*'}`;
-    const alreadySaved = localStorage.getItem(savedSignatureKey);
+    const alreadySaved = safeGetItem(savedSignatureKey);
     if (alreadySaved === signature) {
       return;
     }
@@ -122,7 +182,7 @@ export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG
       orderNum: ch.number || 0,
     })), accountId).then(() => {
       // Mark as saved
-      localStorage.setItem(savedSignatureKey, signature);
+      safeSetItem(savedSignatureKey, signature);
     }).catch(err => console.error('[DB] Failed to save channels:', err));
   }, [query.data, accountId, genreId]);
   
@@ -263,11 +323,11 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
     if (result.totalItems > 0) {
       totalExpectedRef.current = result.totalItems;
       const cacheKey = `iptv-channels-total-${accountId}-${genreId || '*'}`;
-      localStorage.setItem(cacheKey, String(result.totalItems));
+      safeSetItem(cacheKey, String(result.totalItems));
     }
     if (result.maxPageItems > 0) {
       const pageSizeKey = `iptv-channels-pagesize-${accountId}-${genreId || '*'}`;
-      localStorage.setItem(pageSizeKey, String(result.maxPageItems));
+      safeSetItem(pageSizeKey, String(result.maxPageItems));
     }
 
     loadedPagesRef.current.add(pageToLoad);
@@ -303,7 +363,7 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
 
     if (shouldStop) {
       const savedSignatureKey = `iptv-channels-saved-${accountId}-${genreId || '*'}`;
-      localStorage.removeItem(savedSignatureKey);
+      safeRemoveItem(savedSignatureKey);
     }
   };
 
@@ -432,7 +492,7 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
 
           // Check if we have complete data from previous API session (use localStorage for persistence)
           const cacheKey = `iptv-channels-total-${accountId}-${genreId || '*'}`;
-          const totalExpected = localStorage.getItem(cacheKey);
+          const totalExpected = safeGetItem(cacheKey);
           const expectedCount = totalExpected ? Number.parseInt(totalExpected, 10) : 0;
 
           // If we have complete data (cached >= expected), or 'All' cap reached, skip API call
@@ -448,7 +508,7 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
           // Calculate which page to load next based on cached channels count
           // Use stored page size if available, otherwise fall back to 14
           const pageSizeKey = `iptv-channels-pagesize-${accountId}-${genreId || '*'}`;
-          const storedPageSize = parseInt(localStorage.getItem(pageSizeKey) || '14', 10);
+          const storedPageSize = parseInt(safeGetItem(pageSizeKey) || '14', 10);
           pageRef.current = Math.ceil(channels.length / storedPageSize) + 1;
           setTimeout(async () => {
             if (!loadingRef.current && mountedRef.current) {
@@ -488,7 +548,7 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
 
     // Check if we already saved this exact data (prevents re-save after player close)
     const savedSignatureKey = `iptv-channels-saved-${accountId}-${genreId || '*'}`;
-    const alreadySaved = localStorage.getItem(savedSignatureKey);
+    const alreadySaved = safeGetItem(savedSignatureKey);
     if (alreadySaved === signature) {
       return;
     }
@@ -502,7 +562,7 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
       orderNum: ch.number || 0,
     })), accountId).then(() => {
       // Mark as saved
-      localStorage.setItem(savedSignatureKey, signature);
+      safeSetItem(savedSignatureKey, signature);
     }).catch(err => console.error('[DB] Failed to save channels:', err));
   }, [allChannels, accountId, genreId]);
 
