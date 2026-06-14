@@ -238,14 +238,6 @@ function handleMovieDetailsClosing(ctx: MovieDetailsContext): boolean {
     return false;
   }
   
-  // Check if there are too many movies - disable focus restoration for performance
-  const movieCount = document.querySelectorAll('[data-tv-group="movies"]').length;
-  
-  if (movieCount > 500) {
-    state.lastFocusedElement = null;
-    (state as any).lastFocusedIndex = null;
-    return true;
-  }
   
   // Restore focus to the previously focused element
   let idx = state.lastFocusedElement?.dataset.tvIndex;
@@ -254,6 +246,14 @@ function handleMovieDetailsClosing(ctx: MovieDetailsContext): boolean {
   // Fallback to saved index if no element
   if (!idx && (state as any).lastFocusedIndex) {
     idx = (state as any).lastFocusedIndex;
+  }
+  
+  // Fallback to global saved values (persisted across player open/close)
+  if (!tvId && (globalThis as any).__lastFocusedMovieId) {
+    tvId = (globalThis as any).__lastFocusedMovieId;
+  }
+  if (!idx && (globalThis as any).__lastFocusedMovieIndex) {
+    idx = (globalThis as any).__lastFocusedMovieIndex;
   }
   
   if (!tvId && !idx) {
@@ -555,13 +555,11 @@ export function initAutoFocus(): () => void {
             // Even if element not found, try to use index for restoration
             (state as any).lastFocusedIndex = savedIndex;
           }
-          (globalThis as any).__lastFocusedMovieId = null;
-          (globalThis as any).__lastFocusedMovieIndex = null;
+          // Don't clear __lastFocusedMovieId/Index here - they're needed for
+          // MovieList scroll restoration after player closes and list remounts
         }, 300);
       } else if (focusedMovie) {
         state.lastFocusedElement = focusedMovie;
-        (globalThis as any).__lastFocusedMovieId = null;
-        (globalThis as any).__lastFocusedMovieIndex = null;
       }
     }
 

@@ -78,15 +78,16 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
   }, [recentLiveItems]);
   const hasResumedRef = useRef(false);
   const urlChangeIdRef = useRef(0);
+  const cleanupRef = useRef(mpv.cleanup);
+  cleanupRef.current = mpv.cleanup;
 
   // Cleanup on unmount and before page unload - empty deps to run once
   useEffect(() => {
-    const cleanupRef = mpv.cleanup;
-    const handleBeforeUnload = () => void cleanupRef(true); // Save position on close
+    const handleBeforeUnload = () => void cleanupRef.current(true); // Save position on close
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      void cleanupRef(true); // Save position on unmount
+      void cleanupRef.current(true); // Save position on unmount
     };
   }, []);
 
@@ -138,12 +139,17 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
     }
   }, [onNextEpisode, hasNextEpisode, mpv.cleanup]);
 
+  const handleClosePlayer = useCallback(() => {
+    void mpv.cleanup(true);
+    void controls.handleClose(onClose);
+  }, [mpv.cleanup, controls.handleClose, onClose]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       if (controls.isFullscreen) {
         void controls.handleFullscreen();
       } else {
-        void controls.handleClose(onClose);
+        handleClosePlayer();
       }
     }
     if (e.key === 'f' || e.key === 'F') {
@@ -165,7 +171,7 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
       e.preventDefault();
       handleNextEpisode();
     }
-  }, [controls.isFullscreen, controls.handleFullscreen, controls.handleClose, controls.handlePlayPause, controls.handleSeek, isVod, onClose, hasNextEpisode, onNextEpisode, handleNextEpisode]);
+  }, [controls.isFullscreen, controls.handleFullscreen, handleClosePlayer, controls.handlePlayPause, controls.handleSeek, isVod, hasNextEpisode, onNextEpisode, handleNextEpisode]);
 
   // Global keyboard handling
   useEffect(() => {
@@ -195,10 +201,6 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
       onChannelChange(channel);
     }
   }, [onChannelChange]);
-
-  const handleClosePlayer = useCallback(() => {
-    void controls.handleClose(onClose);
-  }, [controls.handleClose, onClose]);
 
   const handlePlayPause = useCallback(() => void controls.handlePlayPause(), [controls.handlePlayPause]);
   const handleVolumeChange = useCallback((v: number) => void controls.handleVolumeChange(v), [controls.handleVolumeChange]);

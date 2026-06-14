@@ -107,16 +107,17 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string, search?
       setStreamingState({ isStreaming: true, loadedPages: 0, totalPages: 0 });
 
       // Layer 1: Fetch from API with progressive hydration
+      const UPDATE_EVERY = 5; // Throttle UI updates to every N pages
       const items = await fetchVODPages(client, effectiveCategoryId, {
         signal,
         search: effectiveSearch,
         onProgress: (progressItems, loadedPages, totalPages) => {
-          // Layer 2: Normalize and update UI progressively
+          // Throttle: only update UI every N pages or on last page
+          if (loadedPages % UPDATE_EVERY !== 0 && loadedPages < totalPages) return;
           if (signal?.aborted) return;
           if (queryClient) {
             const normalized = normalizeVod(progressItems);
             queryClient.setQueryData(['movies-all', accountId, effectiveCategoryId], normalized);
-            // Update streaming state
             setStreamingState({ isStreaming: loadedPages < totalPages, loadedPages, totalPages });
           }
         },

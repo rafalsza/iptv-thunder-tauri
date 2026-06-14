@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { StalkerVOD } from '@/types';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { useFavorites } from '@/hooks/useFavorites';
@@ -398,6 +399,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   onBack,
 }) => {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const containerRef = useRef<HTMLDivElement>(null);
   const { setActiveContainer } = useTVNavigation({
     onBack,
@@ -415,8 +417,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     }
     return () => {
       setActiveContainer(null);
+      // Cancel all in-flight series-stream prefetch queries on unmount
+      queryClient.cancelQueries({ queryKey: ['series-stream'] });
     };
-  }, [setActiveContainer]);
+  }, [setActiveContainer, queryClient]);
   const accountId = usePortalsStore((s) =>
     s.portals.find((p) => p.id === s.activePortalId)?.id ?? 'default'
   );
@@ -458,16 +462,22 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   // Prefetch stream URL for all episodes when data loads
   const prefetchStream = usePrefetchSeriesStream(client);
   useEffect(() => {
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
     if (episodes.length > 0) {
       // Prefetch all episodes with delay to avoid server overload
       episodes.forEach((episode, index) => {
         if (episode?.cmd) {
-          setTimeout(() => {
-            prefetchStream(episode);
-          }, index * 500); // 500ms delay between each prefetch
+          timers.push(setTimeout(() => {
+            if (!cancelled) prefetchStream(episode);
+          }, index * 500)); // 500ms delay between each prefetch
         }
       });
     }
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
   }, [episodes, prefetchStream]);
 
   // Set first available season after loading data

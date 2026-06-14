@@ -231,6 +231,29 @@ export const SeriesList: React.FC<SeriesListProps> = ({
     overscan: 15,
   });
 
+  // Restore scroll + focus after SeriesDetails/player closes (handle virtualization)
+  useEffect(() => {
+    const savedId = (globalThis as any).__lastFocusedMovieId;
+    const savedIndex = (globalThis as any).__lastFocusedMovieIndex;
+    if (savedIndex && savedIndex !== '0') {
+      const indexNum = Number(savedIndex);
+      const rowIndex = Math.floor(indexNum / columnCount);
+      rowVirtualizer.scrollToIndex(rowIndex, { align: 'center' });
+
+      setTimeout(() => {
+        let el: HTMLElement | null = null;
+        if (savedId) {
+          el = document.querySelector(`[data-tv-id="${savedId}"]`) as HTMLElement;
+        }
+        if (!el && savedIndex) {
+          el = document.querySelector(`[data-tv-index="${savedIndex}"]`) as HTMLElement;
+        }
+        if (el) {
+          el.focus({ preventScroll: true });
+        }
+      }, 150);
+    }
+  }, []);
 
   const handleToggleFavorite = useCallback((e: React.MouseEvent, series: StalkerVOD) => {
     e.stopPropagation();

@@ -32,8 +32,9 @@ async function fetchAllSeriesSilent(
   const totalPages = Math.ceil(first.totalItems / first.maxPageItems) || 1;
 
   if (totalPages > 1) {
-    // Parallel fetching with concurrency limit
-    const CONCURRENCY_LIMIT = 3;
+    // Batch requests to avoid overwhelming the server (causes timeouts at 30s)
+    // Server processes ~2.5 req/s, so batch of 10 = ~4s per batch (safe margin)
+    const CONCURRENCY_LIMIT = 10;
     const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
 
     for (let i = 0; i < pageNums.length; i += CONCURRENCY_LIMIT) {
@@ -43,44 +44,23 @@ async function fetchAllSeriesSilent(
       const batchPromises = batch.map(async (page) => {
         try {
           const result = await getSeriesWithPagination(client, categoryId, page, signal);
-          return result.items;
+          if (result.items.length > 0) {
+            allItems.push(...result.items);
+          }
         } catch (e) {
+          if (signal?.aborted) return;
           console.error(`Failed to fetch series page ${page}:`, e);
-          return [];
         }
       });
 
-      const batchResults = await Promise.all(batchPromises);
-      allItems.push(...batchResults.flat());
-
-      // Small delay between batches
-      await new Promise(r => setTimeout(r, 50));
+      await Promise.all(batchPromises);
     }
   }
 
   return sortAndDedupe(allItems);
 }
-async function fetchBatch(
-  client: StalkerClient,
-  categoryId: string,
-  pageNums: number[],
-  signal?: AbortSignal,
-): Promise<StalkerVOD[]> {
-  const batchPromises = pageNums.map(async (page) => {
-    try {
-      const result = await getSeriesWithPagination(client, categoryId, page, signal);
-      return result.items;
-    } catch (e) {
-      console.error(`Failed to fetch series page ${page}:`, e);
-      return [];
-    }
-  });
 
-  const batchResults = await Promise.all(batchPromises);
-  return batchResults.flat();
-}
-
-async function fetchRemainingBatches(
+async function fetchRemainingPages(
   client: StalkerClient,
   categoryId: string,
   queryKey: string[],
@@ -89,36 +69,33 @@ async function fetchRemainingBatches(
   queryClient: ReturnType<typeof useQueryClient>,
   signal?: AbortSignal,
 ): Promise<void> {
-  const CONCURRENCY_LIMIT = 3;
+  // Batch requests to avoid overwhelming the server (causes timeouts at 30s)
+  const CONCURRENCY_LIMIT = 10;
   const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
 
   for (let i = 0; i < pageNums.length; i += CONCURRENCY_LIMIT) {
     if (signal?.aborted) return;
 
     const batch = pageNums.slice(i, i + CONCURRENCY_LIMIT);
-    const newItems = await fetchBatch(client, categoryId, batch, signal);
+    const batchPromises = batch.map(async (page) => {
+      try {
+        const result = await getSeriesWithPagination(client, categoryId, page, signal);
+        if (result.items.length > 0) {
+          allItems.push(...result.items);
+        }
+      } catch (e) {
+        if (signal?.aborted) return;
+        console.error(`Failed to fetch series page ${page}:`, e);
+      }
+    });
 
-    if (newItems.length > 0) {
-      allItems.push(...newItems);
+    await Promise.all(batchPromises);
+
+    // Update UI progressively after each batch
+    if (!signal?.aborted) {
+      queryClient.setQueryData(queryKey, sortAndDedupe(allItems));
     }
-
-    if (!shouldUpdateCache(signal, queryClient, queryKey)) return;
-
-    queryClient.setQueryData(queryKey, sortAndDedupe(allItems));
-
-    await new Promise(r => setTimeout(r, 50));
   }
-}
-
-function shouldUpdateCache(
-  signal?: AbortSignal,
-  queryClient?: ReturnType<typeof useQueryClient>,
-  queryKey?: string[],
-): boolean {
-  if (signal?.aborted) return false;
-  if (!queryClient || !queryKey) return false;
-  const currentData = queryClient.getQueryData(queryKey);
-  return !!currentData;
 }
 
 async function fetchAllSeriesProgressive(
@@ -141,7 +118,7 @@ async function fetchAllSeriesProgressive(
   const totalPages = Math.ceil(first.totalItems / first.maxPageItems) || 1;
 
   if (totalPages > 1) {
-    await fetchRemainingBatches(
+    await fetchRemainingPages(
       client,
       categoryId,
       queryKey,

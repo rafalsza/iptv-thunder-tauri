@@ -422,12 +422,9 @@ export function useMpvPlayer(
   }, []);
 
   const safeDestroyMpv = useCallback(async () => {
-    if (!mpvRunningRef.current) return;
     mpvRunningRef.current = false;
-    try {
-      await command('quit');
-      await destroy();
-    } catch { /* already dead */ }
+    try { await command('quit'); } catch { /* already dead */ }
+    try { await destroy(); } catch { /* already dead */ }
   }, []);
 
   const cleanup = useCallback(async (savePosition: boolean = false) => {
@@ -439,6 +436,9 @@ export function useMpvPlayer(
         lastSavedMovieIdRef.current = movieIdRef.current;
       }
     }
+    // Invalidate loading token FIRST to prevent any in-flight lifecycle queue
+    // from starting a new MPV instance after we destroy
+    loadingTokenRef.current = null;
     // Reset refs after setPosition to prevent old values being used for next stream
     currentTimeRef.current = 0;
     durationRef.current = 0;
@@ -449,8 +449,6 @@ export function useMpvPlayer(
     }
     clearAllTimers();
     await safeDestroyMpv();
-    // Clear loading token - cleanup complete
-    loadingTokenRef.current = null;
   }, [setPosition, clearAllTimers, safeDestroyMpv]);
 
   // Success callback - defined outside loadUrl to avoid closure staleness

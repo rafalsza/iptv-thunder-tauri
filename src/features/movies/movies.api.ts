@@ -40,50 +40,41 @@ export async function fetchVODPages(
     : undefined;
 
   if (totalPages) {
-    // Progressive fetch: load pages in parallel with concurrency limit
+    // Batch requests to avoid overwhelming the server (causes timeouts at 30s)
+    // Server processes ~2.5 req/s, so batch of 10 = ~4s per batch (safe margin)
+    const CONCURRENCY_LIMIT = 10;
     const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
-    let allItems = [...first.items];
+    const allItems = [...first.items];
+    let completedPages = 1;
 
     // Emit first page immediately for progressive hydration
     if (onProgress) {
-      onProgress(first.items, 1, totalPages);
+      onProgress(allItems, 1, totalPages);
     }
 
-    // Parallel fetching with conservative concurrency to avoid 503 errors
-    const CONCURRENCY_LIMIT = 3;
-
     for (let i = 0; i < pageNums.length; i += CONCURRENCY_LIMIT) {
-      const batch = pageNums.slice(i, i + CONCURRENCY_LIMIT);
-
       if (signal?.aborted) {
         throw new DOMException('aborted', 'AbortError');
       }
 
-      try {
-        const batchPromises = batch.map(async (page) => {
-          try {
-            const pageData = await client.getVODListWithPagination(categoryId, page, { signal, search });
-            return { page, items: pageData.items };
-          } catch (e) {
-            console.error(`Failed to fetch page ${page}:`, e);
-            return { page, items: [] };
+      const batch = pageNums.slice(i, i + CONCURRENCY_LIMIT);
+      const batchPromises = batch.map(async (page) => {
+        try {
+          const pageData = await client.getVODListWithPagination(categoryId, page, { signal, search });
+          if (pageData.items.length > 0) {
+            allItems.push(...pageData.items);
           }
-        });
-
-        const batchResults = await Promise.all(batchPromises);
-
-        // Merge results and emit progress
-        const newItems = batchResults.flatMap(r => r.items);
-        allItems = [...allItems, ...newItems];
-
-        if (onProgress) {
-          onProgress(allItems, i + batch.length, totalPages);
+        } catch (e) {
+          if (signal?.aborted) return;
+          console.error(`Failed to fetch page ${page}:`, e);
         }
+      });
 
-        // Small delay between batches to avoid server overload
-        await new Promise(r => setTimeout(r, 50));
-      } catch (e) {
-        console.error('Batch fetch error:', e);
+      await Promise.all(batchPromises);
+      completedPages += batch.length;
+
+      if (onProgress) {
+        onProgress(allItems, completedPages, totalPages);
       }
     }
 

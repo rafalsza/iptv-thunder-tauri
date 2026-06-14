@@ -293,15 +293,29 @@ export const MovieList: React.FC<MovieListProps> = ({
     overscan: 15, // Increased to keep more elements in DOM for focus restoration
   });
 
-  // Restore scroll position after MovieDetails closes (handle virtualization)
+  // Restore scroll + focus after MovieDetails/player closes (handle virtualization)
   useEffect(() => {
+    const savedId = (globalThis as any).__lastFocusedMovieId;
     const savedIndex = (globalThis as any).__lastFocusedMovieIndex;
     if (savedIndex && savedIndex !== '0') {
       const indexNum = Number(savedIndex);
-      console.log('[MovieList] Scrolling to saved index:', indexNum);
       const rowIndex = Math.floor(indexNum / cols);
       // Scroll to the row containing the saved movie
       virtualizer.scrollToIndex(rowIndex, { align: 'center' });
+      
+      // After scroll, wait for virtualizer to render then restore focus
+      setTimeout(() => {
+        let el: HTMLElement | null = null;
+        if (savedId) {
+          el = document.querySelector(`[data-tv-id="${savedId}"]`) as HTMLElement;
+        }
+        if (!el && savedIndex) {
+          el = document.querySelector(`[data-tv-index="${savedIndex}"]`) as HTMLElement;
+        }
+        if (el) {
+          el.focus({ preventScroll: true });
+        }
+      }, 150);
     }
   }, []);
 
