@@ -97,7 +97,7 @@ export const getSeriesWithPagination = async (
     params.category = categoryId;
   }
 
-  if (search && search.trim()) {
+  if (search?.trim()) {
     params.search = search.trim();
   }
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { StreamState, Track } from '../mpv.types';
 import { formatDurationTime } from '../mpv.utils';
@@ -58,75 +58,79 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
   const categoryOpenedOnceRef = useRef(false);
   const recentOpenedOnceRef = useRef(false);
 
-  // Save scroll position when category menu closes
-  useEffect(() => {
-    if (!showCategoryChannelsMenu && categoryCarouselRef.current) {
+  // Save category scroll position on every scroll event (ref is valid while menu is open)
+  const handleCategoryScroll = useCallback(() => {
+    if (categoryCarouselRef.current) {
       categoryScrollPosRef.current = categoryCarouselRef.current.scrollLeft;
     }
-  }, [showCategoryChannelsMenu]);
+  }, []);
+
+  // Save recent scroll position on every scroll event
+  const handleRecentScroll = useCallback(() => {
+    if (recentCarouselRef.current) {
+      recentScrollPosRef.current = recentCarouselRef.current.scrollLeft;
+    }
+  }, []);
 
   // Restore scroll position when category menu opens
   useEffect(() => {
-    if (showCategoryChannelsMenu && categoryCarouselRef.current) {
-      if (categoryOpenedOnceRef.current && categoryScrollPosRef.current > 0) {
-        // Restore saved position
-        categoryCarouselRef.current.scrollLeft = categoryScrollPosRef.current;
+    if (!showCategoryChannelsMenu) return;
+    requestAnimationFrame(() => {
+      const el = categoryCarouselRef.current;
+      if (!el) return;
+      const currentChannelElement = el.querySelector(
+        `[data-channel-id="${currentChannelId}"]`
+      ) as HTMLElement;
+      if (categoryOpenedOnceRef.current) {
+        el.scrollLeft = categoryScrollPosRef.current;
       } else {
-        // First open - scroll to current channel
-        const currentChannelElement = categoryCarouselRef.current.querySelector(
-          `[data-tv-id*="tv-channel-${currentChannelId}"]`
-        ) as HTMLElement;
         if (currentChannelElement) {
-          const containerWidth = categoryCarouselRef.current.clientWidth;
+          const containerWidth = el.clientWidth;
           const elementLeft = currentChannelElement.offsetLeft;
           const elementWidth = currentChannelElement.clientWidth;
           const targetScroll = elementLeft - (containerWidth / 2) + (elementWidth / 2);
-          categoryCarouselRef.current.scrollLeft = Math.max(0, targetScroll);
+          el.scrollLeft = Math.max(0, targetScroll);
         }
         categoryOpenedOnceRef.current = true;
       }
-    }
+      currentChannelElement?.focus({ preventScroll: true });
+    });
   }, [showCategoryChannelsMenu, currentChannelId]);
-
-  // Save scroll position when recent menu closes
-  useEffect(() => {
-    if (!showRecentChannelsMenu && recentCarouselRef.current) {
-      recentScrollPosRef.current = recentCarouselRef.current.scrollLeft;
-    }
-  }, [showRecentChannelsMenu]);
 
   // Restore scroll position when recent menu opens
   useEffect(() => {
-    if (showRecentChannelsMenu && recentCarouselRef.current) {
-      if (recentOpenedOnceRef.current && recentScrollPosRef.current > 0) {
-        // Restore saved position
-        recentCarouselRef.current.scrollLeft = recentScrollPosRef.current;
+    if (!showRecentChannelsMenu) return;
+    requestAnimationFrame(() => {
+      const el = recentCarouselRef.current;
+      if (!el) return;
+      const currentChannelElement = el.querySelector(
+        `[data-channel-id="${currentChannelId}"]`
+      ) as HTMLElement;
+      if (recentOpenedOnceRef.current) {
+        el.scrollLeft = recentScrollPosRef.current;
       } else {
-        // First open - scroll to current channel
-        const currentChannelElement = recentCarouselRef.current.querySelector(
-          `[data-tv-id*="recent-${currentChannelId}"]`
-        ) as HTMLElement;
         if (currentChannelElement) {
-          const containerWidth = recentCarouselRef.current.clientWidth;
+          const containerWidth = el.clientWidth;
           const elementLeft = currentChannelElement.offsetLeft;
           const elementWidth = currentChannelElement.clientWidth;
           const targetScroll = elementLeft - (containerWidth / 2) + (elementWidth / 2);
-          recentCarouselRef.current.scrollLeft = Math.max(0, targetScroll);
+          el.scrollLeft = Math.max(0, targetScroll);
         }
         recentOpenedOnceRef.current = true;
       }
-    }
+      currentChannelElement?.focus({ preventScroll: true });
+    });
   }, [showRecentChannelsMenu, currentChannelId]);
-  // Filter channels for carousel (exclude hidden and current channel)
+  // Filter channels for carousel (exclude hidden channels only; current channel stays in list)
   const filteredCategoryChannels = categoryChannels?.filter(channel => 
-    !channel.name.startsWith('#####') && channel.id !== currentChannelId
+    !channel.name.startsWith('#####')
   ) || [];
 
   const hasCategoryChannels = filteredCategoryChannels.length > 0;
 
-  // Filter recent channels (exclude hidden channels and current channel)
+  // Filter recent channels (exclude hidden channels only; current channel stays in list)
   const filteredRecentChannels = recentChannels?.filter(channel => 
-    !channel.name.startsWith('#####') && channel.id !== currentChannelId
+    !channel.name.startsWith('#####')
   ) || [];
 
   const hasRecentChannels = filteredRecentChannels.length > 0;
@@ -380,22 +384,23 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
               scrollbarWidth: 'thin',
               scrollbarColor: '#4b5563 transparent',
             }}
+            onScroll={handleCategoryScroll}
           >
             {filteredCategoryChannels.map((channel) => {
               const isCurrent = channel.id === currentChannelId;
               return (
                 <button
                   key={channel.id}
+                  data-channel-id={channel.id}
                   onClick={() => {
                     if (onChannelSelect && !isCurrent) {
                       onChannelSelect(channel);
+                      setShowCategoryChannelsMenu(false);
                     }
-                    setShowCategoryChannelsMenu(false);
                   }}
-                  disabled={isCurrent}
                   className={`flex-shrink-0 w-[140px] p-3 rounded-lg transition-all flex flex-col items-center gap-2 ${
                     isCurrent
-                      ? 'bg-green-600/30 border-2 border-green-500 cursor-not-allowed'
+                      ? 'bg-green-600/30 border-2 border-green-500 cursor-default'
                       : 'bg-zinc-800/50 hover:bg-zinc-700 border border-zinc-700 hover:border-green-500 cursor-pointer'
                   }`}
                   data-tv-focusable
@@ -432,22 +437,23 @@ export const PlayerControls = React.memo<PlayerControlsProps>(({
               scrollbarWidth: 'thin',
               scrollbarColor: '#4b5563 transparent',
             }}
+            onScroll={handleRecentScroll}
           >
             {filteredRecentChannels.map((channel) => {
               const isCurrent = channel.id === currentChannelId;
               return (
                 <button
                   key={`recent-${channel.id}`}
+                  data-channel-id={channel.id}
                   onClick={() => {
                     if (onChannelSelect && !isCurrent) {
                       onChannelSelect(channel);
+                      setShowRecentChannelsMenu(false);
                     }
-                    setShowRecentChannelsMenu(false);
                   }}
-                  disabled={isCurrent}
                   className={`flex-shrink-0 w-[140px] p-3 rounded-lg transition-all flex flex-col items-center gap-2 ${
                     isCurrent
-                      ? 'bg-blue-600/30 border-2 border-blue-500 cursor-not-allowed'
+                      ? 'bg-blue-600/30 border-2 border-blue-500 cursor-default'
                       : 'bg-zinc-800/50 hover:bg-zinc-700 border border-zinc-700 hover:border-blue-500 cursor-pointer'
                   }`}
                   data-tv-focusable

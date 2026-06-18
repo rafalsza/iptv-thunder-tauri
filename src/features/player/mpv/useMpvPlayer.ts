@@ -714,7 +714,7 @@ export function useMpvPlayer(
     }
 
     // Use start option to begin at resume position, avoiding flash of first second
-    const startTime = resumePositionRef.current > 0 ? resumePositionRef.current : 0;
+    const startTime = Math.max(resumePositionRef.current, 0);
     if (startTime > 0) {
       await setProperty('start', startTime.toString());
       // Reduce cache for faster resume
