@@ -341,7 +341,7 @@ function tryNavigateToLeftInRow(grid: any, row: number, col: number): Navigation
 }
 
 function isInCarouselGroup(groupId: string | undefined): boolean {
-  return CAROUSEL_ORDER.indexOf(groupId as any) >= 0;
+  return CAROUSEL_ORDER.includes(groupId as any);
 }
 
 function tryNavigateToPreviousInCarousel(
@@ -559,6 +559,13 @@ function handleLeftNavigationAtColumnZero(
   current: { index?: number; groupId?: string; id?: string },
   state: NavigationState
 ): string | null {
+  // Skip handling for favorite groups - let containerPlugin handle it
+  // These groups need special LEFT navigation to sidebar items, not fallback to categories
+  const skipGroups = ['favorite-categories', 'favorite-movie-categories', 'favorite-series-categories', 'favorite-channels', 'favorite-movies', 'favorite-series'];
+  if (current.groupId && skipGroups.includes(current.groupId)) {
+    return null;
+  }
+
   if (shouldTryPreviousRowNode(grid, row, current)) {
     const prevNode = getPreviousRowNode(grid, current);
     if (prevNode) {

@@ -39,7 +39,19 @@ const rules: Rule[] = [
   // General navigation rules
   { match: (d, c, _) => d === 'left' && c.containerId === 'main' && !GRID_GROUPS.has(c.groupId || '') && c.groupId !== 'movie-actions', handler: findNavigationActive, log: 'left from main (non-grid, non-movie-actions)' },
   { match: (d, c, _) => d === 'right' && c.groupId === 'movie-categories', handler: findGridInitial, log: 'right from movie-categories to first movie' },
+  { match: (d, c, _) => d === 'right' && c.groupId === 'favorite-movie-categories', handler: findGridInitial, log: 'right from favorite-movie-categories to first favorite movie' },
   { match: (d, c, _) => d === 'right' && c.groupId === 'series-categories', handler: findGridInitial, log: 'right from series-categories to first series' },
+  { match: (d, c, _) => d === 'right' && c.groupId === 'favorite-series-categories', handler: findGridInitial, log: 'right from favorite-series-categories to first favorite series' },
+  // LEFT from favorite movie/series categories back to sidebar navigation items (only when at column 0)
+  { match: (d, c, _) => d === 'left' && c.groupId === 'favorite-movie-categories' && c.gridPosition?.col === 0, handler: findNavigationFavoriteMovieCategories, log: 'left from favorite-movie-categories col 0 to sidebar' },
+  { match: (d, c, _) => d === 'left' && c.groupId === 'favorite-series-categories' && c.gridPosition?.col === 0, handler: findNavigationFavoriteSeriesCategories, log: 'left from favorite-series-categories col 0 to sidebar' },
+  // LEFT from favorite movies/series back to sidebar navigation items (only when at column 0)
+  { match: (d, c, _) => d === 'left' && c.groupId === 'favorite-movies' && c.gridPosition?.col === 0, handler: findNavigationFavoriteMovies, log: 'left from favorite-movies col 0 to sidebar' },
+  { match: (d, c, _) => d === 'left' && c.groupId === 'favorite-series' && c.gridPosition?.col === 0, handler: findNavigationFavoriteSeries, log: 'left from favorite-series col 0 to sidebar' },
+  // LEFT from favorite channels back to sidebar navigation item (only when at column 0)
+  { match: (d, c, _) => d === 'left' && c.groupId === 'favorite-channels' && c.gridPosition?.col === 0, handler: findNavigationFavoriteChannels, log: 'left from favorite-channels col 0 to sidebar' },
+  // LEFT from favorite channel categories back to sidebar navigation item (only when at column 0)
+  { match: (d, c, _) => d === 'left' && c.groupId === 'favorite-categories' && c.gridPosition?.col === 0, handler: findNavigationFavoriteCategories, log: 'left from favorite-categories col 0 to sidebar' },
   { match: (d, c, _) => d === 'up' && c.groupId === 'movie-actions' && !c.isInitial, handler: findMovieActionsInitial, log: 'up from movie-actions to X' },
   { match: (d, c, _) => d === 'back' && c.groupId === 'portal-actions', handler: findPortalsContentActive, log: 'back from portal-actions' },
   // From back button, go to poster (below), otherwise go to season selector
@@ -283,16 +295,70 @@ function findMovieActionsInitial(state: NavigationState): string | null {
 
 function findGridInitial(state: NavigationState): string | null {
   // Find the first grid element in main container
-  const gridElements = state.nodes.filter(n => 
-    n.containerId === 'main' && 
+  const gridElements = state.nodes.filter(n =>
+    n.containerId === 'main' &&
     GRID_GROUPS.has(n.groupId || '') &&
-    n.groupId !== 'movie-categories' && 
+    n.groupId !== 'movie-categories' &&
     n.groupId !== 'series-categories' &&
-    n.groupId !== 'favorite-movie-categories' && 
+    n.groupId !== 'favorite-movie-categories' &&
     n.groupId !== 'favorite-series-categories'
   );
   const initialElement = gridElements.find(n => n.isInitial);
   return initialElement?.id ?? gridElements[0]?.id ?? null;
+}
+
+function findNavigationFavoriteMovies(state: NavigationState): string | null {
+  // Find the favorite-movies nav item in the sidebar (navigation container)
+  const navItem = state.nodes.find(n =>
+    n.containerId === 'navigation' &&
+    n.id === 'favorite-movies'
+  );
+  return navItem?.id ?? null;
+}
+
+function findNavigationFavoriteSeries(state: NavigationState): string | null {
+  // Find the favorite-series nav item in the sidebar (navigation container)
+  const navItem = state.nodes.find(n =>
+    n.containerId === 'navigation' &&
+    n.id === 'favorite-series'
+  );
+  return navItem?.id ?? null;
+}
+
+function findNavigationFavoriteMovieCategories(state: NavigationState): string | null {
+  // Find the favorite-movie-categories nav item in the sidebar (navigation container)
+  const navItem = state.nodes.find(n =>
+    n.containerId === 'navigation' &&
+    n.id === 'favorite-movie-categories'
+  );
+  return navItem?.id ?? null;
+}
+
+function findNavigationFavoriteSeriesCategories(state: NavigationState): string | null {
+  // Find the favorite-series-categories nav item in the sidebar (navigation container)
+  const navItem = state.nodes.find(n =>
+    n.containerId === 'navigation' &&
+    n.id === 'favorite-series-categories'
+  );
+  return navItem?.id ?? null;
+}
+
+function findNavigationFavoriteChannels(state: NavigationState): string | null {
+  // Find the favorite-channels nav item in the sidebar (navigation container)
+  const navItem = state.nodes.find(n =>
+    n.containerId === 'navigation' &&
+    n.id === 'favorite-channels'
+  );
+  return navItem?.id ?? null;
+}
+
+function findNavigationFavoriteCategories(state: NavigationState): string | null {
+  // Find the favorite-categories nav item in the sidebar (navigation container)
+  const navItem = state.nodes.find(n =>
+    n.containerId === 'navigation' &&
+    n.id === 'favorite-categories'
+  );
+  return navItem?.id ?? null;
 }
 
 function findNextByIndex(state: NavigationState, current: NavigationState['nodes'][0]): string | null {

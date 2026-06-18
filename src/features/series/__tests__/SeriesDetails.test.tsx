@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SeriesDetails } from '../SeriesDetails';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerVOD } from '@/types';
@@ -119,8 +120,11 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     { id: 5, name: 'Episode 5', season: '3', episode: '1', cmd: 'ep5', description: '', added: '2024-01-01', censored: false },
   ];
 
+  let queryClient: QueryClient;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
     mockUseTranslation.mockReturnValue({
       t: mockT,
@@ -161,12 +165,14 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
 
   it('should play the first episode (lowest season, lowest episode) when play button is clicked', () => {
     render(
-      <SeriesDetails
-        series={mockSeries}
-        client={mockClient}
-        onPlay={mockOnPlay}
-        onBack={mockOnBack}
-      />
+      <QueryClientProvider client={queryClient}>
+        <SeriesDetails
+          series={mockSeries}
+          client={mockClient}
+          onPlay={mockOnPlay}
+          onBack={mockOnBack}
+        />
+      </QueryClientProvider>
     );
 
     const playButton = screen.getByText('Odtwórz pierwszy odcinek');
@@ -200,12 +206,14 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     } as any);
 
     render(
-      <SeriesDetails
-        series={mockSeries}
-        client={mockClient}
-        onPlay={mockOnPlay}
-        onBack={mockOnBack}
-      />
+      <QueryClientProvider client={queryClient}>
+        <SeriesDetails
+          series={mockSeries}
+          client={mockClient}
+          onPlay={mockOnPlay}
+          onBack={mockOnBack}
+        />
+      </QueryClientProvider>
     );
 
     const playButton = screen.getByText('Odtwórz pierwszy odcinek');
@@ -233,12 +241,14 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     } as any);
 
     render(
-      <SeriesDetails
-        series={mockSeries}
-        client={mockClient}
-        onPlay={mockOnPlay}
-        onBack={mockOnBack}
-      />
+      <QueryClientProvider client={queryClient}>
+        <SeriesDetails
+          series={mockSeries}
+          client={mockClient}
+          onPlay={mockOnPlay}
+          onBack={mockOnBack}
+        />
+      </QueryClientProvider>
     );
 
     // Play button should not be rendered when there are no episodes
@@ -265,12 +275,14 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     } as any);
 
     render(
-      <SeriesDetails
-        series={mockSeries}
-        client={mockClient}
-        onPlay={mockOnPlay}
-        onBack={mockOnBack}
-      />
+      <QueryClientProvider client={queryClient}>
+        <SeriesDetails
+          series={mockSeries}
+          client={mockClient}
+          onPlay={mockOnPlay}
+          onBack={mockOnBack}
+        />
+      </QueryClientProvider>
     );
 
     const playButton = screen.getByText('Odtwórz pierwszy odcinek');
@@ -289,12 +301,14 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
 
   it('should update selected season to match the newest episode season', () => {
     render(
-      <SeriesDetails
-        series={mockSeries}
-        client={mockClient}
-        onPlay={mockOnPlay}
-        onBack={mockOnBack}
-      />
+      <QueryClientProvider client={queryClient}>
+        <SeriesDetails
+          series={mockSeries}
+          client={mockClient}
+          onPlay={mockOnPlay}
+          onBack={mockOnBack}
+        />
+      </QueryClientProvider>
     );
 
     const playButton = screen.getByText('Odtwórz pierwszy odcinek');
@@ -318,12 +332,14 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     } as any);
 
     render(
-      <SeriesDetails
-        series={mockSeries}
-        client={mockClient}
-        onPlay={mockOnPlay}
-        onBack={mockOnBack}
-      />
+      <QueryClientProvider client={queryClient}>
+        <SeriesDetails
+          series={mockSeries}
+          client={mockClient}
+          onPlay={mockOnPlay}
+          onBack={mockOnBack}
+        />
+      </QueryClientProvider>
     );
 
     const playButton = screen.getByText('Odtwórz pierwszy odcinek');
@@ -351,12 +367,14 @@ describe('SeriesDetails - handlePlayFirstEpisode', () => {
     } as any);
 
     render(
-      <SeriesDetails
-        series={mockSeries}
-        client={mockClient}
-        onPlay={mockOnPlay}
-        onBack={mockOnBack}
-      />
+      <QueryClientProvider client={queryClient}>
+        <SeriesDetails
+          series={mockSeries}
+          client={mockClient}
+          onPlay={mockOnPlay}
+          onBack={mockOnBack}
+        />
+      </QueryClientProvider>
     );
 
     const playButton = screen.getByText('Odtwórz pierwszy odcinek');
