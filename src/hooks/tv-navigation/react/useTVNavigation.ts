@@ -250,6 +250,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
     el.focus({ preventScroll: true });
     el.classList.add('tv-focused');
+    (globalThis as any).__tvLastFocusedElement = el;
 
     // Special case: reset scroll to top when focusing first element of for-you-live
     const isFirstForYouLive = el.dataset.tvGroup === 'for-you-live' && el.dataset.tvIndex === '0';
@@ -436,9 +437,9 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       });
     };
     
-    window.addEventListener('resize', resizeListener);
-    window.addEventListener('scroll', scrollListener, true);
-    window.addEventListener('tv-navigation-rebuild', rebuildListener);
+    globalThis.addEventListener('resize', resizeListener);
+    globalThis.addEventListener('scroll', scrollListener, true);
+    globalThis.addEventListener('tv-navigation-rebuild', rebuildListener);
 
     // Optimized mutation observer - observe only TV containers
     let mutationScheduled = false;
@@ -600,7 +601,6 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
       // If dropdown was open and now closed, restore focus to last element
       if (!isRadixOpen && lastFocusBeforeDropdownRef.current) {
         const savedElement = lastFocusBeforeDropdownRef.current;
-        lastFocusBeforeDropdownRef.current = null;
 
         isRestoringFocusRef.current = true;
 
@@ -630,11 +630,9 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
         // Start restoration attempts
         setTimeout(tryRestore, 50);
-      } else {
-        // Clear the ref if dropdown is closed and we don't need to restore
-        // This prevents restoring stale focus on future focus events
-        lastFocusBeforeDropdownRef.current = null;
       }
+      // Clear the ref - either Radix closed (prevent stale restore) or Radix open (save latest below)
+      lastFocusBeforeDropdownRef.current = null;
 
       // Check if this is a TV focusable element
       if (!(target instanceof Element)) return;
@@ -652,6 +650,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
 
         // Always update currentElementRef to track actual focused element
         currentElementRef.current = focusableEl;
+        (globalThis as any).__tvLastFocusedElement = focusableEl;
 
         // If Radix is opening, save this element
         if (isRadixOpen && !lastFocusBeforeDropdownRef.current) {
@@ -667,6 +666,25 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   // Stable event listeners - never re-bind
   useEffect(() => {
     const keyHandler = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      // Android TV focus recovery: if WebView loses focus to body/document, restore it.
+      // This commonly happens when the soft keyboard opens/closes or when the WebView pauses.
+      const isFocusLost = !activeEl || activeEl === document.body || activeEl === document.documentElement;
+      if (isFocusLost) {
+        const lastFocused = (globalThis as any).__tvLastFocusedElement as HTMLElement | null;
+        const isEnabled = (el: HTMLElement | null) =>
+          !!el && document.contains(el) && !el.hasAttribute('disabled') && el.getAttribute('aria-disabled') !== 'true';
+        const fallback = (isEnabled(lastFocused) ? lastFocused : null) ||
+          (isEnabled(currentElementRef.current) ? currentElementRef.current : null) ||
+          document.querySelector('[data-tv-focusable]') as HTMLElement | null;
+        if (fallback) {
+          fallback.focus({ preventScroll: true });
+          currentElementRef.current = fallback;
+          (globalThis as any).__tvLastFocusedElement = fallback;
+          updateState();
+        }
+      }
+
       const targetEl = e.target as HTMLElement;
       // Use currentElementRef if available, otherwise fall back to e.target
       const currentEl = currentElementRef.current || targetEl;
