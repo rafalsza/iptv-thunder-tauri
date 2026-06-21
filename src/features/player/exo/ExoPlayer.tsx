@@ -8,7 +8,7 @@ import { createLogger } from '@/lib/logger';
 import { usePlaybackStore } from '@/store/playback.store';
 import { usePortalsStore } from '@/store/portals.store';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
-import { getChannelEPG, getCurrentProgram, getNextProgram, formatEPGTime } from '@/features/epg/epg.api';
+import { getChannelEPG, getCurrentProgram, getNextProgram, formatEPGTime, fetchExternalEPG } from '@/features/epg/epg.api';
 import { useChannels } from '@/features/tv/tv.hooks';
 import { useRecentViewed } from '@/hooks/useRecentItems';
 
@@ -24,7 +24,7 @@ const isAndroid = () => {
 };
 
 // Helper to fetch EPG data for a channel
-const fetchEPGData = async (channelId: number, isVod: boolean) => {
+const fetchEPGData = async (channelId: number, isVod: boolean, channelName?: string) => {
   if (isVod || !channelId) {
     return {};
   }
@@ -35,9 +35,16 @@ const fetchEPGData = async (channelId: number, isVod: boolean) => {
       return {};
     }
 
-    const client = new StalkerClient(activePortal as any);
-    logger.info('[ExoPlayer] Fetching EPG data for channel:', channelId);
-    const epg = await getChannelEPG(client, channelId);
+    const effectiveEpgUrl = usePortalsStore.getState().getEffectiveEpgUrl();
+    logger.info('[ExoPlayer] Fetching EPG data for channel:', channelId, 'name:', channelName, 'externalEpg:', !!effectiveEpgUrl);
+
+    let epg;
+    if (effectiveEpgUrl && channelName) {
+      epg = await fetchExternalEPG(effectiveEpgUrl, channelId, undefined, undefined, channelName);
+    } else {
+      const client = new StalkerClient(activePortal as any);
+      epg = await getChannelEPG(client, channelId);
+    }
 
     if (!epg || epg.length === 0) {
       return {};
@@ -86,9 +93,9 @@ const validatePlayerParams = (params: any) => {
 };
 
 // Helper to load and send EPG data to Android player
-const loadEpgData = async (channelId: number | undefined, isVod: boolean | undefined) => {
+const loadEpgData = async (channelId: number | undefined, isVod: boolean | undefined, channelName?: string) => {
   try {
-    const epgData = await fetchEPGData(channelId || 0, isVod || false);
+    const epgData = await fetchEPGData(channelId || 0, isVod || false, channelName);
 
     if (!epgData || Object.keys(epgData).length === 0) {
       return;
@@ -116,9 +123,9 @@ const loadEpgData = async (channelId: number | undefined, isVod: boolean | undef
 };
 
 // Helper to refresh EPG data periodically
-const refreshEpgData = async (channelId: number) => {
+const refreshEpgData = async (channelId: number, channelName?: string) => {
   try {
-    const epgData = await fetchEPGData(channelId, false);
+    const epgData = await fetchEPGData(channelId, false, channelName);
     if (!epgData || Object.keys(epgData).length === 0) {
       return;
     }
@@ -254,6 +261,15 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
           onChannelChange({ id: channelId, cmd, name, tv_genre_id: genreId });
         }
 
+        // Fetch and send EPG data for the new channel (non-blocking)
+        loadEpgData(channelId, false, name);
+
+        // Update periodic EPG refresh to use the new channelId
+        if (epgIntervalRef.current) {
+          clearInterval(epgIntervalRef.current);
+        }
+        epgIntervalRef.current = setInterval(() => refreshEpgData(channelId, name), 30000);
+
         return streamUrl;
       } catch (e) {
         logger.error('[ExoPlayer] onChannelChange failed:', e);
@@ -387,11 +403,11 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
       }
 
       // Load EPG data in background (non-blocking)
-      loadEpgData(channelId, isVod);
+      loadEpgData(channelId, isVod, name);
 
       // Start periodic EPG refresh (every 30 seconds for live TV)
       if (!isVod && channelId) {
-        epgIntervalRef.current = setInterval(() => refreshEpgData(channelId), 30000);
+        epgIntervalRef.current = setInterval(() => refreshEpgData(channelId, name), 30000);
       }
     };
 
