@@ -11,6 +11,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { TranslationKey } from '@/lib/translations';
 import { useTheme } from '@/components/theme-provider';
 import { clearRecentViewed } from '@/hooks/useRecentItems';
+import { TVSelect } from '@/components/ui/TVSelect';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface SettingsProps {
@@ -207,82 +208,43 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                   <div className="max-w-md space-y-8" data-tv-tab="general">
                     <div>
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('theme')}</label>
-                      <select
-                        data-tv-focusable
-                        data-tv-id="settings-theme-select"
-                        data-tv-group="settings-content"
-                        data-tv-initial
-                        data-tv-index="10"
-                        tabIndex={0}
+                      <TVSelect
+                        tvId="settings-theme-select"
+                        tvGroup="settings-theme"
+                        tvIndex="10"
+                        tvInitial
                         value={localTheme}
-                        onChange={(e) => {
-                          const newTheme = e.target.value as 'light' | 'dark' | 'system';
-                          setLocalTheme(newTheme);
-                          setTheme(newTheme);
+                        onChange={(newTheme) => {
+                          setLocalTheme(newTheme as 'light' | 'dark' | 'system');
+                          setTheme(newTheme as 'light' | 'dark' | 'system');
                         }}
-                        onKeyDown={(e: React.KeyboardEvent<HTMLSelectElement>) => {
-                          if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-                            e.preventDefault();
-                            // Try to open select dropdown using showPicker API
-                            const select = e.currentTarget;
-                            if ('showPicker' in select) {
-                              select.showPicker();
-                            } else {
-                              // Fallback: focus and expand size to show all options
-                              const fallbackSelect = select as HTMLSelectElement;
-                              fallbackSelect.size = fallbackSelect.options.length;
-                              fallbackSelect.focus();
-                            }
-                          } else if (e.key === 'Escape' || e.key === 'Back') {
-                            // Close expanded select
-                            e.currentTarget.size = 0;
-                          }
-                        }}
-                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900"
-                      >
-                        <option value="dark">{t('dark')}</option>
-                        <option value="light">{t('light')}</option>
-                        <option value="system">{t('system')}</option>
-                      </select>
+                        options={[
+                          { value: 'dark', label: t('dark') },
+                          { value: 'light', label: t('light') },
+                          { value: 'system', label: t('system') },
+                        ]}
+                        className="dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg"
+                      />
                     </div>
 
                     <div>
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('language')}</label>
-                      <select
-                        data-tv-focusable
-                        data-tv-id="settings-lang-select"
-                        data-tv-group="settings-content"
-                        data-tv-index="11"
-                        tabIndex={0}
+                      <TVSelect
+                        tvId="settings-lang-select"
+                        tvGroup="settings-language"
+                        tvIndex="11"
                         value={currentLang}
-                        onChange={(e) => changeLanguage(e.target.value as 'pl' | 'en' | 'cs' | 'sk' | 'be' | 'de')}
-                        onKeyDown={(e: React.KeyboardEvent<HTMLSelectElement>) => {
-                          if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-                            e.preventDefault();
-                            // Try to open select dropdown using showPicker API
-                            const select = e.currentTarget;
-                            if ('showPicker' in select) {
-                              select.showPicker();
-                            } else {
-                              // Fallback: focus and expand size to show all options
-                              const fallbackSelect = select as HTMLSelectElement;
-                              fallbackSelect.size = fallbackSelect.options.length;
-                              fallbackSelect.focus();
-                            }
-                          } else if (e.key === 'Escape' || e.key === 'Back') {
-                            // Close expanded select
-                            e.currentTarget.size = 0;
-                          }
-                        }}
-                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900"
-                      >
-                        <option value="pl">Polski</option>
-                        <option value="cs">Čeština</option>
-                        <option value="sk">Slovenčina</option>
-                        <option value="be">Беларуская</option>
-                        <option value="de">Deutsch</option>
-                        <option value="en">English</option>
-                      </select>
+                        onChange={(lang) => changeLanguage(lang as 'pl' | 'en' | 'cs' | 'sk' | 'be' | 'de')}
+                        options={[
+                          { value: 'pl', label: 'Polski' },
+                          { value: 'cs', label: 'Čeština' },
+                          { value: 'sk', label: 'Slovenčina' },
+                          { value: 'be', label: 'Беларуская' },
+                          { value: 'de', label: 'Deutsch' },
+                          { value: 'en', label: 'English' },
+                        ]}
+                        className="dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg"
+                      />
                     </div>
                   </div>
                 )}
@@ -326,21 +288,20 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-3 block">
                         {t('videoQuality')}
                       </label>
-                      <select
-                        data-tv-focusable
-                        data-tv-id="settings-quality-select"
-                        data-tv-group="settings-content"
-                        data-tv-index="32"
-                        tabIndex={0}
+                      <TVSelect
+                        tvId="settings-quality-select"
+                        tvGroup="settings-quality"
+                        tvIndex="32"
                         value={settings.videoQuality}
-                        onChange={(e) => updateSetting('videoQuality', e.target.value as any)}
-                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900"
-                      >
-                        <option value="auto">{t('auto')}</option>
-                        <option value="1080p">{t('1080p')}</option>
-                        <option value="720p">{t('720p')}</option>
-                        <option value="480p">{t('480p')}</option>
-                      </select>
+                        onChange={(quality) => updateSetting('videoQuality', quality as any)}
+                        options={[
+                          { value: 'auto', label: t('auto') },
+                          { value: '1080p', label: t('1080p') },
+                          { value: '720p', label: t('720p') },
+                          { value: '480p', label: t('480p') },
+                        ]}
+                        className="dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg"
+                      />
                     </div>
 
                     <div>
@@ -386,38 +347,16 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                   <div className="max-w-lg space-y-8" data-tv-tab="epg">
                     <div>
                       <label className="text-sm dark:text-slate-400 text-slate-600 mb-2 block">{t('epgSource')}</label>
-                      <select
-                        data-tv-focusable
-                        data-tv-id="settings-epg-service"
-                        data-tv-group="settings-content"
-                        data-tv-initial
-                        data-tv-index="20"
-                        tabIndex={0}
+                      <TVSelect
+                        tvId="settings-epg-service"
+                        tvGroup="settings-epg"
+                        tvIndex="20"
+                        tvInitial
                         value={selectedService}
-                        onChange={(e) => handleEpgServiceChange(e.target.value)}
-                        onKeyDown={(e: React.KeyboardEvent<HTMLSelectElement>) => {
-                          if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
-                            e.preventDefault();
-                            const select = e.currentTarget;
-                            if ('showPicker' in select) {
-                              select.showPicker();
-                            } else {
-                              const fallbackSelect = select as HTMLSelectElement;
-                              fallbackSelect.size = fallbackSelect.options.length;
-                              fallbackSelect.focus();
-                            }
-                          } else if (e.key === 'Escape' || e.key === 'Back') {
-                            e.currentTarget.size = 0;
-                          }
-                        }}
-                        className="w-full px-4 py-3 dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg dark:text-white text-slate-900"
-                      >
-                        {epgServices.map(service => (
-                          <option key={service.id} value={service.id}>
-                            {service.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(serviceId) => handleEpgServiceChange(serviceId)}
+                        options={epgServices.map(service => ({ value: service.id, label: service.name }))}
+                        className="dark:bg-slate-800 bg-white dark:border border-slate-700 border-gray-300 rounded-lg"
+                      />
                     </div>
 
                     {showCustomUrl && (
