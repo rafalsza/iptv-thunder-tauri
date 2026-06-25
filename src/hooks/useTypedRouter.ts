@@ -38,10 +38,14 @@ export const isSeriesDetails = (route: Route): route is { type: 'series-details'
   route.type === 'series-details';
 
 // Get simple route type string (for comparisons)
-export const getRouteType = (route: Route): string => route.type;
+export const getRouteType = (route: Route): Route['type'] => route.type;
 
 // Check if route matches a specific type
 export const isRouteType = (route: Route, type: Route['type']): boolean => route.type === type;
+
+// Navbar routes (top-level navigation items)
+const NAVBAR_ROUTES = new Set<Route['type']>(['portals', 'for-you', 'tv', 'movies', 'series']);
+const isNavbarRoute = (type: Route['type']): boolean => NAVBAR_ROUTES.has(type);
 
 // =========================
 // 🎮 ROUTER HOOK
@@ -52,7 +56,7 @@ export const useTypedRouter = () => {
   const [selectedCategory, setSelectedCategory] = useState<StalkerGenre | null>(null);
 
   // Track previous route for back navigation
-  const previousRouteRef = useRef<Route>({ type: 'movies' });
+  const previousRouteRef = useRef<Route>({ type: 'portals' });
 
   // Navigate to a simple route
   const navigate = useCallback((newRoute: SimpleRoute) => {
@@ -64,15 +68,19 @@ export const useTypedRouter = () => {
 
   // Navigate to movie details (with data)
   const navigateToMovie = useCallback((movie: StalkerVOD) => {
-    previousRouteRef.current = route;
-    setRoute({ type: 'movie-details', movie });
-  }, [route]);
+    setRoute(currentRoute => {
+      previousRouteRef.current = currentRoute;
+      return { type: 'movie-details', movie };
+    });
+  }, []);
 
   // Navigate to series details (with data)
   const navigateToSeries = useCallback((series: StalkerVOD) => {
-    previousRouteRef.current = route;
-    setRoute({ type: 'series-details', series });
-  }, [route]);
+    setRoute(currentRoute => {
+      previousRouteRef.current = currentRoute;
+      return { type: 'series-details', series };
+    });
+  }, []);
 
   // Go back from details view
   const goBack = useCallback(() => {
@@ -87,7 +95,7 @@ export const useTypedRouter = () => {
       setSelectedCategory(null);
     }
     setRoute(targetRoute);
-  }, [route]);
+  }, []);
 
   // Focus management - save/restore focus on route changes
   const lastFocusRef = useRef<Record<string, string>>({});
@@ -102,18 +110,14 @@ export const useTypedRouter = () => {
       const focusedGroup = focusedElement?.dataset.tvGroup;
 
       // Don't save navbar element as focus for main content routes
-      const isPreviousNavbarRoute = previousRouteType === 'portals' || previousRouteType === 'for-you' ||
-                                    previousRouteType === 'tv' || previousRouteType === 'movies' ||
-                                    previousRouteType === 'series';
+      const isPreviousNavbarRoute = isNavbarRoute(previousRouteType);
       const isNavbarElement = focusedGroup === 'navbar';
 
       // Only save focus if:
       // 1. Previous route is NOT a navbar route, OR
       // 2. The focused element is NOT a navbar element
       // 3. Current route is NOT a navbar route (don't save navbar focus when going to main content)
-      const isCurrentNavbarRoute = currentRouteType === 'portals' || currentRouteType === 'for-you' ||
-                                   currentRouteType === 'tv' || currentRouteType === 'movies' ||
-                                   currentRouteType === 'series';
+      const isCurrentNavbarRoute = isNavbarRoute(currentRouteType);
 
       if ((!isPreviousNavbarRoute || !isNavbarElement) && !isCurrentNavbarRoute && focusedElement?.dataset.tvFocusable) {
         lastFocusRef.current[previousRouteType] = focusedElement.id || focusedElement.dataset.tvId || '';
@@ -121,19 +125,18 @@ export const useTypedRouter = () => {
 
       // Restore focus for current route
       const savedFocusId = lastFocusRef.current[currentRouteType];
-      const isNavbarRoute = currentRouteType === 'portals' || currentRouteType === 'for-you' ||
-                           currentRouteType === 'tv' || currentRouteType === 'movies' ||
-                           currentRouteType === 'series';
+      const currentIsNavbarRoute = isNavbarRoute(currentRouteType);
 
       if (savedFocusId) {
-        setTimeout(() => {
+        requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
           const savedElement = document.getElementById(savedFocusId) || document.querySelector(`[data-tv-id="${savedFocusId}"]`);
           const isSubmenuItem = savedElement?.dataset?.tvGroup &&
                                savedElement.dataset.tvGroup !== 'navbar' &&
                                savedElement.dataset.tvGroup !== 'portals-content';
           const isSavedNavbarElement = savedElement?.dataset?.tvGroup === 'navbar';
 
-          if (isNavbarRoute && isSubmenuItem) {
+          if (currentIsNavbarRoute && isSubmenuItem) {
             const navbarElement = document.querySelector(`[data-tv-id="${currentRouteType}"]`) as HTMLElement;
             if (navbarElement) {
               navbarElement.focus();
@@ -141,16 +144,18 @@ export const useTypedRouter = () => {
             return;
           }
 
-          if (!isNavbarRoute && (isSavedNavbarElement || isSubmenuItem)) {
+          if (!currentIsNavbarRoute && (isSavedNavbarElement || isSubmenuItem)) {
             return;
           }
 
           if (savedElement && 'focus' in savedElement) {
             savedElement.focus();
           }
-        }, 50);
-      } else if (isNavbarRoute) {
-        setTimeout(() => {
+        });
+        });
+      } else if (currentIsNavbarRoute) {
+        requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
           // Don't focus if user already has focus in sidebar
           const activeElement = document.activeElement as HTMLElement;
           const isInSidebar = activeElement?.closest('[data-tv-container="navigation"]') !== null;
@@ -161,29 +166,30 @@ export const useTypedRouter = () => {
           if (navbarElement) {
             navbarElement.focus();
           }
-        }, 50);
+        });
+        });
       }
     }
   }, [route]);
 
   // Handle category selection with context-aware navigation
   const navigateToCategory = useCallback((category: StalkerGenre) => {
-    setSelectedCategory(category);
-
     setRoute(currentRoute => {
-      previousRouteRef.current = currentRoute;
       switch (currentRoute.type) {
         case 'movie-categories':
         case 'favorite-movie-categories':
           previousRouteRef.current = currentRoute;
+          setSelectedCategory(category);
           return { type: 'movies' };
         case 'series-categories':
         case 'favorite-series-categories':
           previousRouteRef.current = currentRoute;
+          setSelectedCategory(category);
           return { type: 'series' };
         case 'categories':
         case 'favorite-categories':
           previousRouteRef.current = currentRoute;
+          setSelectedCategory(category);
           return { type: 'tv' };
         case 'movies':
         case 'series':
@@ -208,7 +214,6 @@ export const useTypedRouter = () => {
   return {
     // Core routing
     route,
-    setRoute,
     navigate,
 
     // Typed navigation helpers

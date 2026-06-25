@@ -83,7 +83,6 @@ describe('useTypedRouter hook', () => {
     const { result } = renderHook(() => useTypedRouter());
 
     expect(result.current).toHaveProperty('route');
-    expect(result.current).toHaveProperty('setRoute');
     expect(result.current).toHaveProperty('navigate');
     expect(result.current).toHaveProperty('navigateToMovie');
     expect(result.current).toHaveProperty('navigateToSeries');
@@ -155,6 +154,41 @@ describe('useTypedRouter hook', () => {
     expect(result.current.route).toEqual({ type: 'movies' });
   });
 
+  it('should handle consecutive navigations without stale closure', () => {
+    const { result } = renderHook(() => useTypedRouter());
+    const movie1 = { id: 1, name: 'Movie 1' } as any;
+    const movie2 = { id: 2, name: 'Movie 2' } as any;
+
+    act(() => {
+      result.current.navigate({ type: 'movies' });
+    });
+
+    act(() => {
+      result.current.navigateToMovie(movie1);
+    });
+
+    act(() => {
+      result.current.navigateToMovie(movie2);
+    });
+
+    // goBack should return to movie1 (the previous route), not movies
+    act(() => {
+      result.current.goBack();
+    });
+
+    expect(result.current.route).toEqual({ type: 'movie-details', movie: movie1 });
+  });
+
+  it('should stay on portals when goBack is called before any navigation', () => {
+    const { result } = renderHook(() => useTypedRouter());
+
+    act(() => {
+      result.current.goBack();
+    });
+
+    expect(result.current.route).toEqual({ type: 'portals' });
+  });
+
   it('should clear selected category when going back from content to category view', () => {
     const { result } = renderHook(() => useTypedRouter());
     const category = { id: '1', title: 'Test' } as any;
@@ -216,5 +250,21 @@ describe('useTypedRouter hook', () => {
     });
 
     expect(result.current.selectedCategory).toEqual(category);
+  });
+
+  it('should not set selectedCategory when navigateToCategory called from non-category route', () => {
+    const { result } = renderHook(() => useTypedRouter());
+    const category = { id: '1', title: 'Test' } as any;
+
+    // Start on portals (non-category route)
+    expect(result.current.route).toEqual({ type: 'portals' });
+
+    act(() => {
+      result.current.navigateToCategory(category);
+    });
+
+    // Route should not change, category should not be set
+    expect(result.current.route).toEqual({ type: 'portals' });
+    expect(result.current.selectedCategory).toBeNull();
   });
 });
