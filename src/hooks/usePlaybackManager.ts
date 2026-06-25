@@ -182,7 +182,7 @@ export const usePlaybackManager = ({
 
     // Fetch and cache the data
     const rawData = await queryClient.fetchQuery({
-      queryKey: ['series', seriesId, 'info'],
+      queryKey: ['series-info', seriesId],
       queryFn: async () => {
         return await getSeriesInfo(client!, seriesId);
       },

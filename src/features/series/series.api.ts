@@ -87,10 +87,8 @@ export const getSeriesWithPagination = async (
     action: 'get_ordered_list',
     p: page.toString(),
     sortby: 'added',
-    hd: '0',
     mac: account.mac,
     JsHttpRequest: '1-xml',
-    max_page_items: '500',
   };
 
   if (categoryId && categoryId !== '*' && categoryId !== '') {
@@ -132,11 +130,9 @@ export const getSeriesCategories = async (
 
   await client.getProfileAndAuth();
 
-  const account = client.getAccount();
   const params = {
     type: 'series',
     action: 'get_categories',
-    mac: account.mac,
     JsHttpRequest: '1-xml',
   };
 

@@ -11,84 +11,105 @@ interface WindowControls {
 
 export const useWindowControls = (): WindowControls => {
   const [isMaximized, setIsMaximized] = useState(false);
-  const unlistenRef = useRef<(() => void) | null>(null);
-  const windowRef = useRef(getCurrentWindow());
+  const isMaximizedRef = useRef(false);
+  const unlistenResizeRef = useRef<(() => void) | null>(null);
+  const unlistenMoveRef = useRef<(() => void) | null>(null);
+  const windowRef = useRef<ReturnType<typeof getCurrentWindow> | null>(null);
+  windowRef.current ??= getCurrentWindow();
 
   useEffect(() => {
     let isMounted = true;
+    let throttleTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const init = async () => {
+    const syncMaximized = async () => {
       try {
-        const maximized = await windowRef.current.isMaximized();
-        if (isMounted) {
+        const maximized = await windowRef.current!.isMaximized();
+        if (isMounted && maximized !== isMaximizedRef.current) {
+          isMaximizedRef.current = maximized;
           setIsMaximized(maximized);
         }
-      } catch {
-        // Silent fail - component will use default state
+      } catch (e) {
+        if (import.meta.env.DEV) console.warn('[useWindowControls] Failed to sync isMaximized:', e);
       }
     };
 
-    const setupWindowListener = async () => {
+    const throttledSync = () => {
+      if (throttleTimer) return;
+      throttleTimer = setTimeout(() => {
+        throttleTimer = null;
+        syncMaximized();
+      }, 100);
+    };
+
+    const setupListeners = async () => {
       try {
-        const unlisten = await listen('tauri://resize', async () => {
-          try {
-            const maximized = await windowRef.current.isMaximized();
-            if (isMounted) {
-              setIsMaximized(maximized);
-            }
-          } catch {
-            // Silent fail - component will continue with current state
-          }
-        });
+        const unlistenResize = await listen('tauri://resize', throttledSync);
         if (isMounted) {
-          unlistenRef.current = unlisten;
+          unlistenResizeRef.current = unlistenResize;
+        } else {
+          unlistenResize();
         }
-      } catch {
-        // Silent fail - component will not sync window state
+      } catch (e) {
+        if (import.meta.env.DEV) console.warn('[useWindowControls] Failed to setup resize listener:', e);
+      }
+
+      try {
+        const unlistenMove = await listen('tauri://move', throttledSync);
+        if (isMounted) {
+          unlistenMoveRef.current = unlistenMove;
+        } else {
+          unlistenMove();
+        }
+      } catch (e) {
+        if (import.meta.env.DEV) console.warn('[useWindowControls] Failed to setup move listener:', e);
       }
     };
 
-    (async () => {
-      await init();
-      await setupWindowListener();
-    })();
+    void Promise.all([syncMaximized(), setupListeners()]);
 
     return () => {
       isMounted = false;
-      if (unlistenRef.current) {
-        unlistenRef.current();
-        unlistenRef.current = null;
+      if (throttleTimer) {
+        clearTimeout(throttleTimer);
+        throttleTimer = null;
+      }
+      if (unlistenResizeRef.current) {
+        unlistenResizeRef.current();
+        unlistenResizeRef.current = null;
+      }
+      if (unlistenMoveRef.current) {
+        unlistenMoveRef.current();
+        unlistenMoveRef.current = null;
       }
     };
   }, []);
 
   const handleMaximize = useCallback(async () => {
     try {
-      if (isMaximized) {
-        await windowRef.current.unmaximize();
-        setIsMaximized(false);
+      if (isMaximizedRef.current) {
+        await windowRef.current!.unmaximize();
       } else {
-        await windowRef.current.maximize();
-        setIsMaximized(true);
+        await windowRef.current!.maximize();
       }
-    } catch {
-      // Silent fail - user can try again
+      // State will be synced via tauri://resize / tauri://move listener
+    } catch (e) {
+      if (import.meta.env.DEV) console.warn('[useWindowControls] handleMaximize failed:', e);
     }
-  }, [isMaximized]);
+  }, []);
 
   const handleMinimize = useCallback(async () => {
     try {
-      await windowRef.current.minimize();
-    } catch {
-      // Silent fail - user can try again
+      await windowRef.current!.minimize();
+    } catch (e) {
+      if (import.meta.env.DEV) console.warn('[useWindowControls] handleMinimize failed:', e);
     }
   }, []);
 
   const handleClose = useCallback(async () => {
     try {
-      await windowRef.current.close();
-    } catch {
-      // Silent fail - user can try again
+      await windowRef.current!.close();
+    } catch (e) {
+      if (import.meta.env.DEV) console.warn('[useWindowControls] handleClose failed:', e);
     }
   }, []);
 

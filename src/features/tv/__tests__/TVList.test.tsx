@@ -33,6 +33,22 @@ jest.mock('@/hooks/useLongPress', () => ({
   })),
 }));
 
+jest.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: jest.fn(() => ({
+    getVirtualItems: jest.fn(() => [
+      { key: 'row-0', index: 0, start: 0 },
+    ]),
+    getTotalSize: jest.fn(() => 140),
+    measureElement: jest.fn(),
+  })),
+}));
+
+Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+  configurable: true,
+  writable: true,
+  value: jest.fn(),
+});
+
 jest.mock('framer-motion', () => ({
   motion: {
     div: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,

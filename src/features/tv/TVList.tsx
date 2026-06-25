@@ -1,7 +1,8 @@
 // =========================
 // 📺 TV LIST (UI)
 // =========================
-import React, { useMemo, useRef, useCallback, useEffect } from 'react';
+import React, { useMemo, useRef, useCallback, useEffect, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useLazyChannels, usePrefetchStream, useChannelSearch } from './tv.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -10,6 +11,16 @@ import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel, StalkerGenre } from '@/types';
 import { ChannelLogo } from './ChannelLogo';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const getRowHeight = () => {
+  if (typeof window === 'undefined') return 130;
+  const width = window.innerWidth;
+  if (width < 640) return 110;
+  if (width < 768) return 120;
+  if (width < 1024) return 125;
+  return 140;
+};
 
 interface TVListProps {
   client: StalkerClient;
@@ -27,12 +38,9 @@ interface ChannelCardProps {
   onToggleFavorite: (e: React.MouseEvent, channel: StalkerChannel) => void;
   onLongPress: (channel: StalkerChannel) => void;
   onPrefetch: (channel: StalkerChannel) => void;
-  isLastItem: boolean;
-  observerRef: React.RefObject<IntersectionObserver | null>;
-  hasMore: boolean;
 }
 
-const ChannelCard: React.FC<ChannelCardProps> = ({
+const ChannelCard = React.memo<ChannelCardProps>(({
   channel,
   index,
   isItemFavorite,
@@ -40,9 +48,6 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
   onToggleFavorite,
   onLongPress,
   onPrefetch,
-  isLastItem,
-  observerRef,
-  hasMore,
 }) => {
   const { isLongPress, ref, isLongPressRef, ...longPressHandlers } = useLongPress({
     onLongPress: () => onLongPress(channel),
@@ -80,12 +85,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
       data-tv-initial={index === 0}
       tabIndex={0}
       {...longPressHandlers}
-      ref={(el) => {
-        ref(el);
-        if (isLastItem && hasMore && el && observerRef.current) {
-          observerRef.current.observe(el);
-        }
-      }}
+      ref={ref}
       onMouseEnter={() => onPrefetch(channel)}
       onFocus={() => onPrefetch(channel)}
       onClick={handleClick}
@@ -97,7 +97,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
       onKeyUp={handleKeyUp}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, delay: index * 0.03 }}
+      transition={{ duration: 0.2 }}
       whileHover={{ scale: 1.05, y: -4, boxShadow: '0 10px 40px rgba(34, 197, 94, 0.2)' }}
       whileTap={{ scale: 0.98 }}
       className="p-2 rounded-lg cursor-pointer dark:bg-slate-800/30 bg-gray-100/30 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 dark:hover:border-green-700 hover:border-green-700 transition-all dark:focus:bg-slate-700/50 focus:bg-gray-200/50 dark:focus:border-green-700 focus:border-green-700 backdrop-blur-sm"
@@ -129,7 +129,9 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
       {!!channel.logo && <ChannelLogo logo={channel.logo} name={channel.name} />}
     </motion.div>
   );
-};
+});
+
+ChannelCard.displayName = 'ChannelCard';
 
 export const TVList: React.FC<TVListProps> = ({
   client,
@@ -156,16 +158,49 @@ export const TVList: React.FC<TVListProps> = ({
   const { isItemFavorite, toggleItemFavorite } = useFavorites(accountId);
   const { isCategoryFavorite, toggleCategory } = useFavoriteCategories(accountId, 'live');
 
-  // Debounce refs
-  const timeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const lastPreloadedRef = useRef<string | null>(null);
-  const prefetchCountRef = useRef(0);
-  const MAX_PREFETCHES = 10;
-  const observerRef = useRef<IntersectionObserver | null>(null);
+  const filtered = useMemo(() => {
+    // When searching in 'All' category with 2+ chars, use SQLite results (covers all 17k+ channels)
+    if (isAllCategory && search.length >= 2) {
+      return searchResults.filter(c => !c.name.startsWith('####'));
+    }
+    return allChannels.filter((c: StalkerChannel) => {
+      if (c.name.startsWith('####')) return false;
+      return search ? c.name.toLowerCase().includes(search.toLowerCase()) : true;
+    });
+  }, [allChannels, searchResults, search, isAllCategory]);
 
-  // Setup intersection observer for infinite scroll
+  // ── Layout / Virtualization ─────────────────────────────────────────────────
+  const parentRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const [columnCount] = useState(6);
+
+  // Reset scroll when category changes
   useEffect(() => {
-    observerRef.current = new IntersectionObserver(
+    parentRef.current?.scrollTo({ top: 0 });
+  }, [selectedCategory?.id]);
+
+  // ── Virtualizer ───────────────────────────────────────────────────────────────
+  const rowCount = Math.ceil(filtered.length / columnCount);
+
+  const rowVirtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => getRowHeight(),
+    overscan: 5,
+  });
+
+  const getRow = useCallback(
+    (rowIndex: number): StalkerChannel[] =>
+      filtered.slice(rowIndex * columnCount, rowIndex * columnCount + columnCount),
+    [filtered, columnCount]
+  );
+
+  // Setup intersection observer for infinite scroll (target is the load-more trigger)
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !isLoading) {
           loadMore();
@@ -174,12 +209,15 @@ export const TVList: React.FC<TVListProps> = ({
       { rootMargin: '100px' }
     );
 
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [hasMore, isLoading, loadMore]);
+
+  // Debounce refs
+  const timeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const lastPreloadedRef = useRef<string | null>(null);
+  const prefetchCountRef = useRef(0);
+  const MAX_PREFETCHES = 10;
 
   // Reset prefetch count when category changes
   useEffect(() => {
@@ -223,17 +261,6 @@ export const TVList: React.FC<TVListProps> = ({
       prefetchCountRef.current++;
     }, 300));
   }, [preload]);
-
-  const filtered = useMemo(() => {
-    // When searching in 'All' category with 2+ chars, use SQLite results (covers all 17k+ channels)
-    if (isAllCategory && search.length >= 2) {
-      return searchResults.filter(c => !c.name.startsWith('####'));
-    }
-    return allChannels.filter((c: StalkerChannel) => {
-      if (c.name.startsWith('####')) return false;
-      return search ? c.name.toLowerCase().includes(search.toLowerCase()) : true;
-    });
-  }, [allChannels, searchResults, search, isAllCategory]);
 
   const handleLongPress = useCallback((channel: StalkerChannel) => {
     toggleItemFavorite('live', String(channel.id), {
@@ -334,31 +361,55 @@ export const TVList: React.FC<TVListProps> = ({
       </AnimatePresence>
 
       {/* Channels Grid */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <motion.div
-          className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
+      <div ref={parentRef} className="flex-1 overflow-y-auto p-4">
+        <div
+          style={{
+            height: rowVirtualizer.getTotalSize(),
+            width: '100%',
+            position: 'relative',
+          }}
         >
-          {filtered.map((channel: StalkerChannel, index: number) => (
-            <ChannelCard
-              key={channel.id}
-              channel={channel}
-              index={index}
-              isItemFavorite={isItemFavorite}
-              onSelect={onChannelSelect}
-              onToggleFavorite={handleToggleFavorite}
-              onLongPress={handleLongPress}
-              onPrefetch={debouncedPreload}
-              isLastItem={index === filtered.length - 1}
-              observerRef={observerRef}
-              hasMore={hasMore}
-            />
-          ))}
-        </motion.div>
-        
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const rowIndex = virtualRow.index;
+            const rowChannels = getRow(rowIndex);
+            return (
+              <div
+                key={virtualRow.key}
+                data-index={virtualRow.index}
+                ref={rowVirtualizer.measureElement}
+                className="grid gap-3"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
+                  gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
+                  paddingBottom: 12,
+                }}
+              >
+                {rowChannels.map((channel, colIndex) => {
+                  const globalIndex = rowIndex * columnCount + colIndex;
+                  return (
+                    <ChannelCard
+                      key={channel.id}
+                      channel={channel}
+                      index={globalIndex}
+                      isItemFavorite={isItemFavorite}
+                      onSelect={onChannelSelect}
+                      onToggleFavorite={handleToggleFavorite}
+                      onLongPress={handleLongPress}
+                      onPrefetch={debouncedPreload}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+
         {/* Infinite scroll trigger and loading state */}
+        <div ref={loadMoreRef} className="h-4" />
         {(isLoading || isSearching) && (
           <div className="flex justify-center py-4">
             <div className="dark:text-white text-slate-900">{t('loading')}...</div>

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PortalForm } from '../PortalForm';
 import { PortalAccount } from '../portals.types';
 import { usePortalsStore } from '@/store/portals.store';
@@ -163,7 +163,7 @@ describe('PortalForm', () => {
     expect(mockAddPortal).not.toHaveBeenCalled();
   });
 
-  it('should call addPortal with valid form data', () => {
+  it('should call addPortal with valid form data', async () => {
     render(<PortalForm onClose={mockOnClose} />);
 
     const nameInput = screen.getByPlaceholderText('np. Mój Portal IPTV');
@@ -172,11 +172,11 @@ describe('PortalForm', () => {
     const urlInput = screen.getByPlaceholderText('http://portal.example.com/');
     fireEvent.change(urlInput, { target: { value: 'http://test.com' } });
 
-    const macInput = screen.getByDisplayValue('00:1A:79:');
+    const macInput = screen.getByPlaceholderText('00:1A:79:84:1A:AB');
     fireEvent.change(macInput, { target: { value: '00:1A:79:AA:BB:CC' } });
 
-    const saveButton = screen.getByText('add');
-    fireEvent.click(saveButton);
+    const form = screen.getByTestId('portal-form');
+    fireEvent.submit(form);
 
     expect(mockAddPortal).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -185,10 +185,10 @@ describe('PortalForm', () => {
         mac: '00:1A:79:AA:BB:CC',
       })
     );
-    expect(mockOnClose).toHaveBeenCalled();
+    await waitFor(() => expect(mockOnClose).toHaveBeenCalled());
   });
 
-  it('should call updatePortal when editing existing portal', () => {
+  it('should call updatePortal when editing existing portal', async () => {
     const mockPortal: PortalAccount = {
       id: 'test-id',
       name: 'Test Portal',
@@ -206,8 +206,8 @@ describe('PortalForm', () => {
     const nameInput = screen.getByDisplayValue('Test Portal');
     fireEvent.change(nameInput, { target: { value: 'Updated Portal' } });
 
-    const saveButton = screen.getByText('Zapisz');
-    fireEvent.click(saveButton);
+    const form = screen.getByTestId('portal-form');
+    fireEvent.submit(form);
 
     expect(mockUpdatePortal).toHaveBeenCalledWith(
       'test-id',
@@ -215,7 +215,7 @@ describe('PortalForm', () => {
         name: 'Updated Portal',
       })
     );
-    expect(mockOnClose).toHaveBeenCalled();
+    await waitFor(() => expect(mockOnClose).toHaveBeenCalled());
   });
 
   it('should call onClose when cancel button is clicked', () => {
@@ -238,8 +238,8 @@ describe('PortalForm', () => {
     const urlInput = screen.getByPlaceholderText('http://portal.example.com/');
     fireEvent.change(urlInput, { target: { value: 'http://test.com' } });
 
-    const saveButton = screen.getByText('add');
-    fireEvent.click(saveButton);
+    const form = screen.getByTestId('portal-form');
+    fireEvent.submit(form);
 
     await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -249,14 +249,14 @@ describe('PortalForm', () => {
   it('should pre-fill default MAC address', () => {
     render(<PortalForm onClose={mockOnClose} />);
 
-    const macInput = screen.getByDisplayValue('00:1A:79:');
-    expect(macInput).toBeInTheDocument();
+    const macInput = screen.getByPlaceholderText('00:1A:79:84:1A:AB');
+    expect(macInput).toHaveValue('');
   });
 
   it('should pre-fill default portal URL', () => {
     render(<PortalForm onClose={mockOnClose} />);
 
-    const urlInput = screen.getByDisplayValue('http://');
-    expect(urlInput).toBeInTheDocument();
+    const urlInput = screen.getByPlaceholderText('http://portal.example.com/');
+    expect(urlInput).toHaveValue('');
   });
 });

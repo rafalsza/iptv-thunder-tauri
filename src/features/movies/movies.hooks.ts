@@ -64,41 +64,43 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string, search?
 
       if (cached.length > 0) {
         // Return cached data immediately, then fetch fresh data in background
-        fetchVODPages(client, effectiveCategoryId, { signal })
+        // Use a separate AbortController so the background fetch isn't cancelled
+        // when the query's signal is aborted after queryFn returns
+        const bgController = new AbortController();
+        const queryKey = ['movies-all', accountId, categoryId, effectiveSearch];
+
+        console.log('[useMoviesAll] Background fetch starting for category:', effectiveCategoryId, 'cached:', cached.length);
+        fetchVODPages(client, effectiveCategoryId, {
+          signal: bgController.signal,
+        })
           .then(items => {
             const normalized = normalizeVod(items);
+            console.log('[useMoviesAll] Background fetch complete:', normalized.length, 'items');
             if (normalized.length > 0) {
-              // Compare cache with API results
-              const cachedIds = new Set(cached.map((c: any) => c.id));
-              const apiIds = new Set(normalized.map((v: any) => String(v.id)));
-              
-              // Find new items (in API but not in cache)
-              const newItems = normalized.filter((v: any) => !cachedIds.has(String(v.id)));
-              // Find removed items (in cache but not in API)
-              const removedItems = cached.filter((c: any) => !apiIds.has(c.id));
-              
-              if (newItems.length > 0 || removedItems.length > 0) {
-                // Save to DB silently - don't update UI, next visit will use fresh cache
-                const vodData = normalized.map(vod => ({
-                  id: vod.id?.toString() || '',
-                  name: vod.o_name || vod.name || '',
-                  description: vod.description || '',
-                  posterUrl: vod.logo || vod.poster || '',
-                  streamUrl: vod.cmd || '',
-                  year: vod.year,
-                  rating: vod.rating_imdb || vod.rating_kinopoisk,
-                  duration: vod.length,
-                  genre: vod.genres_str || '',
-                  director: vod.director,
-                  actors: vod.actors,
-                  added: vod.added ? new Date(vod.added).getTime() : undefined,
-                }));
-                persistVodQueue(vodData, accountId, effectiveCategoryId, saveVod)
-                  .catch(() => {});
-              }
+              // Save to DB
+              const vodData = normalized.map(vod => ({
+                id: vod.id?.toString() || '',
+                name: vod.o_name || vod.name || '',
+                description: vod.description || '',
+                posterUrl: vod.logo || vod.poster || '',
+                streamUrl: vod.cmd || '',
+                year: vod.year,
+                rating: vod.rating_imdb || vod.rating_kinopoisk,
+                duration: vod.length,
+                genre: vod.genres_str || '',
+                director: vod.director,
+                actors: vod.actors,
+                added: vod.added ? new Date(vod.added).getTime() : undefined,
+              }));
+              persistVodQueue(vodData, accountId, effectiveCategoryId, saveVod)
+                .catch(() => {});
+
+              // Update UI with fresh API data
+              queryClient.setQueryData(queryKey, normalized);
+              setStreamingState({ isStreaming: false, loadedPages: 0, totalPages: 0 });
             }
           })
-          .catch(() => {});
+          .catch(err => console.error('[useMoviesAll] Background fetch failed:', err));
         
         return cached;
       }
@@ -107,17 +109,17 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string, search?
       setStreamingState({ isStreaming: true, loadedPages: 0, totalPages: 0 });
 
       // Layer 1: Fetch from API with progressive hydration
-      const UPDATE_EVERY = 5; // Throttle UI updates to every N pages
+      const UPDATE_EVERY = 1; // Update UI on every page
       const items = await fetchVODPages(client, effectiveCategoryId, {
         signal,
         search: effectiveSearch,
         onProgress: (progressItems, loadedPages, totalPages) => {
-          // Throttle: only update UI every N pages or on last page
-          if (loadedPages % UPDATE_EVERY !== 0 && loadedPages < totalPages) return;
+          // Always show first page immediately, then throttle every N pages
+          if (loadedPages !== 1 && loadedPages % UPDATE_EVERY !== 0 && loadedPages < totalPages) return;
           if (signal?.aborted) return;
           if (queryClient) {
             const normalized = normalizeVod(progressItems);
-            queryClient.setQueryData(['movies-all', accountId, effectiveCategoryId], normalized);
+            queryClient.setQueryData(['movies-all', accountId, categoryId, effectiveSearch], normalized);
             setStreamingState({ isStreaming: loadedPages < totalPages, loadedPages, totalPages });
           }
         },
@@ -153,9 +155,10 @@ export const useMoviesAll = (client: StalkerClient, categoryId?: string, search?
       return normalized;
     },
     enabled,
-    staleTime: 1000 * 60 * 5, // 5 min cache - prevents refetch on scroll/remount
+    staleTime: 0, // Always stale - but refetch only on category change, not on remount
     gcTime: 24 * 60 * 60 * 1000,
     placeholderData: keepPreviousData,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -212,17 +215,12 @@ export const useMovieCategories = (client: StalkerClient) => {
 
 // ─── Movie details ────────────────────────────────────────────────────────────
 
-export const useMovieDetails = (client: StalkerClient, movieId?: string, cmd?: string) => {
+export const useMovieDetails = (_client: StalkerClient, movieId?: string, cmd?: string) => {
   return useQuery({
     queryKey: ['movie-details', movieId, cmd],
     queryFn: async () => {
-      // Try to get details by ID first
-      if (movieId && movieId !== '0' && movieId !== 'NaN') {
-        const result = await client.getVODDetails(movieId);
-        // Ensure we never return undefined
-        return result ?? null;
-      }
-      // Return null as fallback (React Query doesn't allow undefined)
+      // Stalker portal doesn't have a get_details endpoint for VOD.
+      // Movie data from the list already contains all details.
       return null;
     },
     enabled: !!movieId,

@@ -15,6 +15,7 @@ import { useLongPress } from '@/hooks/useLongPress';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerVOD, StalkerGenre } from '@/types';
 import { ContinueWatching } from './ContinueWatching';
+import { useQueryClient } from '@tanstack/react-query';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -255,8 +256,20 @@ export const MovieList: React.FC<MovieListProps> = ({
   client, onMovieSelect, selectedCategory, search,
 }) => {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   // ── Data ──────────────────────────────────────────────────────────────────────
   const { movies, isLoading, isFetching, error, streamingState } = useMoviesAll(client, selectedCategory?.id, search);
+
+  // Invalidate query on category change to force background API fetch
+  const prevCategoryRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const catId = selectedCategory?.id;
+    if (prevCategoryRef.current !== undefined && prevCategoryRef.current !== catId) {
+      const accountId = client?.getAccount()?.id ?? 'default';
+      queryClient.invalidateQueries({ queryKey: ['movies-all', accountId] });
+    }
+    prevCategoryRef.current = catId;
+  }, [selectedCategory?.id, queryClient, client]);
 
   // ── Favorites ─────────────────────────────────────────────────────────────────
   const accountId = usePortalsStore(s =>

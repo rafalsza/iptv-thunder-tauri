@@ -101,7 +101,7 @@ export class StalkerClient {
     } else {
       // Use Axios for browser development - will have CORS issues
       const cookieHeader = `mac=${this.account.mac}; stb_lang=${DEFAULT_LANGUAGE}; timezone=${timezone}`;
-      const timeout = options?.timeout ?? 15000;
+      const timeout = options?.timeout ?? 180000;
       this.axios = axios.create({
         baseURL,
         timeout,
