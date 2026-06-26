@@ -308,7 +308,7 @@ describe('FavoriteMovieCategoriesList', () => {
 
     // After clicking, the category should have green styling
     const categoryCard = categoryElement.closest('.cursor-pointer');
-    expect(categoryCard).toHaveClass('border-green-700');
+    expect(categoryCard).toHaveClass('border-green-600');
   });
 
   it('should handle show movies button click', () => {

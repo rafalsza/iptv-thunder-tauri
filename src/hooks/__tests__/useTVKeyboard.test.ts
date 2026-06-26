@@ -1,5 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { useTVKeyboard } from '../useTVKeyboard';
+import { tvLongPressState } from '../tvLongPressState';
 
 // Mock console.log to avoid noise
 const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
@@ -8,8 +9,8 @@ describe('useTVKeyboard', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    // Reset window globals
-    (window as any).__tvLongPressPreventClick = false;
+    // Reset long press state
+    tvLongPressState.reset();
   });
 
   afterEach(() => {
@@ -200,7 +201,7 @@ describe('useTVKeyboard', () => {
     globalThis.dispatchEvent(enterEvent);
 
     // Simulate tvlongpress event before timeout
-    (window as any).__tvLongPressPreventClick = true;
+    tvLongPressState.setPreventClick(true);
     globalThis.dispatchEvent(new Event('tvlongpress'));
 
     act(() => {

@@ -4,6 +4,7 @@ export interface StalkerAccount {
   portalUrl: string;        // np. "http://example.com:8080/c/" lub "/stalker_portal/c/"
   mac: string;              // format: 00:1A:79:XX:XX:XX
   token?: string;
+  tokenExpiresAt?: Date;
   expiresAt?: Date;
   expiry?: Date;            // alias dla expiresAt (kompatybilność)
   profile?: any;            // dane z get_profile

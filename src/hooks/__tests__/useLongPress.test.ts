@@ -1,5 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { useLongPress } from '../useLongPress';
+import { tvLongPressState } from '../tvLongPressState';
 
 // Mock window.addEventListener and removeEventListener
 const addEventListenerSpy = jest.spyOn(window, 'addEventListener').mockImplementation();
@@ -9,9 +10,8 @@ describe('useLongPress', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    // Reset window globals
-    (window as any).__tvLongPressHandled = false;
-    (window as any).__tvLongPressPreventClick = false;
+    // Reset long press state
+    tvLongPressState.reset();
   });
 
   afterEach(() => {

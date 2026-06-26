@@ -33,7 +33,7 @@ export class TauriHttpClient {
     this.baseURL = baseURL;
     this.defaultHeaders = defaultHeaders;
     this.defaultOptions = {
-      timeoutMs: 180000,
+      timeoutMs: 30000,
       retries: 2,
       ...defaultOptions,
     };
@@ -82,7 +82,7 @@ export class TauriHttpClient {
     url: string,
     options?: HttpRequestOptions
   ): Promise<T> {
-    const timeoutMs = options?.timeoutMs ?? this.defaultOptions.timeoutMs ?? 180000;
+    const timeoutMs = options?.timeoutMs ?? this.defaultOptions.timeoutMs ?? 30000;
     const retries = options?.retries ?? this.defaultOptions.retries ?? 2;
     const signal = options?.signal;
 
@@ -424,7 +424,7 @@ export class TauriHttpClient {
     options?: HttpRequestOptions
   ): Promise<T> {
     const fullUrl = this.buildUrl(url);
-    const timeoutMs = options?.timeoutMs ?? this.defaultOptions.timeoutMs ?? 180000;
+    const timeoutMs = options?.timeoutMs ?? this.defaultOptions.timeoutMs ?? 30000;
     const signal = options?.signal;
 
     if (signal?.aborted) {

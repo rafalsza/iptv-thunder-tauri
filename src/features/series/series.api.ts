@@ -124,11 +124,7 @@ export const getSeriesWithPagination = async (
 export const getSeriesCategories = async (
   client: StalkerClient
 ): Promise<StalkerGenre[]> => {
-  if (!client.token) {
-    await client.handshake();
-  }
-
-  await client.getProfileAndAuth();
+  await client.ensureAuthenticated();
 
   const params = {
     type: 'series',

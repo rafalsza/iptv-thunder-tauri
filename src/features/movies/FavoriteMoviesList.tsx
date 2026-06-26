@@ -8,6 +8,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFavorites } from '@/hooks/useFavorites';
 import { getImageUrl } from '@/hooks/useImageCache';
 import { useTranslation } from '@/hooks/useTranslation';
+import { tvLongPressState } from '@/hooks/tvLongPressState';
 import { useResumeStore, type WatchStatus } from '@/store/resume.store';
 import { StalkerVOD } from '@/types';
 import { useLongPress } from '@/hooks/useLongPress';
@@ -70,7 +71,7 @@ const MovieCard = React.memo<MovieCardProps>(({
         (globalThis as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
       }
       // Check if long press was triggered - if so, don't call onSelect
-      if (!(globalThis as any).__tvLongPressPreventClick) {
+      if (!tvLongPressState.getPreventClick()) {
         e.preventDefault();
         onSelect(movie);
       }
@@ -85,7 +86,7 @@ const MovieCard = React.memo<MovieCardProps>(({
       (globalThis as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
     }
     // For mouse/touch, let useLongPress handle it
-    if (!isLongPress && !(globalThis as any).__tvLongPressPreventClick) {
+    if (!isLongPress && !tvLongPressState.getPreventClick()) {
       onSelect(movie);
     }
   };

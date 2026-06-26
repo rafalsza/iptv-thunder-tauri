@@ -42,7 +42,7 @@ const fetchEPGData = async (channelId: number, isVod: boolean, channelName?: str
     if (effectiveEpgUrl && channelName) {
       epg = await fetchExternalEPG(effectiveEpgUrl, channelId, undefined, undefined, channelName);
     } else {
-      const client = new StalkerClient(activePortal as any);
+      const client = StalkerClient.getOrCreate(activePortal as any);
       epg = await getChannelEPG(client, channelId);
     }
 

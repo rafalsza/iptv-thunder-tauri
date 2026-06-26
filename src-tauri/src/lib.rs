@@ -4,18 +4,16 @@
 use std::sync::{LazyLock, Mutex};
 use std::collections::HashMap;
 use tokio::sync::oneshot;
-use tokio::sync::Mutex as AsyncMutex;
 
 static CANCEL_MAP: LazyLock<Mutex<HashMap<String, oneshot::Sender<()>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
-
-// Async mutex to serialize requests to avoid server rate limiting
-static REQUEST_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
 
 // Static HTTP client shared across all requests
 static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
+        .timeout(std::time::Duration::from_secs(30))
+        .connect_timeout(std::time::Duration::from_secs(15))
         .build()
         .expect("Failed to create HTTP client")
 });
@@ -84,21 +82,17 @@ async fn stalker_request(
         cookies.push(format!("mac={}", mac_address));
     }
     
-    // Extract token from headers first (before creating request)
-    let mut token = String::new();
+    // Parse headers - Authorization is sent as a header (like IPTVNator), not cookie
     let mut custom_headers: Vec<(String, String)> = Vec::new();
     if let Some(ref headers_list) = headers {
         for header in headers_list {
             if header.starts_with("Authorization: Bearer ") {
-                token = header
-                    .trim_start_matches("Authorization: Bearer ")
-                    .trim()
-                    .to_string();
-            } else if !header.to_lowercase().starts_with("authorization:") {
-                // Skip Authorization header - token is sent via cookies
+                // Keep Authorization header - portal expects it as a header
                 if let Some((key, value)) = header.split_once(':') {
                     custom_headers.push((key.trim().to_string(), value.trim().to_string()));
                 }
+            } else if let Some((key, value)) = header.split_once(':') {
+                custom_headers.push((key.trim().to_string(), value.trim().to_string()));
             }
         }
     }
@@ -114,9 +108,7 @@ async fn stalker_request(
         request = request.header(&key, &value);
     }
     
-    if !token.is_empty() {
-        cookies.push(format!("stb_token={}", token));
-    }
+    // Token is sent via Authorization header, not cookie
     
     // Only add these if they were in original request
     // cookies.push("stb_lang=en_US".to_string());
@@ -146,12 +138,6 @@ async fn stalker_request(
     };
 
     let do_request = async {
-        // Serialize requests to avoid server rate limiting
-        let _lock = REQUEST_MUTEX.lock().await;
-        
-        // Small delay to avoid rate limiting
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        
         let response = request.send().await.map_err(|e| {
             let err_msg = e.to_string();
             if err_msg.contains("dns") || err_msg.contains("DNS") {

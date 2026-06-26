@@ -7,6 +7,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel } from '@/types';
 import { useLongPress } from '@/hooks/useLongPress';
+import { tvLongPressState } from '@/hooks/tvLongPressState';
 import { searchChannels } from '@/hooks/useDatabase';
 
 interface FavoriteChannelsListProps {
@@ -39,7 +40,7 @@ const FavoriteChannelCard: React.FC<FavoriteChannelCardProps> = ({
   const handleKeyUp = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
       // Check if long press was triggered - if so, don't call onSelect
-      if (!(window as any).__tvLongPressPreventClick) {
+      if (!tvLongPressState.getPreventClick()) {
         e.preventDefault();
         onSelect(channel);
       }
@@ -48,7 +49,7 @@ const FavoriteChannelCard: React.FC<FavoriteChannelCardProps> = ({
 
   const handleClick = () => {
     // For mouse/touch, let useLongPress handle it
-    if (!isLongPress && !(window as any).__tvLongPressPreventClick) {
+    if (!isLongPress && !tvLongPressState.getPreventClick()) {
       onSelect(channel);
     }
   };

@@ -7,6 +7,7 @@ import { Direction, NavigationState, PluginContext, ContainerState } from '../co
 import { buildNavigationState, findElementById, filterVisibleElements } from '..';
 import { gridPlugin, containerPlugin, wrapPlugin, spatialPlugin, initAutoFocus, navbarPlugin, trapFocusPlugin, settingsPlugin, movieDetailsPlugin, modalTrapPlugin } from '../plugins';
 import { setActiveContainerId, saveContainerFocus, getLastFocus } from '../plugins/containerPlugin';
+import { tvLongPressState } from '../../tvLongPressState';
 
 interface TVNavigationOptions {
   selector?: string;
@@ -726,7 +727,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     };
 
     const handleEnterKeyUp = () => {
-      if ((globalThis as any).__tvLongPressPreventClick) return;
+      if (tvLongPressState.getPreventClick()) return;
       const current = currentElementRef.current;
       const currentId = current?.dataset?.tvId || current?.id;
       const downElementId = (globalThis as any).__tvEnterDownElement;

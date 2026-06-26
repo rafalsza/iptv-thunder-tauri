@@ -6,14 +6,14 @@ import { StalkerGenre, StalkerChannel } from '@/types';
 
 
 export async function getGenres(client: StalkerClient): Promise<StalkerGenre[]> {
-  await client.ensureAuthenticated();
-
-  const response = await (client as any)._makeRequest({
+  const params = {
     type: 'itv',
     action: 'get_genres',
-    mac: client.getAccount().mac,
     JsHttpRequest: '1-xml',
-  });
+  };
+
+  await client.ensureAuthenticated();
+  const response = await (client as any)._makeRequest(params);
 
   const useTauri = client.useTauri;
   const genres: StalkerGenre[] = useTauri ? response?.js : response.data?.js || [];

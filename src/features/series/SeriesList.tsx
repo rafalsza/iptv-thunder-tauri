@@ -8,6 +8,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useSeriesAll } from './series.hooks';
 import { useFavorites, useFavoriteCategories } from '@/hooks/useFavorites';
 import { usePortalsStore } from '@/store/portals.store';
+import { tvLongPressState } from '@/hooks/tvLongPressState';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getImageUrl } from '@/hooks/useImageCache';
 import { useLongPress } from '@/hooks/useLongPress';
@@ -74,7 +75,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
         (globalThis as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
       }
       // Check if long press was triggered - if so, don't call onSelect
-      if (!(globalThis as any).__tvLongPressPreventClick) {
+      if (!tvLongPressState.getPreventClick()) {
         e.preventDefault();
         onSelect(String(series.id));
       }
@@ -89,7 +90,7 @@ const SeriesCard = React.memo<SeriesCardProps>(({
       (globalThis as any).__lastFocusedMovieIndex = focusedEl.dataset.tvIndex;
     }
     // For mouse/touch, let useLongPress handle it
-    if (!isLongPress && !(globalThis as any).__tvLongPressPreventClick) {
+    if (!isLongPress && !tvLongPressState.getPreventClick()) {
       onSelect(String(series.id));
     }
   };

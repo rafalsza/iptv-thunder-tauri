@@ -135,31 +135,36 @@ export const usePortalsStore = create<PortalsState>()(
           state.activePortalId = id;
         });
         
-        // Fetch account info in background when portal becomes active
+        // Fetch account info in background when portal becomes active (delayed to avoid interfering with initial loading)
         if (id) {
           const portal = get().portals.find((p) => p.id === id);
           if (portal) {
-            const client = new StalkerClient({
-              id: portal.id,
-              name: portal.name,
-              portalUrl: portal.portalUrl,
-              mac: portal.mac,
-              login: portal.login,
-              lastUsed: new Date(),
-              isActive: true,
-            });
-            
-            client.getAccountInfo().then((accountInfo) => {
-              if (accountInfo?.phone) {
-                const parsed = new Date(accountInfo.phone);
-                if (!Number.isNaN(parsed.getTime())) {
-                  get().updatePortal(id, { expiresAt: parsed });
-                  logger.debug('Updated portal expiresAt from background test:', id, parsed);
+            setTimeout(() => {
+              const portalAtTimeout = get().portals.find((p) => p.id === id);
+              const client = StalkerClient.getOrCreate({
+                id: portal.id,
+                name: portal.name,
+                portalUrl: portal.portalUrl,
+                mac: portal.mac,
+                login: portal.login,
+                token: portalAtTimeout?.token,
+                tokenExpiresAt: portalAtTimeout?.tokenExpiresAt,
+                lastUsed: new Date(),
+                isActive: true,
+              });
+              
+              client.getAccountInfo().then((accountInfo) => {
+                if (accountInfo?.phone) {
+                  const parsed = new Date(accountInfo.phone);
+                  if (!Number.isNaN(parsed.getTime())) {
+                    get().updatePortal(id, { expiresAt: parsed });
+                    logger.debug('Updated portal expiresAt from background test:', id, parsed);
+                  }
                 }
-              }
-            }).catch((err) => {
-              logger.debug('Background account info fetch failed:', err);
-            });
+              }).catch((err) => {
+                logger.debug('Background account info fetch failed:', err);
+              });
+            }, 10000);
           }
         }
       },

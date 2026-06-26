@@ -22,6 +22,9 @@ const USER_AGENT = 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHT
 const DEFAULT_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Berlin';
 const DEFAULT_LANGUAGE = navigator.language || 'en-US';
 
+// Singleton cache: one StalkerClient per portal ID to prevent duplicate handshakes
+const clientCache = new Map<string, StalkerClient>();
+
 export class StalkerClient {
   private readonly axios: AxiosInstance;
   private readonly tauriHttp: TauriHttpClient | null;
@@ -30,6 +33,30 @@ export class StalkerClient {
   public readonly useTauri: boolean;
   token: string | null = null;
   private tokenExpiresAt: Date | null = null;
+  private handshakePromise: Promise<string> | null = null;
+
+  /**
+   * Get or create a singleton StalkerClient for a portal.
+   * Prevents duplicate handshakes from multiple client instances.
+   */
+  static getOrCreate(account: StalkerAccount, options?: { timezone?: string; timeout?: number }): StalkerClient {
+    const existing = clientCache.get(account.id);
+    if (existing) {
+      // Update token from account if it was persisted by another instance
+      if (!existing.token && account.token && account.tokenExpiresAt && new Date(account.tokenExpiresAt) > new Date()) {
+        existing.token = account.token;
+        existing.tokenExpiresAt = new Date(account.tokenExpiresAt);
+        if (existing.tauriHttp) {
+          existing.tauriHttp.setHeader('Authorization', `Bearer ${account.token}`);
+        }
+        existing.logger.info('Restored token from account on cached client');
+      }
+      return existing;
+    }
+    const client = new StalkerClient(account, options);
+    clientCache.set(account.id, client);
+    return client;
+  }
 
   constructor(account: StalkerAccount, options?: { timezone?: string; timeout?: number }) {
     this.account = account;
@@ -85,23 +112,34 @@ export class StalkerClient {
       globalThis.window.__STALKER_CLIENT_LOGGED__ = true;
     }
 
+    // Restore token from account if available (avoids handshake on app restart)
+    if (account.token && account.tokenExpiresAt && new Date(account.tokenExpiresAt) > new Date()) {
+      this.token = account.token;
+      this.tokenExpiresAt = new Date(account.tokenExpiresAt);
+      this.logger.info('Restored token from saved account, skipping handshake');
+    }
+
     if (this.useTauri) {
       // Use Tauri HTTP client - no CORS issues!
       // Cookie with MAC is required for EPG and other requests
       const cookieHeader = `mac=${this.account.mac}; stb_lang=${DEFAULT_LANGUAGE}; timezone=${timezone}`;
-      this.tauriHttp = new TauriHttpClient(baseURL, {
+      const headers: Record<string, string> = {
         'User-Agent': USER_AGENT,
         'X-User-Agent': USER_AGENT,
         'Accept': '*/*',
         'Accept-Language': 'en-US,en;q=0.9',
         'Cookie': cookieHeader,
         'Connection': 'keep-alive',
-      });
+      };
+      if (this.token) {
+        headers['Authorization'] = `Bearer ${this.token}`;
+      }
+      this.tauriHttp = new TauriHttpClient(baseURL, headers);
       this.axios = {} as AxiosInstance; // Placeholder - won't be used
     } else {
       // Use Axios for browser development - will have CORS issues
       const cookieHeader = `mac=${this.account.mac}; stb_lang=${DEFAULT_LANGUAGE}; timezone=${timezone}`;
-      const timeout = options?.timeout ?? 180000;
+      const timeout = options?.timeout ?? 30000;
       this.axios = axios.create({
         baseURL,
         timeout,
@@ -120,13 +158,27 @@ export class StalkerClient {
   }
 
   /**
+   * Generate SHA1 prehash from MAC address (matches IPTVNator/real STB behavior)
+   */
+  private async generatePrehash(): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(this.account.mac.toUpperCase());
+    const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+  }
+
+  /**
    * Główny handshake – zwraca token
+   * Uses prehash (SHA1 of MAC) instead of raw MAC, matching IPTVNator and real STB behavior
    */
   async handshake(): Promise<string> {
+    const prehash = await this.generatePrehash();
     const params = {
       type: 'stb',
       action: 'handshake',
-      mac: this.account.mac,
+      token: '',
+      prehash,
       JsHttpRequest: '1-xml',
     };
 
@@ -151,11 +203,16 @@ export class StalkerClient {
       this.token = data.js.token;
       this.tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       
+      // Persist token to portal store so it survives app restarts
       try {
-        (this.account as any).token = data.js.token;
-        (this.account as any).expiresAt = this.tokenExpiresAt;
+        const { usePortalsStore } = await import('@/store/portals.store');
+        usePortalsStore.getState().updatePortal(this.account.id, {
+          token: data.js.token,
+          tokenExpiresAt: this.tokenExpiresAt,
+        });
+        this.logger.debug('Token persisted to portal store');
       } catch (e) {
-        this.logger.debug('Could not update account token (frozen)', e);
+        this.logger.debug('Could not persist token to store:', e);
       }
 
       if (!this.useTauri && this.axios.defaults) {
@@ -185,11 +242,25 @@ export class StalkerClient {
   async getProfileAndAuth(): Promise<StalkerProfile> {
     await this.ensureAuthenticated();
 
+    const prehash = await this.generatePrehash();
+    const metrics = JSON.stringify({
+      mac: this.account.mac,
+      model: 'MAG250',
+      type: 'STB',
+      random: '',
+    });
+
     const params = {
       type: 'stb',
       action: 'get_profile',
-      mac: this.account.mac,
       hd: '1',
+      not_valid_token: '0',
+      video_out: 'hdmi',
+      auth_second_step: '1',
+      num_banks: '2',
+      metrics,
+      prehash,
+      stb_type: '',
       JsHttpRequest: '1-xml',
     };
 
@@ -229,15 +300,13 @@ export class StalkerClient {
    * Get channel genres
    */
   async getGenres(): Promise<StalkerGenre[]> {
-    await this.ensureAuthenticated();
-
     const params = {
       type: 'itv',
       action: 'get_genres',
-      mac: this.account.mac,
       JsHttpRequest: '1-xml',
     };
 
+    await this.ensureAuthenticated();
     const response = await this._makeRequest(params);
     return this.useTauri ? (response?.js || []) : (response.data?.js || []);
   }
@@ -412,14 +481,9 @@ export class StalkerClient {
   async getVODCategories(): Promise<StalkerGenre[]> {
     await this.ensureAuthenticated();
 
-    // Wywołaj getProfileAndAuth aby aktywować sesję - to może być wymagane aby dostać pełną listę kategorii
-    this.logger.debug('Calling getProfileAndAuth for VOD categories');
-    await this.getProfileAndAuth();
-
     const params = {
       type: 'vod',
       action: 'get_categories',
-      mac: this.account.mac,
       JsHttpRequest: '1-xml',
     };
     const response = await this._makeRequest(params);
@@ -450,7 +514,11 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     return this._makeGenericRequest('portal.php', params, signal);
   }
 
-  private async _makeGenericRequest(endpoint: string, params: any, signal?: AbortSignal): Promise<any> {
+  async _makeRequestWithoutAuth(params: any, signal?: AbortSignal, timeoutMs?: number): Promise<any> {
+    return this._makeGenericRequest('portal.php', params, signal, timeoutMs);
+  }
+
+  private async _makeGenericRequest(endpoint: string, params: any, signal?: AbortSignal, timeoutMs?: number): Promise<any> {
     if (signal?.aborted) {
       throw new Error('Request aborted');
     }
@@ -462,9 +530,9 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     let response: any;
     try {
       if (this.useTauri && this.tauriHttp) {
-        response = await this.tauriHttp.get(endpoint, params);
+        response = await this.tauriHttp.get(endpoint, params, timeoutMs ? { timeoutMs, retries: 0 } : undefined);
       } else {
-        response = await this.axios.get(endpoint, { params, signal });
+        response = await this.axios.get(endpoint, { params, signal, timeout: timeoutMs });
       }
       
       logDebugSuccess(ctx, this.useTauri ? response : response.data);
@@ -554,7 +622,17 @@ async getVODDetails(vodId: string): Promise<StalkerVOD> {
     if (this.token && this.isTokenValid()) {
       return;
     }
-    await this.handshake();
+    // Reuse in-flight handshake to prevent concurrent handshake calls
+    if (this.handshakePromise) {
+      await this.handshakePromise;
+      return;
+    }
+    this.handshakePromise = this.handshake();
+    try {
+      await this.handshakePromise;
+    } finally {
+      this.handshakePromise = null;
+    }
   }
 
   /**

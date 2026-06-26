@@ -9,6 +9,7 @@ export interface PortalAccount {
   portalUrl: string;
   mac: string;
   token?: string;
+  tokenExpiresAt?: Date;
   expiresAt?: Date;
   isActive: boolean;
   createdAt: Date;

@@ -74,6 +74,9 @@ export function useMpvPlayer(
   const isVodRef = useRef(isVod);
   const lastSavedMovieIdRef = useRef<string | null>(null);
   const resumePositionRef = useRef(resumePosition);
+  const audioAutoSelectedRef = useRef(false);
+  const userSelectedAudioRef = useRef(false);
+  const appLanguageRef = useRef<string | null>(null);
 
   // Smart retry metrics per URL
   interface UrlMetrics {
@@ -122,6 +125,8 @@ export function useMpvPlayer(
       try {
         const hwAccelEnabled = await getSetting('hardwareAcceleration');
         hwAccelEnabledRef.current = hwAccelEnabled;
+        const appLang = await getSetting('language');
+        appLanguageRef.current = appLang;
       } catch (e) {
         console.error('Failed to load settings:', e);
       }
@@ -347,6 +352,26 @@ export function useMpvPlayer(
     }
 
     setTracks(parsedTracks);
+
+    // Auto-select Polish audio track if user's app language or locale is PL and they haven't manually chosen one
+    if (!userSelectedAudioRef.current && !audioAutoSelectedRef.current) {
+      const audioTracks = parsedTracks.filter(t => t.type === 'audio');
+      if (audioTracks.length > 1) {
+        const appLang = appLanguageRef.current?.toLowerCase();
+        const navLang = navigator.language?.toLowerCase();
+        const isPolish = appLang === 'pl' || navLang?.startsWith('pl');
+        if (isPolish) {
+          const polishTrack = audioTracks.find(t =>
+            t.lang?.toLowerCase().startsWith('pl') ||
+            t.title?.toLowerCase().includes('pol')
+          );
+          if (polishTrack) {
+            audioAutoSelectedRef.current = true;
+            void setProperty('aid', polishTrack.id);
+          }
+        }
+      }
+    }
   }, []);
 
   const handleAid = useCallback((data: unknown) => {
@@ -963,6 +988,7 @@ export function useMpvPlayer(
   }, [isVod, shouldSkipStallCheck, checkVodEnd, handleStallRecovery]);
 
   const setAudioTrack = useCallback(async (id: string) => {
+    userSelectedAudioRef.current = true;
     try {
       await setProperty('aid', id);
     } catch (e) { console.error('Set audio track failed:', e); }

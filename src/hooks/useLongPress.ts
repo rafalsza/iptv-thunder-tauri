@@ -1,4 +1,5 @@
 import React, { useRef, useCallback, useState, useEffect } from 'react';
+import { tvLongPressState } from './tvLongPressState';
 
 type LongPressCallback = (e: React.TouchEvent | React.MouseEvent | React.KeyboardEvent | Event) => void;
 
@@ -26,7 +27,7 @@ export const useLongPress = ({
   useEffect(() => {
     const handleTvLongPress = (e: Event) => {
       // Check if already handled by another component
-      if ((window as any).__tvLongPressHandled) {
+      if (tvLongPressState.getHandled()) {
         return;
       }
 
@@ -40,10 +41,10 @@ export const useLongPress = ({
       }
 
       // Mark as handled
-      (window as any).__tvLongPressHandled = true;
+      tvLongPressState.setHandled(true);
 
       // Set flag to prevent select even if onKeyUp fires
-      (window as any).__tvLongPressPreventClick = true;
+      tvLongPressState.setPreventClick(true);
 
       // Trigger onLongPress for this instance
       setIsLongPress(true);
@@ -51,11 +52,10 @@ export const useLongPress = ({
       onLongPressRef.current(e);
 
       // Reset flags after a delay
+      tvLongPressState.scheduleReset(1000);
       setTimeout(() => {
         setIsLongPress(false);
         isLongPressRef.current = false;
-        (window as any).__tvLongPressPreventClick = false;
-        (window as any).__tvLongPressHandled = false;
       }, 1000);
     };
 

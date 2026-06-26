@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
+import { tvLongPressState } from './tvLongPressState';
 
 interface TVKeyboardOptions {
   onBack?: () => void;
@@ -25,6 +26,9 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
   const onEnterRef = useRef(onEnter);
   const onMenuRef = useRef(onMenu);
   const onFocusNextRef = useRef(onFocusNext);
+  const getCurrentElementRef = useRef(getCurrentElement);
+  const getGlobalActiveContainerRef = useRef(getGlobalActiveContainer);
+  const getLocalActiveContainerRef = useRef(getLocalActiveContainer);
   const enterClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Listen for tvlongpress event to cancel pending click
@@ -39,54 +43,55 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
   useEffect(() => { onEnterRef.current = onEnter; }, [onEnter]);
   useEffect(() => { onMenuRef.current = onMenu; }, [onMenu]);
   useEffect(() => { onFocusNextRef.current = onFocusNext; }, [onFocusNext]);
+  useEffect(() => { getCurrentElementRef.current = getCurrentElement; }, [getCurrentElement]);
+  useEffect(() => { getGlobalActiveContainerRef.current = getGlobalActiveContainer; }, [getGlobalActiveContainer]);
+  useEffect(() => { getLocalActiveContainerRef.current = getLocalActiveContainer; }, [getLocalActiveContainer]);
+
+  const handleNavigation = useCallback((direction: 'up' | 'down' | 'left' | 'right') => {
+    if (direction === 'up') {
+      const current = getCurrentElementRef.current?.();
+      const isOnSearchInput = current?.dataset.tvSearch !== undefined;
+      if (!isOnSearchInput) {
+        onFocusNextRef.current?.(direction);
+      }
+    } else if (direction === 'left') {
+      const current = getCurrentElementRef.current?.();
+      const isInSidebar = current?.closest('[data-tv-container="navigation"]') !== null;
+      if (!isInSidebar) {
+        onFocusNextRef.current?.(direction);
+      }
+    } else {
+      onFocusNextRef.current?.(direction);
+    }
+  }, []);
+
+  const executeEnterClick = useCallback((current: HTMLElement) => {
+    if (!tvLongPressState.getPreventClick()) {
+      const handled = onEnterRef.current?.(current);
+      if (handled !== true) {
+        current.click();
+      }
+    }
+  }, []);
+
+  const handleEnter = useCallback(() => {
+    const current = getCurrentElementRef.current?.();
+    if (current) {
+      if (enterClickTimeoutRef.current) {
+        clearTimeout(enterClickTimeoutRef.current);
+      }
+      enterClickTimeoutRef.current = setTimeout(() => executeEnterClick(current), 550);
+    }
+  }, [executeEnterClick]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const globalActiveContainer = getGlobalActiveContainer?.();
-      const localActiveContainer = getLocalActiveContainer?.();
-      
+      const globalActiveContainer = getGlobalActiveContainerRef.current?.();
+      const localActiveContainer = getLocalActiveContainerRef.current?.();
+
       if (globalActiveContainer && globalActiveContainer !== localActiveContainer) {
         return;
       }
-
-      const handleNavigation = (direction: 'up' | 'down' | 'left' | 'right') => {
-        if (direction === 'up') {
-          const current = getCurrentElement?.();
-          const isOnSearchInput = current?.dataset.tvSearch !== undefined;
-          if (!isOnSearchInput) {
-            onFocusNextRef.current?.(direction);
-          }
-        } else if (direction === 'left') {
-          const current = getCurrentElement?.();
-          const isInSidebar = current?.closest('[data-tv-container="navigation"]') !== null;
-          if (!isInSidebar) {
-            onFocusNextRef.current?.(direction);
-          }
-        } else {
-          onFocusNextRef.current?.(direction);
-        }
-      };
-
-      const handleEnter = () => {
-        const current = getCurrentElement?.();
-        if (current) {
-          // Clear any pending click
-          if (enterClickTimeoutRef.current) {
-            clearTimeout(enterClickTimeoutRef.current);
-          }
-          
-          // Delay the click to allow long press detection
-          enterClickTimeoutRef.current = setTimeout(() => {
-            // Check if long press was triggered
-            if (!(window as any).__tvLongPressPreventClick) {
-              const handled = onEnterRef.current?.(current);
-              if (handled !== true) {
-                current.click();
-              }
-            }
-          }, 550); // Delay longer than MainActivity's 500ms long press
-        }
-      };
 
       // Check if user is typing in an input field
       const isTyping =
@@ -132,7 +137,7 @@ export function useTVKeyboard(options: TVKeyboardOptions = {}) {
         clearTimeout(enterClickTimeoutRef.current);
       }
     };
-  }, [getCurrentElement, getGlobalActiveContainer, getLocalActiveContainer]);
+  }, [handleNavigation, handleEnter]);
 
   return {};
 }

@@ -38,13 +38,14 @@ const persister = createAsyncStoragePersister({
 });
 
 // Helper function to convert PortalAccount to StalkerAccount
-function portalToStalkerAccount(portal: { id: string; name: string; portalUrl: string; mac: string; token?: string; expiresAt?: Date; login?: string }): StalkerAccount {
+function portalToStalkerAccount(portal: { id: string; name: string; portalUrl: string; mac: string; token?: string; tokenExpiresAt?: Date; expiresAt?: Date; login?: string }): StalkerAccount {
   return {
     id: portal.id,
     name: portal.name,
     portalUrl: portal.portalUrl,
     mac: portal.mac,
     token: portal.token,
+    tokenExpiresAt: portal.tokenExpiresAt,
     expiresAt: portal.expiresAt,
     login: portal.login,
     lastUsed: new Date(),
@@ -108,7 +109,7 @@ function AppInner() {
 
   // Create client only when we have an active portal (memoized to avoid recreation on every render)
   const client = useMemo(() => 
-    activePortal ? new StalkerClient(portalToStalkerAccount(activePortal)) : null,
+    activePortal ? StalkerClient.getOrCreate(portalToStalkerAccount(activePortal)) : null,
     [activePortal?.id]
   );
 

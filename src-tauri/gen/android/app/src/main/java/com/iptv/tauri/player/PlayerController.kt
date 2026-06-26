@@ -62,6 +62,10 @@ class PlayerController(
     private var endedDetected = false
     private val END_CREDITS_THRESHOLD = 0.90f // 90% - detect end credits
 
+    // Auto audio selection
+    private var audioAutoSelected = false
+    private var userSelectedAudio = false
+
     sealed class PlayerState {
         data object Loading : PlayerState()
         data object Live : PlayerState()
@@ -221,6 +225,7 @@ class PlayerController(
             override fun onTracksChanged(tracks: Tracks) {
                 android.util.Log.d("PlayerController", "Tracks changed, updating track info")
                 updateTrackInfoInUi()
+                autoSelectPolishAudio()
             }
         })
     }
@@ -524,6 +529,7 @@ class PlayerController(
     }
 
     fun selectAudioTrack(trackId: String?) {
+        userSelectedAudio = true
         val exoPlayer = player ?: return
         val (audioTracks, _) = getAvailableTracks()
 
@@ -537,6 +543,27 @@ class PlayerController(
 
         exoPlayer.trackSelectionParameters = parametersBuilder.build()
         updateTrackInfoInUi()
+    }
+
+    private fun autoSelectPolishAudio() {
+        if (userSelectedAudio || audioAutoSelected) return
+
+        val (audioTracks, _) = getAvailableTracks()
+        if (audioTracks.size <= 1) return
+
+        val isPolishLocale = java.util.Locale.getDefault().language.equals("pl", ignoreCase = true)
+        if (!isPolishLocale) return
+
+        val polishTrack = audioTracks.find { track ->
+            track.language?.lowercase()?.startsWith("pl") == true ||
+            track.label.lowercase().contains("pol")
+        }
+
+        if (polishTrack != null) {
+            audioAutoSelected = true
+            android.util.Log.d("PlayerController", "Auto-selecting Polish audio track: ${polishTrack.label}")
+            selectAudioTrack(polishTrack.id)
+        }
     }
 
     fun selectSubtitleTrack(trackId: String?) {

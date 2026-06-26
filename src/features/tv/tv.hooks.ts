@@ -9,6 +9,7 @@ import { usePortalCacheStore } from '@/store/portalCache.store';
 import { saveChannels, upsertChannels, getChannels as getChannelsFromDB, searchChannels } from '@/hooks/useDatabase';
 import { getChannelEPG, getEPGTimeRange } from '@/features/epg/epg.api';
 import { getGenres, getChannels } from './tv.api';
+import { useCategories } from '@/hooks/useCategories';
 
 // Safe localStorage helpers with quota handling
 const cleanupOldIPTVCache = (): void => {
@@ -264,24 +265,24 @@ export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG
   };
 };
 
-// Pobierz kategorie kanałów (tylko w TanStack Query, bez Zustand cache)
+// Pobierz kategorie kanałów (z SQLite cache przez useCategories)
 export const useChannelCategories = (client: StalkerClient) => {
-  const accountId = client?.['account']?.id || 'default';
+  const portalId = client?.['account']?.id || 'default';
 
-  const query = useQuery({
-    queryKey: ['channel-categories', accountId],
-    queryFn: async () => {
+  const { categories, isLoading, refresh, isRefreshing } = useCategories(
+    'live',
+    portalId,
+    async () => {
       return await getGenres(client);
     },
-    staleTime: 60 * 60 * 1000, // 1 hour - categories rarely change
-    gcTime: 7 * 24 * 60 * 60 * 1000,
-    enabled: !!client,
-  });
+  );
 
   return {
-    ...query,
-    data: query.data || [],
-    isLoading: query.isLoading,
+    data: categories,
+    isLoading,
+    refetch: refresh,
+    isRefetching: isRefreshing,
+    error: null,
   };
 };
 
