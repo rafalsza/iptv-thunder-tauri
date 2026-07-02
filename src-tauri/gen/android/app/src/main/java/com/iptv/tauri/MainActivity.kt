@@ -26,7 +26,6 @@ class MainActivity : TauriActivity() {
     private val longPressDelay = 500L // 500ms for long press
     private val handler = Handler(Looper.getMainLooper())
     var pendingPlayerClosed = false
-        private set
     private var longPressTriggered = false
     private var longPressEventSent = false
 
