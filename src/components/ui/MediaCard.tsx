@@ -126,7 +126,11 @@ export const MediaCard = React.memo<MediaCardProps>(({
       {...(tvInitial && { 'data-tv-initial': true })}
       data-media-card
       tabIndex={0}
-      className="relative group/card cursor-pointer flex-shrink-0 w-24 sm:w-28 md:w-32 lg:w-36 xl:w-40 2xl:w-36 3xl:w-32 4ktv:w-28 rounded-lg mr-2 sm:mr-3 last:mr-0 snap-start"
+      className="relative group/card cursor-pointer flex-shrink-0 rounded-lg snap-start"
+      style={{
+        width: 'calc(9rem * var(--ui-scale, 1))',
+        marginRight: 'calc(0.75rem * var(--ui-scale, 1))',
+      }}
     >
       {/* Card container */}
       <div className="dark:bg-slate-800/50 bg-gray-100/50 rounded-lg backdrop-blur-sm border dark:border-slate-700/50 border-gray-200/50 hover:shadow-glow transition-all">
@@ -148,16 +152,16 @@ export const MediaCard = React.memo<MediaCardProps>(({
             />
           ) : null}
           <div className={`w-full h-full flex items-center justify-center dark:bg-slate-700 bg-gray-300 ${poster ? 'hidden' : ''}`}>
-            {type === 'live' && <Tv className="w-8 h-8 text-blue-400" />}
-            {type === 'vod' && <Film className="w-8 h-8 text-purple-400" />}
-            {type === 'series' && <Film className="w-8 h-8 text-orange-400" />}
+            {type === 'live' && <Tv className="w-[calc(2rem*var(--ui-scale,1))] h-[calc(2rem*var(--ui-scale,1))] text-blue-400" />}
+            {type === 'vod' && <Film className="w-[calc(2rem*var(--ui-scale,1))] h-[calc(2rem*var(--ui-scale,1))] text-purple-400" />}
+            {type === 'series' && <Film className="w-[calc(2rem*var(--ui-scale,1))] h-[calc(2rem*var(--ui-scale,1))] text-orange-400" />}
           </div>
 
           {/* Type badge */}
           {typeLabel && typeLabel.trim() !== '' && (
-            <div className="absolute top-1.5 left-1.5 dark:bg-black/70 bg-white/80 backdrop-blur-sm px-1.5 py-0.5 rounded flex items-center gap-1">
+            <div className="absolute top-[calc(0.375rem*var(--ui-scale,1))] left-[calc(0.375rem*var(--ui-scale,1))] dark:bg-black/70 bg-white/80 backdrop-blur-sm px-[calc(0.375rem*var(--ui-scale,1))] py-[calc(0.125rem*var(--ui-scale,1))] rounded flex items-center gap-1">
               {getTypeIcon(type)}
-              <span className="text-[10px] font-medium dark:text-white text-slate-900">
+              <span className="text-[calc(0.625rem*var(--ui-scale,1))] font-medium dark:text-white text-slate-900">
                 {typeLabel}
               </span>
             </div>
@@ -168,24 +172,24 @@ export const MediaCard = React.memo<MediaCardProps>(({
             <button
               type="button"
               onClick={handleRemove}
-              className="absolute top-1.5 right-1.5 dark:bg-red-600/90 bg-red-600/90 backdrop-blur-sm p-1 rounded opacity-0 group-hover/card:opacity-100 transition-opacity hover:dark:bg-red-700 hover:bg-red-700 border-0 cursor-pointer z-20"
+              className="absolute top-[calc(0.375rem*var(--ui-scale,1))] right-[calc(0.375rem*var(--ui-scale,1))] dark:bg-red-600/90 bg-red-600/90 backdrop-blur-sm p-[calc(0.25rem*var(--ui-scale,1))] rounded opacity-0 group-hover/card:opacity-100 transition-opacity hover:dark:bg-red-700 hover:bg-red-700 border-0 cursor-pointer z-20"
               aria-label={`Remove ${name}`}
               title="Usuń"
             >
-              <X className="w-3 h-3 text-white" />
+              <X className="w-[calc(0.75rem*var(--ui-scale,1))] h-[calc(0.75rem*var(--ui-scale,1))] text-white" />
             </button>
           )}
 
           {/* Progress indicator for movies */}
           {hasProgress && (
             <>
-              <div className="absolute top-1.5 right-1.5 dark:bg-green-700/90 bg-green-600/90 backdrop-blur-sm px-1.5 py-0.5 rounded flex items-center gap-1">
-                <Play className="w-2 h-2 text-white" />
-                <span className="text-[10px] font-medium text-white">
+              <div className="absolute top-[calc(0.375rem*var(--ui-scale,1))] right-[calc(0.375rem*var(--ui-scale,1))] dark:bg-green-700/90 bg-green-600/90 backdrop-blur-sm px-[calc(0.375rem*var(--ui-scale,1))] py-[calc(0.125rem*var(--ui-scale,1))] rounded flex items-center gap-1">
+                <Play className="w-[calc(0.5rem*var(--ui-scale,1))] h-[calc(0.5rem*var(--ui-scale,1))] text-white" />
+                <span className="text-[calc(0.625rem*var(--ui-scale,1))] font-medium text-white">
                   {progressPercentage}%
                 </span>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 dark:bg-slate-700 bg-gray-300">
+              <div className="absolute bottom-0 left-0 right-0 h-[calc(0.125rem*var(--ui-scale,1))] dark:bg-slate-700 bg-gray-300">
                 <div
                   className="h-full bg-green-600 transition-all"
                   style={{ width: `${progressPercentage}%` }}
@@ -200,21 +204,21 @@ export const MediaCard = React.memo<MediaCardProps>(({
             className="absolute inset-0 bg-black/50 opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center border-0 p-0 cursor-pointer"
             aria-label={`Play ${name}`}
           >
-            <div className="w-10 h-10 dark:bg-white/90 bg-white/90 rounded-full flex items-center justify-center">
-              <Play className="w-5 h-5 text-black fill-current ml-1" />
+            <div className="w-[calc(2.5rem*var(--ui-scale,1))] h-[calc(2.5rem*var(--ui-scale,1))] dark:bg-white/90 bg-white/90 rounded-full flex items-center justify-center">
+              <Play className="w-[calc(1.25rem*var(--ui-scale,1))] h-[calc(1.25rem*var(--ui-scale,1))] text-black fill-current ml-[calc(0.25rem*var(--ui-scale,1))]" />
             </div>
           </button>
         </div>
 
         {/* Info section */}
-        <div className="p-2">
-          <h3 className="font-medium text-xs dark:text-white text-slate-900 truncate mb-1">
+        <div className="p-[calc(0.5rem*var(--ui-scale,1))]">
+          <h3 className="font-medium text-[calc(0.75rem*var(--ui-scale,1))] dark:text-white text-slate-900 truncate mb-[calc(0.25rem*var(--ui-scale,1))]">
             {name}
           </h3>
           {timeAgo && (
-            <div className="flex items-center justify-between text-[10px] dark:text-slate-400 text-slate-600">
-              <span className="flex items-center gap-0.5">
-                <Clock className="w-2.5 h-2.5" />
+            <div className="flex items-center justify-between text-[calc(0.625rem*var(--ui-scale,1))] dark:text-slate-400 text-slate-600">
+              <span className="flex items-center gap-[calc(0.125rem*var(--ui-scale,1))]">
+                <Clock className="w-[calc(0.625rem*var(--ui-scale,1))] h-[calc(0.625rem*var(--ui-scale,1))]" />
                 {timeAgo}
               </span>
               {season && episode && (
