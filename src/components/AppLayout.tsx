@@ -166,7 +166,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             return;
           }
           if (savedId) {
-            const el = document.querySelector(`[data-tv-id="${savedId}"], #${savedId}`) as HTMLElement;
+            const escapedId = CSS.escape(savedId);
+            const el = document.querySelector(`[data-tv-id="${savedId}"], #${escapedId}`) as HTMLElement;
             if (el) {
               el.focus();
               // Dispatch rebuild AFTER focus so navigation system picks up the correct element
