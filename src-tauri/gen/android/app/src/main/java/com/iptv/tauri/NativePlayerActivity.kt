@@ -636,9 +636,7 @@ class NativePlayerActivity : AppCompatActivity() {
     }
 
     private fun notifyPlayerClosed() {
-        MainActivity.currentInstance?.webView?.let { webview ->
-            webview.evaluateJavascript("if (window.onPlayerClosed) { window.onPlayerClosed(); }", null)
-        }
+        MainActivity.currentInstance?.pendingPlayerClosed = true
     }
 
     override fun onDestroy() {

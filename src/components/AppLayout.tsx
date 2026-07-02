@@ -152,9 +152,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       const savedId = lastFocusedElementIdRef.current || player.lastFocusedElementId;
       lastFocusedElementIdRef.current = null;
       const androidPlatform = (() => { try { return platform() === 'android'; } catch { return false; } })();
-      const initialDelay = androidPlatform ? 200 : 50;
-      const maxAttempts = androidPlatform ? 10 : 5;
-      const retryDelay = androidPlatform ? 100 : 50;
+      const initialDelay = androidPlatform ? 400 : 50;
+      const maxAttempts = androidPlatform ? 15 : 5;
+      const retryDelay = androidPlatform ? 150 : 50;
       setTimeout(() => {
         (document.activeElement as HTMLElement)?.blur();
         // Retry focus restoration with increasing delays in case virtualizer hasn't rendered the card yet

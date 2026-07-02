@@ -25,6 +25,8 @@ class MainActivity : TauriActivity() {
         private set
     private val longPressDelay = 500L // 500ms for long press
     private val handler = Handler(Looper.getMainLooper())
+    var pendingPlayerClosed = false
+        private set
     private var longPressTriggered = false
     private var longPressEventSent = false
 
@@ -157,6 +159,14 @@ class MainActivity : TauriActivity() {
         // Restore focus to WebView when returning from NativePlayerActivity
         webView?.requestFocus()
         window.decorView.requestFocus()
+
+        // If native player was closed, notify JS after WebView has focus
+        if (pendingPlayerClosed) {
+            pendingPlayerClosed = false
+            webView?.postDelayed({
+                webView?.evaluateJavascript("if (window.onPlayerClosed) { window.onPlayerClosed(); }", null)
+            }, 100)
+        }
     }
 
     override fun onWebViewCreate(webView: WebView) {
