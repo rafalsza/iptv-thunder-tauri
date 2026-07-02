@@ -435,9 +435,11 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         return;
       }
 
-      const portalUrl = player?.portalUrl || '';
-      const mac = player?.mac || '';
-      const token = player?.token || '';
+      // Get portalUrl/mac/token from player data, fallback to active portal from store
+      const activePortal = usePortalsStore.getState().getActivePortal();
+      const portalUrl = player?.portalUrl || activePortal?.portalUrl || '';
+      const mac = player?.mac || activePortal?.mac || '';
+      const token = player?.token || activePortal?.token || '';
 
       if (!portalUrl || !mac || !token) {
         logger.error('[ExoPlayer] Missing required player data: portalUrl, mac, or token');

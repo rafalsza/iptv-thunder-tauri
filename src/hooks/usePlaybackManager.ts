@@ -332,9 +332,6 @@ export const usePlaybackManager = ({
         episodes: episodesData,
         currentEpisodeIndex: explicitIndex ?? localIndex,
         autoPlayEpisodes: autoPlayRef.current,
-        portalUrl: client.getAccount()?.portalUrl || '',
-        mac: client.getAccount()?.mac || '',
-        token: client.token || '',
       });
 
       const seriesInfo = selectedSeries;
