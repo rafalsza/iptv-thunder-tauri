@@ -281,12 +281,19 @@ export const usePlaybackManager = ({
   const handleEpisodeSelect = useCallback(async (episode: StalkerVOD, resumePosition?: number, explicitIndex?: number) => {
     if (!client) return;
 
-    // Cancel any previous request
-    if (abortRef.current) {
+    // Check if URL is already cached - if so, skip abort logic entirely
+    const queryKey = ['series-stream', String(episode.id)];
+    const cachedState = queryClient.getQueryState(queryKey);
+    const hasCachedUrl = cachedState?.status === 'success' && cachedState.data;
+
+    // Only abort if we have a different request in-flight
+    if (abortRef.current && !hasCachedUrl) {
       abortRef.current.abort();
     }
     const controller = new AbortController();
-    abortRef.current = controller;
+    if (!hasCachedUrl) {
+      abortRef.current = controller;
+    }
 
     player.setBuffering(true);
 
@@ -300,12 +307,12 @@ export const usePlaybackManager = ({
       await client.ensureAuthenticated();
 
       const url = await queryClient.fetchQuery({
-        queryKey: ['series-stream', String(episode.id)],
-        queryFn: () => fetchStreamUrl(episode, controller.signal),
+        queryKey,
+        queryFn: () => fetchStreamUrl(episode, hasCachedUrl ? undefined : controller.signal),
         staleTime: 5 * 60 * 1000, // 5 minutes - allows prefetch to work
       });
 
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted && !hasCachedUrl) return;
 
       const fullName = buildEpisodeName(episode);
 
