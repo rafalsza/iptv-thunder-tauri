@@ -322,6 +322,7 @@ export const usePlaybackManager = ({
       const episodesData = prepareEpisodesData(localEpisodes);
 
       player.setContentType('series');
+      console.log('[usePlaybackManager] handleEpisodeSelect: setMedia called with url=', url, 'name=', fullName);
       player.setMedia({
         url,
         name: fullName,
@@ -348,6 +349,8 @@ export const usePlaybackManager = ({
       queryClient.invalidateQueries({ queryKey: ['recent-viewed'] });
     } catch (error) {
       console.error('❌ Failed to play episode:', error);
+    } finally {
+      player.setBuffering(false);
     }
   }, [client, queryClient, selectedSeries, activePortal, t]);
 

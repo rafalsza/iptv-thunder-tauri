@@ -259,6 +259,8 @@ class MainActivity : TauriActivity() {
                             intent.putExtra("mac", params.optString("mac"))
                             intent.putExtra("token", params.optString("token"))
                             intent.putExtra("isVod", params.optBoolean("isVod"))
+                            intent.putExtra("movieId", params.optString("movieId"))
+                            intent.putExtra("resumePosition", params.optLong("resumePosition", 0))
                             intent.putExtra("episodesJson", params.optString("episodesJson"))
                             intent.putExtra("currentEpisodeIndex", params.optInt("currentEpisodeIndex"))
                             intent.putExtra("autoPlayEpisodes", params.optBoolean("autoPlayEpisodes"))
