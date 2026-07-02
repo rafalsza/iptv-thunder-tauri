@@ -417,8 +417,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     }
     return () => {
       setActiveContainer(null);
-      // Cancel all in-flight series-stream prefetch queries on unmount
-      queryClient.cancelQueries({ queryKey: ['series-stream'] });
+      // Don't cancel series-stream queries on unmount - handleEpisodeSelect may still be fetching
     };
   }, [setActiveContainer, queryClient]);
   const accountId = usePortalsStore((s) =>
