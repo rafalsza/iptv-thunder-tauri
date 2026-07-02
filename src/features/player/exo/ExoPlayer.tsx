@@ -125,14 +125,8 @@ const fetchEPGData = async (channelId: number, isVod: boolean, channelName?: str
 
 // Helper to validate player params
 const validatePlayerParams = (params: any) => {
-  if (!params?.channelId || !params?.portalUrl || !params?.mac || !params?.token) {
-    logger.error('[ExoPlayer] Invalid params object:', {
-      hasParams: !!params,
-      channelId: params?.channelId,
-      portalUrl: params?.portalUrl,
-      mac: params?.mac,
-      token: params?.token
-    });
+  if (!params?.url) {
+    logger.error('[ExoPlayer] Invalid params: missing url');
     return false;
   }
   return true;
@@ -435,17 +429,9 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         return;
       }
 
-      // Get portalUrl/mac/token from player data, fallback to active portal from store
-      const activePortal = usePortalsStore.getState().getActivePortal();
-      const portalUrl = player?.portalUrl || activePortal?.portalUrl || '';
-      const mac = player?.mac || activePortal?.mac || '';
-      const token = player?.token || activePortal?.token || '';
-
-      if (!portalUrl || !mac || !token) {
-        logger.error('[ExoPlayer] Missing required player data: portalUrl, mac, or token');
-        onClose();
-        return;
-      }
+      const portalUrl = player?.portalUrl || '';
+      const mac = player?.mac || '';
+      const token = player?.token || '';
 
       const episodes = player?.episodes || [];
       const currentEpisodeIndex = player?.currentEpisodeIndex || 0;
