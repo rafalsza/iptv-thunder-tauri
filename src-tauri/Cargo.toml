@@ -21,7 +21,6 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2.11", features = ["protocol-asset"] }
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-os = "2.3.2"
-tauri-plugin-shell = "2.3.5"
 tauri-plugin-http = "2.5.9"
 tauri-plugin-store = "2.4.3"
 tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }

@@ -24,7 +24,6 @@
     "opener:default",
     "store:default",
     "store:allow-load",
-    "shell:default",
     {
       "identifier": "http:default",
       "allow": [
