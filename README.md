@@ -4,6 +4,8 @@
 
 A modern, feature-rich IPTV client built with Tauri 2, React 19, and TypeScript. Supports Stalker Middleware portals with integrated video player and comprehensive VOD (Movies/Series) support.
 
+**Current Version: 1.2.0**
+
 ## Features
 
 ### Core Functionality
@@ -12,15 +14,21 @@ A modern, feature-rich IPTV client built with Tauri 2, React 19, and TypeScript.
 - **Quick Account Switching**: Fast switching between portals via navbar dropdown
 - **Stalker API Integration**: Full support for Stalker Middleware portals
 - **Built-in Video Player**: Integrated player with HLS/MP4/MPEG-TS support
+  - **Desktop**: MPV player integration
+  - **Android**: ExoPlayer (Media3) with native activity, D-pad controls, and EPG dialog
 - **Favorites & History**: Global favorites and watch history across accounts
 - **Import/Export**: Backup and restore accounts via JSON files
+- **Responsive UI**: CSS `--ui-scale` system scales all UI elements proportionally across 720p, 1080p, 4K, and Android TV screens
 
 ### Content Features
 - **Android TV Support**: Full remote control navigation, focus graph system, and D-pad navigation
 - **Live TV**: Virtualized channel list with categories, search, and filtering
-- **Movies (VOD)**: Movie catalog with categories, pagination, and details
-- **Series (VOD)**: TV series browser with seasons and episodes
+- **Movies (VOD)**: Movie catalog with categories, pagination, and details page with resume support
+- **Series (VOD)**: TV series browser with seasons, episodes, and autoplay next episode
 - **EPG**: Electronic Program Guide with interactive timeline view
+- **For You Section**: Netflix-style horizontal carousels showing recently viewed content (channels, movies, series)
+- **Resume Playback**: Continue watching from where you left off with progress indicators
+- **Stream Prefetching**: Background prefetch of stream URLs for instant playback
 - **Favorites Management**: Favorite channels, movies, and series with persistence
 
 ### Technology Stack
@@ -41,7 +49,8 @@ A modern, feature-rich IPTV client built with Tauri 2, React 19, and TypeScript.
 - **TanStack Virtual**: List virtualization for performance
 - **Framer Motion**: Smooth animations and transitions
 - **Lucide React**: Modern icon library
-- **Video.js & HLS.js**: Video playback support
+- **Video.js & HLS.js**: Video playback support (Desktop)
+- **AndroidX Media3 (ExoPlayer)**: Native video playback on Android
 
 ## Installation
 
@@ -107,10 +116,19 @@ npm run tauri build
 
 ### Player Controls
 
+#### Desktop (MPV)
 - **Play/Pause**: Space bar or click
 - **Fullscreen**: Double-click or F11
 - **Volume**: Mouse wheel or controls
 - **Channel Switching**: Arrow keys or on-screen controls
+
+#### Android TV (ExoPlayer)
+- **Play/Pause**: OK button on remote
+- **Seek**: Left/right D-pad navigation
+- **Volume**: Up/down D-pad navigation
+- **Channel Switching**: Left/right when in channel carousel mode
+- **EPG**: Dedicated EPG button for program guide dialog
+- **Episode Navigation**: Auto-play next episode option
 
 ## Architecture
 
@@ -212,20 +230,41 @@ src/
 // Multiple Zustand stores for different concerns
 // app.store.ts - Global app state (fullscreen, etc.)
 // portals.store.ts - Portal and account management
-// playback.store.ts - Playback state
+// playback.store.ts - Playback state (current media, buffering, error, contentType)
 // portalCache.store.ts - Portal data caching
 // resume.store.ts - Resume playback state
 // stream.store.ts - Stream URL management
 ```
 
+### Responsive UI System
+
+The app uses a CSS custom property `--ui-scale` for proportional scaling across screen sizes:
+
+| Screen Width | --ui-scale | Target |
+|---|---|---|
+| < 1440px | 1.0 | Standard desktop / 720p |
+| 1440px - 1999px | 1.0 | Desktop 1080p |
+| 2000px - 2559px | 1.1 | Large desktop / 1440p |
+| 2560px - 3839px | 1.25 | 4K TV |
+| >= 3840px | 1.3 | Ultra-wide / 8K |
+
+All dimensions use `calc(Nrem * var(--ui-scale))` instead of fixed Tailwind breakpoints. Android TV uses a fixed `0.75` scale via `.app-wrapper.android-tv` class.
+
+Components using this system:
+- `ForYouSection.tsx` - Netflix-style carousels
+- `MediaCard.tsx` - Universal media cards
+- `MovieDetails.tsx` - Movie details page
+- `ExoPlayer` controls (via Android dimension resources `dimens.xml`)
+
 ### Data Fetching
 - **TanStack Query**: Server state with caching and background updates
 - **Feature-specific hooks**: `useChannels`, `useMovies`, `useSeries`, `useEPG`
-- **Playback management**: `usePlaybackManager` for unified playback control
+- **Playback management**: `usePlaybackManager` for unified playback control (movies, series, live TV)
 - **Favorites management**: `useFavorites` for favorites across content types
 - **Navigation**: `useTypedRouter` for type-safe routing
 - **TV Navigation**: Comprehensive TV navigation system for Android TV
-- **Prefetching**: Hover-based stream URL prefetching
+- **Prefetching**: Background stream URL prefetching for movies and series episodes
+- **Image Caching**: Local file-based image cache with base64 data URLs for Android compatibility
 
 ## Configuration
 
@@ -295,8 +334,10 @@ npm run test:watch             # Run tests in watch mode
 
 - **Build fails on Windows**: Ensure Visual Studio Build Tools with C++ workload are installed
 - **Android APK not building**: Verify ANDROID_HOME and ANDROID_NDK_HOME environment variables
-- **Video playback issues**: Check MPV is in PATH or configure custom path in settings
+- **Video playback issues**: Check MPV is in PATH or configure custom path in settings (Desktop)
+- **Android TV series not playing**: Fixed in 1.2.0 - was caused by AbortController race condition on double D-pad click
 - **Portal connection fails**: Verify MAC address format and portal URL accessibility
+- **Images not loading on Android**: Uses base64 data URLs for Android WebView compatibility
 
 ## License
 
