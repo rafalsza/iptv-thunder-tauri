@@ -521,8 +521,7 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
     
     if (isVod || !client) {
       logger.warn('[ExoPlayer] Skipping channel send: isVod or no client');
-      // Close immediately if we're not sending channels
-      onClose();
+      // Don't close - wait for onPlayerClosed from native player
       return;
     }
     
@@ -541,8 +540,7 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
     // Send channels immediately without delay - player is already open
     const exoPlayer = (globalThis.window as any).ExoPlayer;
     if (!exoPlayer || typeof (exoPlayer as any).update_channels !== 'function') {
-      logger.warn('[ExoPlayer] ExoPlayer.update_channels not available yet, closing');
-      onClose();
+      logger.warn('[ExoPlayer] ExoPlayer.update_channels not available yet, skipping channel send');
       return;
     }
     
@@ -575,14 +573,12 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         
         (exoPlayer as any).update_channels(JSON.stringify(categoryChannelsToSend), JSON.stringify(recentChannelsToSend));
         
-        // Close after sending channels
-        onClose();
+        // Don't close - wait for onPlayerClosed from native player
       } catch (e) {
         logger.warn('[ExoPlayer] Failed to send channels via useEffect:', e);
-        onClose();
       }
     })();
-  }, [categoryChannels, recentChannels, genreId, isVod, client, channelId, onClose, playerOpened]);
+  }, [categoryChannels, recentChannels, genreId, isVod, client, channelId, playerOpened]);
 
   // Cleanup EPG interval on unmount
   React.useEffect(() => {
