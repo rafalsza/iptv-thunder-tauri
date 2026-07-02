@@ -49,6 +49,7 @@ class NativePlayerActivity : AppCompatActivity() {
     private var currentChannelCmd = ""
     private var currentChannelGenreId = ""
     private var addedToRecent = false
+    private var pendingChannelName = ""  // Set when waiting for JS to resolve URL
 
     // Episode data for auto-play
     private var episodes: List<EpisodeInfo> = emptyList()
@@ -60,10 +61,12 @@ class NativePlayerActivity : AppCompatActivity() {
     private var epgStart = ""
     private var epgEnd = ""
     private var epgCategory = ""
+    private var epgDesc = ""
     private var epgNextTitle = ""
     private var epgNextStart = ""
     private var epgNextEnd = ""
     private var epgNextCategory = ""
+    private var epgProgramsJson = ""
     private var initialVolume = 0.8f
 
     // Channel data for carousel - separate lists for category and recent
@@ -134,11 +137,18 @@ class NativePlayerActivity : AppCompatActivity() {
         epgStart = intent.getStringExtra("epgStart") ?: ""
         epgEnd = intent.getStringExtra("epgEnd") ?: ""
         epgCategory = intent.getStringExtra("epgCategory") ?: ""
+        epgDesc = intent.getStringExtra("epgDesc") ?: ""
         epgNextTitle = intent.getStringExtra("epgNextTitle") ?: ""
         epgNextStart = intent.getStringExtra("epgNextStart") ?: ""
         epgNextEnd = intent.getStringExtra("epgNextEnd") ?: ""
         epgNextCategory = intent.getStringExtra("epgNextCategory") ?: ""
         android.util.Log.d("NativePlayerActivity", "EPG data: title=$epgTitle, start=$epgStart, end=$epgEnd, category=$epgCategory")
+
+        // Parse full EPG program list for auto-refresh
+        epgProgramsJson = intent.getStringExtra("epgProgramsJson") ?: ""
+        if (epgProgramsJson.isNotEmpty()) {
+            android.util.Log.d("NativePlayerActivity", "EPG programs list received, length=${epgProgramsJson.length}")
+        }
 
         // Get volume from settings (0-100, default 80)
         initialVolume = intent.getIntExtra("volume", 80) / 100f
@@ -216,6 +226,7 @@ class NativePlayerActivity : AppCompatActivity() {
             epgNextContainer = findViewById(R.id.epg_next_container),
             epgNextTime = findViewById(R.id.epg_next_time),
             epgNextTitle = findViewById(R.id.epg_next_title),
+            epgCurrentDesc = findViewById(R.id.epg_current_desc),
             epgNextCategory = findViewById(R.id.epg_next_category),
             getPlayerPosition = { playerController.player?.currentPosition ?: 0L },
             getPlayerDuration = { playerController.player?.duration ?: 0L },
@@ -255,6 +266,7 @@ class NativePlayerActivity : AppCompatActivity() {
             seekBackwardButton = findViewById(R.id.seek_backward_button),
             seekToBeginningButton = seekToBeginningButton,
             trackSelectButton = findViewById(R.id.track_select_button),
+            epgButton = findViewById(R.id.epg_button),
             statusIndicator = findViewById(R.id.status_indicator),
             getDuration = { playerController.player?.duration ?: 0L },
             onSeek = { position ->
@@ -268,7 +280,8 @@ class NativePlayerActivity : AppCompatActivity() {
             formatTime = ::formatTime,
             getTrackInfo = { playerController.currentUiState },
             onSelectAudioTrack = { trackId -> playerController.selectAudioTrack(trackId) },
-            onSelectSubtitleTrack = { trackId -> playerController.selectSubtitleTrack(trackId) }
+            onSelectSubtitleTrack = { trackId -> playerController.selectSubtitleTrack(trackId) },
+            onShowEpg = { showEpgDialog() }
         )
         uiController.setChannelName(channelName)
 
@@ -293,7 +306,8 @@ class NativePlayerActivity : AppCompatActivity() {
                 updateSeekBarFromPlayer()
             },
             focusSeekBar = { uiController.focusSeekBar() },
-            focusPlayPause = { uiController.focusPlayPauseButton() }
+            focusPlayPause = { uiController.focusPlayPauseButton() },
+            onShowEpg = { showEpgDialog() }
         )
 
         // Initialize player (prepare is now async in PlayerController)
@@ -313,8 +327,32 @@ class NativePlayerActivity : AppCompatActivity() {
 
         // Start EPG with initial data if available
         if (epgTitle.isNotEmpty() && epgStart.isNotEmpty() && epgEnd.isNotEmpty()) {
-            epgManager.updateEpg(epgTitle, epgStart, epgEnd, epgNextTitle, epgNextStart, epgNextEnd, epgCategory, epgNextCategory)
+            epgManager.updateEpg(epgTitle, epgStart, epgEnd, epgNextTitle, epgNextStart, epgNextEnd, epgCategory, epgNextCategory, epgDesc)
         }
+
+        // Apply full EPG program list for auto-refresh
+        if (epgProgramsJson.isNotEmpty()) {
+            epgManager.updateEpgList(epgProgramsJson)
+        }
+
+        // Apply buffered EPG from MainActivity (in case update_epg arrived before this activity was created)
+        MainActivity.currentInstance?.bufferedEpg?.let { buf ->
+            if (buf.isNotEmpty()) {
+                android.util.Log.d("NativePlayerActivity", "Applying buffered EPG: title=${buf[0]}")
+                epgManager.updateEpg(buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], if (buf.size > 8) buf[8] else "")
+                MainActivity.currentInstance?.bufferedEpg = null
+            }
+        }
+
+        // Apply buffered EPG list from MainActivity
+        MainActivity.currentInstance?.bufferedEpgList?.let { json ->
+            if (json.isNotEmpty()) {
+                android.util.Log.d("NativePlayerActivity", "Applying buffered EPG list")
+                epgManager.updateEpgList(json)
+                MainActivity.currentInstance?.bufferedEpgList = null
+            }
+        }
+
         epgManager.start(isVod)
 
         // Start auto-hide timer for controls
@@ -330,6 +368,7 @@ class NativePlayerActivity : AppCompatActivity() {
                     toggleRecentCarousel()
                 } else {
                     playerController.player?.stop()
+                    notifyPlayerClosed()
                     finish()
                 }
             }
@@ -381,6 +420,8 @@ class NativePlayerActivity : AppCompatActivity() {
         uiController.updateTrackInfo(state)
         uiController.updateSeekToBeginningButtonVisibility(state.isVod)
         uiController.updatePlayPauseButtonVisibility(state.isVod)
+        uiController.updateSeekButtonsVisibility(state.isVod)
+        uiController.updateEpgButtonVisibility(state.isVod)
     }
 
     private fun loadResumePosition() {
@@ -407,6 +448,127 @@ class NativePlayerActivity : AppCompatActivity() {
         // Kept for backward compatibility if needed
     }
 
+    private fun showEpgDialog() {
+        val epg = epgManager.currentEpg
+        val programs = epgManager.getProgramList()
+
+        if (epg == null && programs.isEmpty()) {
+            android.util.Log.d("NativePlayerActivity", "showEpgDialog: no EPG data available")
+            return
+        }
+
+        val dialogView = layoutInflater.inflate(R.layout.dialog_epg, null)
+        val channelText = dialogView.findViewById<android.widget.TextView>(R.id.epg_dialog_channel)
+        val listContainer = dialogView.findViewById<android.widget.LinearLayout>(R.id.epg_dialog_list)
+
+        channelText.text = "EPG - $currentChannelName"
+
+        val now = System.currentTimeMillis() / 1000
+        val dayFormat = java.text.SimpleDateFormat("EEE, dd MMM", java.util.Locale.getDefault())
+        dayFormat.timeZone = java.util.TimeZone.getDefault()
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getDefault())
+
+        var currentProgramView: android.view.View? = null
+        var lastDayKey = ""
+
+        for (prog in programs) {
+            val startSec = prog.start.toLongOrNull() ?: 0L
+            val endSec = prog.end.toLongOrNull() ?: 0L
+
+            // Day header
+            cal.timeInMillis = startSec * 1000
+            val dayKey = dayFormat.format(cal.time)
+            if (dayKey != lastDayKey) {
+                lastDayKey = dayKey
+                val dayHeader = layoutInflater.inflate(R.layout.dialog_epg_day_header, null) as android.widget.TextView
+                dayHeader.text = dayKey
+                listContainer.addView(dayHeader)
+            }
+
+            val itemView = layoutInflater.inflate(R.layout.dialog_epg_item, null)
+            val timeText = itemView.findViewById<android.widget.TextView>(R.id.epg_item_time)
+            val titleText = itemView.findViewById<android.widget.TextView>(R.id.epg_item_title)
+            val descText = itemView.findViewById<android.widget.TextView>(R.id.epg_item_desc)
+
+            val isCurrent = startSec <= now && now < endSec
+
+            timeText.text = "${epgManager.formatUnixTime(startSec)} - ${epgManager.formatUnixTime(endSec)}"
+            titleText.text = prog.title
+
+            if (prog.desc.isNotEmpty()) {
+                descText.text = prog.desc
+                descText.visibility = android.view.View.VISIBLE
+            }
+
+            if (isCurrent) {
+                itemView.setBackgroundColor(0xFF3B82F6.toInt())
+                titleText.setTextColor(0xFFFFFFFF.toInt())
+                timeText.setTextColor(0xFFCCCCCC.toInt())
+                itemView.isFocusable = true
+                itemView.isFocusableInTouchMode = true
+                currentProgramView = itemView
+            }
+
+            listContainer.addView(itemView)
+        }
+
+        if (listContainer.childCount == 0 && epg != null) {
+            val itemView = layoutInflater.inflate(R.layout.dialog_epg_item, null)
+            val timeText = itemView.findViewById<android.widget.TextView>(R.id.epg_item_time)
+            val titleText = itemView.findViewById<android.widget.TextView>(R.id.epg_item_title)
+            val descText = itemView.findViewById<android.widget.TextView>(R.id.epg_item_desc)
+
+            timeText.text = "${epg.start} - ${epg.end}"
+            titleText.text = epg.title
+            if (epg.desc.isNotEmpty()) {
+                descText.text = epg.desc
+                descText.visibility = android.view.View.VISIBLE
+            }
+            itemView.setBackgroundColor(0xFF3B82F6.toInt())
+            listContainer.addView(itemView)
+
+            if (epg.nextTitle.isNotEmpty()) {
+                val nextView = layoutInflater.inflate(R.layout.dialog_epg_item, null)
+                val nextTime = nextView.findViewById<android.widget.TextView>(R.id.epg_item_time)
+                val nextTitle = nextView.findViewById<android.widget.TextView>(R.id.epg_item_title)
+                nextTime.text = "${epg.nextStart} - ${epg.nextEnd}"
+                nextTitle.text = epg.nextTitle
+                listContainer.addView(nextView)
+            }
+        }
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setPositiveButton("OK") { d, _ -> d.dismiss() }
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.setOnDismissListener { uiController.resetHideTimer() }
+        dialog.show()
+
+        // Focus and scroll to current program
+        currentProgramView?.let { cv ->
+            cv.post {
+                cv.requestFocus()
+                cv.scrollTo(0, 0)
+                val scrollView = dialogView.findViewById<android.widget.ScrollView>(R.id.epg_dialog_scroll)
+                scrollView?.scrollTo(0, cv.top)
+            }
+        }
+
+        // Set dialog window size to 80% width, 70% height for TV
+        dialog.window?.let { win ->
+            val metrics = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.getMetrics(metrics)
+            val params = win.attributes
+            params.width = (metrics.widthPixels * 0.8).toInt()
+            params.height = (metrics.heightPixels * 0.7).toInt()
+            params.gravity = android.view.Gravity.CENTER
+            win.attributes = params
+        }
+    }
+
     private fun formatTime(ms: Long): String {
         val seconds = (ms / 1000) % 60
         val minutes = (ms / (1000 * 60)) % 60
@@ -431,8 +593,22 @@ class NativePlayerActivity : AppCompatActivity() {
         if (isVod) epgManager.stop() else epgManager.start(false)
     }
 
-    fun updateEPG(title: String, start: String, end: String, nextTitle: String = "", nextStart: String = "", nextEnd: String = "", category: String = "", nextCategory: String = "") {
-        epgManager.updateEpg(title, start, end, nextTitle, nextStart, nextEnd, category, nextCategory)
+    fun updateEPG(title: String, start: String, end: String, nextTitle: String = "", nextStart: String = "", nextEnd: String = "", category: String = "", nextCategory: String = "", desc: String = "") {
+        epgManager.updateEpg(title, start, end, nextTitle, nextStart, nextEnd, category, nextCategory, desc)
+    }
+
+    fun updateEpgList(programsJson: String) {
+        android.util.Log.d("NativePlayerActivity", "updateEpgList: length=${programsJson.length}")
+        epgManager.updateEpgList(programsJson)
+    }
+
+    // Called when JS resolves the stream URL after onChannelChange callback
+    fun onResolvedUrl(resolvedUrl: String) {
+        android.util.Log.d("NativePlayerActivity", "onResolvedUrl: $resolvedUrl, pendingChannelName=$pendingChannelName")
+        if (resolvedUrl.isNotEmpty() && pendingChannelName.isNotEmpty()) {
+            changeChannel(resolvedUrl, pendingChannelName, isVod = false)
+            pendingChannelName = ""
+        }
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -457,6 +633,12 @@ class NativePlayerActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         playerController.resume()
+    }
+
+    private fun notifyPlayerClosed() {
+        MainActivity.currentInstance?.webView?.let { webview ->
+            webview.evaluateJavascript("if (window.onPlayerClosed) { window.onPlayerClosed(); }", null)
+        }
     }
 
     override fun onDestroy() {
@@ -512,7 +694,7 @@ class NativePlayerActivity : AppCompatActivity() {
                     logo = obj.optString("logo", ""),
                     stream_url = obj.optString("stream_url", ""),
                     cmd = obj.optString("cmd", ""),
-                    tv_genre_id = obj.optString("tv_genre_id", null)
+                    tv_genre_id = obj.optString("tv_genre_id", "")
                 ))
             }
             list
@@ -876,27 +1058,34 @@ class NativePlayerActivity : AppCompatActivity() {
 
     private fun handleChannelSelect(channel: ChannelInfo) {
         android.util.Log.d("NativePlayerActivity", "Channel selected: ${channel.name} (id: ${channel.id})")
-        android.util.Log.d("NativePlayerActivity", "  stream_url: ${channel.stream_url}")
+        android.util.Log.d("NativePlayerActivity", "  cmd: ${channel.cmd}")
 
-        // URLs are pre-resolved in React, use stream_url directly
-        val url = channel.stream_url
+        currentChannelId = channel.id
+        currentChannelName = channel.name
+        currentChannelLogo = channel.logo ?: ""
+        currentChannelCmd = channel.cmd ?: ""
+        currentChannelGenreId = channel.tv_genre_id ?: ""
+        pendingChannelName = channel.name
 
-        if (!url.isNullOrEmpty()) {
-            android.util.Log.d("NativePlayerActivity", "  Calling changeChannel with URL")
-            currentChannelId = channel.id
-            currentChannelLogo = channel.logo ?: ""
-            currentChannelCmd = channel.cmd ?: ""
-            currentChannelGenreId = channel.tv_genre_id ?: ""
-            changeChannel(url, channel.name, isVod = false)
-            
-            // Close whichever carousel is open
-            if (isCategoryCarouselVisible) {
-                toggleCategoryCarousel()
-            } else if (isRecentCarouselVisible) {
-                toggleRecentCarousel()
+        // Close whichever carousel is open
+        if (isCategoryCarouselVisible) {
+            toggleCategoryCarousel()
+        } else if (isRecentCarouselVisible) {
+            toggleRecentCarousel()
+        }
+
+        val cmd = channel.cmd ?: ""
+        val id = channel.id
+        val name = channel.name
+        val genreId = channel.tv_genre_id ?: ""
+
+        // Call JS onChannelChange bridge to resolve URL via create_link
+        // JS will call ExoPlayer.set_resolved_url(url) when done
+        val js = "if (window.onChannelChange) { window.onChannelChange($id, '$cmd', '$name', '$genreId').then(function(url) { if (window.ExoPlayer && window.ExoPlayer.set_resolved_url) { window.ExoPlayer.set_resolved_url(url); } }); }"
+        MainActivity.currentInstance?.webView?.let { webview ->
+            runOnUiThread {
+                webview.evaluateJavascript(js, null)
             }
-        } else {
-            android.util.Log.w("NativePlayerActivity", "Channel has no stream URL - cannot change channel")
         }
     }
 
@@ -908,6 +1097,20 @@ class NativePlayerActivity : AppCompatActivity() {
         if (!addedToRecent && !isVod && currentChannelId.isNotEmpty() && currentChannelCmd.isNotEmpty()) {
             addRecentViewedViaBridge("live", currentChannelId, currentChannelName, currentChannelLogo, currentChannelCmd, currentChannelGenreId)
             addedToRecent = true
+        }
+
+        // Request EPG from JS for the current channel.
+        // evaluateJavascript works even when WebView is paused.
+        if (!isVod && currentChannelName.isNotEmpty()) {
+            val escapedName = currentChannelName.replace("\\", "\\\\").replace("'", "\\'")
+            val channelIdNum = currentChannelId.toIntOrNull() ?: 0
+            val js = "if (window.onEpgRequest) { window.onEpgRequest($channelIdNum, '$escapedName'); }"
+            android.util.Log.d("NativePlayerActivity", "Requesting EPG via JS for channel: $currentChannelName")
+            MainActivity.currentInstance?.webView?.let { webview ->
+                runOnUiThread {
+                    webview.evaluateJavascript(js, null)
+                }
+            }
         }
     }
 

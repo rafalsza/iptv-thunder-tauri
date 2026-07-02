@@ -239,7 +239,7 @@ const parseXMLTV = (xmlDataOrDoc: string | Document, channelId: number, channelN
     // If no channel name match, try direct ID match
     targetChannelId ??= channelId.toString();
     
-    
+
     // Find programme elements for this channel only
     const programmes = xmlDoc.getElementsByTagName('programme');
     
@@ -327,9 +327,6 @@ const parseXMLTVTime = (timeStr: string): number => {
   return Math.floor(date.getTime() / 1000);
 };
 
-// Check if URL ends with .gz
-const isGzippedUrl = (url: string): boolean => url.toLowerCase().endsWith('.gz');
-
 const checkParsedCache = (parsedCacheKey: string, from?: number, to?: number): StalkerEPG[] | null => {
   const now = Date.now();
   const parsedCached = epgParsedCache.get(parsedCacheKey);
@@ -364,31 +361,9 @@ const checkRawCache = (cacheKey: string): string | null => {
 
 const fetchXmlData = async (url: string): Promise<string | null> => {
   try {
-    if (isGzippedUrl(url)) {
-      return (await invoke('fetch_epg_gz', { url }) as unknown) as string | null;
-    }
-
-    const acceptHeader = 'Accept: application/xml';
-    // Using a safe invoke wrapper to avoid callback issues during quick navigation
-    const response = await invoke('stalker_request', {
-      url: url,
-      method: 'GET',
-      headers: [acceptHeader],
-      body: null,
-    }).catch(() => {
-      // Silently fail for aborted requests to avoid console spam
-      return null;
-    });
-
-    if (!response) return null;
-
-    const responseBody = typeof response === 'string' ? response : (response as any)?.body;
-
-    if (!responseBody || typeof responseBody !== 'string' || responseBody.trim() === '') {
-      return null;
-    }
-    
-    return responseBody;
+    const data = (await invoke('fetch_epg_gz', { url }) as unknown) as string | null;
+    if (!data || data.trim() === '') return null;
+    return data;
   } catch (error) {
     return null;
   }

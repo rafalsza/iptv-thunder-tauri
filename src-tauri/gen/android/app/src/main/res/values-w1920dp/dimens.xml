@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Player controls - 4K TV -->
+    <dimen name="player_control_padding_h">32dp</dimen>
+    <dimen name="player_control_padding_top">16dp</dimen>
+    <dimen name="player_control_padding_bottom">32dp</dimen>
+
+    <dimen name="player_btn_size">56dp</dimen>
+    <dimen name="player_btn_icon_size">28dp</dimen>
+    <dimen name="player_btn_margin">12dp</dimen>
+
+    <dimen name="player_btn_primary_size">64dp</dimen>
+    <dimen name="player_btn_primary_icon_size">32dp</dimen>
+    <dimen name="player_btn_primary_margin">24dp</dimen>
+
+    <dimen name="player_seekbar_margin_bottom">12dp</dimen>
+    <dimen name="player_buttons_margin_top">8dp</dimen>
+    <dimen name="player_carousel_margin_top">20dp</dimen>
+</resources>

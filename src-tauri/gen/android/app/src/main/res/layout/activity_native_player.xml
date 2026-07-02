@@ -157,6 +157,17 @@
                                 android:textColor="#B0B0B0"
                                 android:textSize="12sp" />
                         </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/epg_current_desc"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:textColor="#A0A0A0"
+                            android:textSize="12sp"
+                            android:maxLines="2"
+                            android:ellipsize="end"
+                            android:visibility="gone" />
                     </LinearLayout>
                 </LinearLayout>
 
@@ -232,10 +243,10 @@
         android:layout_gravity="bottom"
         android:orientation="vertical"
         android:background="@drawable/bottom_player_gradient"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingBottom="32dp"
-        android:paddingTop="16dp">
+        android:paddingStart="@dimen/player_control_padding_h"
+        android:paddingEnd="@dimen/player_control_padding_h"
+        android:paddingBottom="@dimen/player_control_padding_bottom"
+        android:paddingTop="@dimen/player_control_padding_top">
 
         <!-- SeekBar z czasem -->
         <LinearLayout
@@ -243,7 +254,7 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="@dimen/player_seekbar_margin_bottom">
 
             <TextView
                 android:id="@+id/current_time"
@@ -282,72 +293,82 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginTop="8dp">
+            android:layout_marginTop="@dimen/player_buttons_margin_top">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/seek_to_beginning_button"
                 style="@style/PlayerControlButton"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
+                android:layout_width="@dimen/player_btn_size"
+                android:layout_height="@dimen/player_btn_size"
                 app:icon="@drawable/ic_first"
-                app:iconSize="28dp"
+                app:iconSize="@dimen/player_btn_icon_size"
                 android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/seek_backward_button"
                 style="@style/PlayerControlButton"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:layout_marginStart="12dp"
+                android:layout_width="@dimen/player_btn_size"
+                android:layout_height="@dimen/player_btn_size"
+                android:layout_marginStart="@dimen/player_btn_margin"
                 app:icon="@drawable/ic_replay_10"
-                app:iconSize="28dp" />
+                app:iconSize="@dimen/player_btn_icon_size" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/play_pause_button"
                 style="@style/PlayerControlButton.Primary"
-                android:layout_width="64dp"
-                android:layout_height="64dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
+                android:layout_width="@dimen/player_btn_primary_size"
+                android:layout_height="@dimen/player_btn_primary_size"
+                android:layout_marginStart="@dimen/player_btn_primary_margin"
+                android:layout_marginEnd="@dimen/player_btn_primary_margin"
                 app:icon="@drawable/ic_play_arrow"
-                app:iconSize="32dp" />
+                app:iconSize="@dimen/player_btn_primary_icon_size" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/seek_forward_button"
                 style="@style/PlayerControlButton"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
+                android:layout_width="@dimen/player_btn_size"
+                android:layout_height="@dimen/player_btn_size"
                 app:icon="@drawable/ic_forward_10"
-                app:iconSize="28dp" />
+                app:iconSize="@dimen/player_btn_icon_size" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/track_select_button"
                 style="@style/PlayerControlButton"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:layout_marginStart="24dp"
+                android:layout_width="@dimen/player_btn_size"
+                android:layout_height="@dimen/player_btn_size"
+                android:layout_marginStart="@dimen/player_btn_primary_margin"
                 app:icon="@drawable/ic_audiotrack"
-                app:iconSize="28dp"
+                app:iconSize="@dimen/player_btn_icon_size"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/epg_button"
+                style="@style/PlayerControlButton"
+                android:layout_width="@dimen/player_btn_size"
+                android:layout_height="@dimen/player_btn_size"
+                android:layout_marginStart="@dimen/player_btn_margin"
+                app:icon="@drawable/ic_info"
+                app:iconSize="@dimen/player_btn_icon_size"
                 android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/category_carousel_button"
                 style="@style/PlayerControlButton"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:layout_marginStart="24dp"
+                android:layout_width="@dimen/player_btn_size"
+                android:layout_height="@dimen/player_btn_size"
+                android:layout_marginStart="@dimen/player_btn_primary_margin"
                 app:icon="@drawable/ic_grid_view"
-                app:iconSize="28dp"
+                app:iconSize="@dimen/player_btn_icon_size"
                 android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/recent_carousel_button"
                 style="@style/PlayerControlButton"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:layout_marginStart="8dp"
+                android:layout_width="@dimen/player_btn_size"
+                android:layout_height="@dimen/player_btn_size"
+                android:layout_marginStart="@dimen/player_btn_margin"
                 app:icon="@drawable/ic_history"
-                app:iconSize="28dp"
+                app:iconSize="@dimen/player_btn_icon_size"
                 android:visibility="gone" />
         </LinearLayout>
 
@@ -356,7 +377,7 @@
             android:id="@+id/category_carousel_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/player_carousel_margin_top"
             android:visibility="gone"
             android:focusable="true"
             android:focusableInTouchMode="true"
@@ -377,7 +398,7 @@
             android:id="@+id/recent_carousel_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/player_carousel_margin_top"
             android:visibility="gone"
             android:focusable="true"
             android:focusableInTouchMode="true"

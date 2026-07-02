@@ -37,17 +37,24 @@ const FavoriteChannelCard: React.FC<FavoriteChannelCardProps> = ({
     delay: 500,
   });
 
+  // Guard to prevent double onSelect from onKeyUp + onClick (Enter on focused element fires both)
+  const enterPressedRef = useRef(false);
+
   const handleKeyUp = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === 'OK' || e.key === 'Select') {
       // Check if long press was triggered - if so, don't call onSelect
       if (!tvLongPressState.getPreventClick()) {
         e.preventDefault();
+        enterPressedRef.current = true;
         onSelect(channel);
+        setTimeout(() => { enterPressedRef.current = false; }, 300);
       }
     }
   };
 
   const handleClick = () => {
+    // Skip if triggered by Enter key (onKeyUp already handled it)
+    if (enterPressedRef.current) return;
     // For mouse/touch, let useLongPress handle it
     if (!isLongPress && !tvLongPressState.getPreventClick()) {
       onSelect(channel);

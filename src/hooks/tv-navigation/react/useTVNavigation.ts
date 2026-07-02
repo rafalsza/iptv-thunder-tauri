@@ -261,12 +261,12 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         // Find and reset ALL scrollable elements
         const allElements = document.querySelectorAll('*');
         allElements.forEach(el => {
-          const style = globalThis.window.getComputedStyle(el);
+          const style = globalThis.getComputedStyle(el);
           if (style.overflowY === 'auto' || style.overflowY === 'scroll' || (el as HTMLElement).scrollTop > 0) {
             (el as HTMLElement).scrollTo({ top: 0, behavior: 'auto' });
           }
         });
-        window.scrollTo({ top: 0, behavior: 'auto' });
+        globalThis.scrollTo({ top: 0, behavior: 'auto' });
         // Update state after scroll reset completes
         updateState();
       });
@@ -424,7 +424,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     let scrollTimeout: number | null = null;
     const scrollListener = () => {
       if (scrollTimeout) return;
-      scrollTimeout = globalThis.window.setTimeout(() => {
+      scrollTimeout = globalThis.setTimeout(() => {
         update();
         scrollTimeout = null;
       }, 16); // ~60fps throttling
@@ -478,9 +478,9 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
     });
 
     return () => {
-      window.removeEventListener('resize', resizeListener);
-      window.removeEventListener('scroll', scrollListener, true);
-      window.removeEventListener('tv-navigation-rebuild', rebuildListener);
+      globalThis.removeEventListener('resize', resizeListener);
+      globalThis.removeEventListener('scroll', scrollListener, true);
+      globalThis.removeEventListener('tv-navigation-rebuild', rebuildListener);
       observer.disconnect();
       if (scrollTimeoutRef.current !== null) {
         cancelAnimationFrame(scrollTimeoutRef.current);
@@ -511,6 +511,18 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
   const handleUpKey = () => {
     const isOnSearchInput = currentElementRef.current?.dataset.tvSearch !== undefined;
     if (!isOnSearchInput) move('up');
+  };
+
+  const handleDownKey = () => {
+    const current = currentElementRef.current;
+    const isInTvChannels = current?.dataset?.tvGroup === 'tv-channels';
+    if (isInTvChannels && stateRef.current) {
+      const result = findNextNode(stateRef.current, 'down', allPlugins, pluginContext);
+      if (!result?.targetId) return;
+      const targetEl = resolveElementTarget(result.targetId);
+      if (targetEl?.dataset?.tvGroup !== 'tv-channels') return;
+    }
+    move('down');
   };
 
   const handleBackOrEscapeKey = (isTyping: boolean, key: string) => {
@@ -554,8 +566,8 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         Right: () => move('right'),
         ArrowLeft: handleLeftKey,
         Left: handleLeftKey,
-        ArrowDown: () => move('down'),
-        Down: () => move('down'),
+        ArrowDown: handleDownKey,
+        Down: handleDownKey,
         ArrowUp: handleUpKey,
         Up: handleUpKey,
         Enter: () => { /* handled via onKeyUp */ },
@@ -613,8 +625,10 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
           const currentTvId = currentActive?.dataset?.tvId;
           const savedTvId = savedElement?.dataset?.tvId;
 
-          // Always restore if not already on the saved element
-          if (currentTvId !== savedTvId) {
+          // Stop if already on the saved element; otherwise restore focus
+          if (currentTvId === savedTvId) {
+            isRestoringFocusRef.current = false;
+          } else {
             savedElement?.focus();
 
             // Try again if focus didn't stick
@@ -624,8 +638,6 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
             } else {
               isRestoringFocusRef.current = false;
             }
-          } else {
-            isRestoringFocusRef.current = false;
           }
         };
 
@@ -654,7 +666,7 @@ export function useTVNavigation(options: TVNavigationOptions = {}) {
         (globalThis as any).__tvLastFocusedElement = focusableEl;
 
         // If Radix is opening, save this element
-        if (isRadixOpen && !lastFocusBeforeDropdownRef.current) {
+        if (isRadixOpen) {
           lastFocusBeforeDropdownRef.current = focusableEl;
         }
 

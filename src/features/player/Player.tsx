@@ -68,13 +68,11 @@ const PlayerComponent: React.FC<PlayerProps> = ({
         name={name}
         channelId={channelId}
         client={client}
-        buffering={buffering}
         isVod={isVod}
         movieId={movieId}
         resumePosition={resumePosition}
         setPosition={setPosition}
         genreId={genreId}
-        onChannelChange={onChannelChange}
         onClose={onClose}
         onEnded={onEnded}
       />

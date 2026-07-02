@@ -225,16 +225,16 @@ export const PortalList: React.FC = () => {
                 }
               }}
               onClick={() => setActiveMenuPortal(portal.id)}
-              className={`group relative backdrop-blur-xl rounded-2xl md:rounded-3xl p-4 md:p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 cursor-pointer ${getStatusColor(portal)} dark:border border-white/10 border-gray-300/20 ${activeMenuPortal === portal.id ? 'pointer-events-none' : ''}`}
+              className={`group relative backdrop-blur-xl rounded-2xl md:rounded-3xl p-4 md:p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 cursor-pointer overflow-hidden ${getStatusColor(portal)} dark:border border-white/10 border-gray-300/20 ${activeMenuPortal === portal.id ? 'pointer-events-none' : ''}`}
             >
             {/* Header */}
             <div className="flex justify-between items-start mb-4 md:mb-6">
-              <div className="flex items-center gap-3 md:gap-4">
+              <div className="flex items-center gap-3 md:gap-4 min-w-0 overflow-hidden">
                 <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center text-xl md:text-2xl backdrop-blur-sm border border-emerald-400/20 flex-shrink-0">
                   {getStatusIcon(portal)}
                 </div>
                 <div className="space-y-1 min-w-0">
-                  <h3 className="font-bold text-base md:text-lg lg:text-xl dark:text-white text-slate-900 tracking-tight truncate">{portal.name}</h3>
+                  <h3 className="font-bold text-base md:text-lg lg:text-xl dark:text-white text-slate-900 tracking-tight truncate max-w-full">{portal.name}</h3>
                   {portal.description && (
                     <p className="text-xs md:text-sm dark:text-slate-400 text-slate-600 truncate">{portal.description}</p>
                   )}
@@ -248,7 +248,7 @@ export const PortalList: React.FC = () => {
                   className="absolute inset-0 z-20 bg-slate-900/95 backdrop-blur-md rounded-2xl md:rounded-3xl flex flex-col items-center justify-center gap-2 md:gap-3 p-3 md:p-4 pointer-events-auto"
                   data-tv-container="portal-actions"
                 >
-                  <p className="text-white font-semibold mb-1 md:mb-2 text-sm md:text-base truncate px-2">{portal.name}</p>
+                  <p className="text-white font-semibold mb-1 md:mb-2 text-sm md:text-base truncate px-2 w-full max-w-full text-center">{portal.name}</p>
                   <div className="flex flex-col gap-2 w-full max-w-[180px] md:max-w-[200px]">
                     {portal.id !== activePortalId && (
                       <button

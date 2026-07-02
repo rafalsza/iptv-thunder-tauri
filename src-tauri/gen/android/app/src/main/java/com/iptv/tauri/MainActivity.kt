@@ -28,6 +28,10 @@ class MainActivity : TauriActivity() {
     private var longPressTriggered = false
     private var longPressEventSent = false
 
+    // Buffered EPG data — used when update_epg arrives before NativePlayerActivity is ready
+    var bufferedEpg: Array<String>? = null
+    var bufferedEpgList: String? = null
+
     // Single long press handler that's reused
     private val longPressRunnable = Runnable {
         if (!longPressEventSent) {
@@ -258,6 +262,7 @@ class MainActivity : TauriActivity() {
                             intent.putExtra("epgNextStart", params.optString("epgNextStart"))
                             intent.putExtra("epgNextEnd", params.optString("epgNextEnd"))
                             intent.putExtra("epgNextCategory", params.optString("epgNextCategory"))
+                            intent.putExtra("epgProgramsJson", params.optString("epgProgramsJson"))
                             intent.putExtra("volume", params.optInt("volume", 80))
                         android.util.Log.d("MainActivity", "Starting NativePlayerActivity")
                         startActivity(intent)
@@ -283,6 +288,45 @@ class MainActivity : TauriActivity() {
                 } else {
                     runOnUiThread {
                         instance.changeChannel(url, channelName, isVod = false) // Channels are never VOD
+                    }
+                }
+            }
+
+            @JavascriptInterface
+            fun update_epg(title: String, start: String, end: String, nextTitle: String, nextStart: String, nextEnd: String, category: String, nextCategory: String, desc: String) {
+                android.util.Log.d("MainActivity", "update_epg called: title=$title, start=$start, end=$end, desc=$desc")
+                val instance = NativePlayerActivity.currentInstance
+                if (instance != null) {
+                    runOnUiThread {
+                        instance.updateEPG(title, start, end, nextTitle, nextStart, nextEnd, category, nextCategory, desc)
+                    }
+                } else {
+                    android.util.Log.w("MainActivity", "NativePlayerActivity not ready, buffering EPG")
+                    bufferedEpg = arrayOf(title, start, end, nextTitle, nextStart, nextEnd, category, nextCategory, desc)
+                }
+            }
+
+            @JavascriptInterface
+            fun update_epg_list(programsJson: String) {
+                android.util.Log.d("MainActivity", "update_epg_list called, length=${programsJson.length}")
+                val instance = NativePlayerActivity.currentInstance
+                if (instance != null) {
+                    runOnUiThread {
+                        instance.updateEpgList(programsJson)
+                    }
+                } else {
+                    android.util.Log.w("MainActivity", "NativePlayerActivity not ready, buffering EPG list")
+                    bufferedEpgList = programsJson
+                }
+            }
+
+            @JavascriptInterface
+            fun set_resolved_url(url: String) {
+                android.util.Log.d("MainActivity", "set_resolved_url: $url")
+                val instance = NativePlayerActivity.currentInstance
+                if (instance != null) {
+                    runOnUiThread {
+                        instance.onResolvedUrl(url)
                     }
                 }
             }

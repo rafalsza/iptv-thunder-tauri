@@ -24,11 +24,20 @@ export class TauriHttpClient {
   private readonly inFlight = new Map<string, Promise<unknown>>();
   private readonly activeRequestIds = new Set<string>();
 
+  // Concurrency limiter + rate limiter - prevents 429 from portal
+  private readonly maxConcurrent: number;
+  private activeCount = 0;
+  private readonly waitQueue: Array<() => void> = [];
+  private lastRequestTime = 0;
+  private readonly minRequestInterval: number;
+
   constructor(
     baseURL: string,
     defaultHeaders: Record<string, string> = {},
     defaultOptions: HttpRequestOptions = {},
-    onAuthError?: () => Promise<AuthResult>
+    onAuthError?: () => Promise<AuthResult>,
+    maxConcurrent: number = 1,
+    minRequestInterval: number = 300
   ) {
     this.baseURL = baseURL;
     this.defaultHeaders = defaultHeaders;
@@ -38,6 +47,45 @@ export class TauriHttpClient {
       ...defaultOptions,
     };
     this.onAuthError = onAuthError;
+    this.maxConcurrent = maxConcurrent;
+    this.minRequestInterval = minRequestInterval;
+  }
+
+  private async acquireSlot(): Promise<void> {
+    if (this.activeCount < this.maxConcurrent) {
+      this.activeCount++;
+      // Rate limit: ensure min interval between consecutive request starts
+      const elapsed = Date.now() - this.lastRequestTime;
+      if (elapsed < this.minRequestInterval) {
+        await this.delay(this.minRequestInterval - elapsed);
+      }
+      this.lastRequestTime = Date.now();
+      return;
+    }
+    await new Promise<void>(resolve => {
+      this.waitQueue.push(() => {
+        this.activeCount++;
+        const elapsed = Date.now() - this.lastRequestTime;
+        if (elapsed < this.minRequestInterval) {
+          this.delay(this.minRequestInterval - elapsed).then(() => {
+            this.lastRequestTime = Date.now();
+            resolve();
+          });
+        } else {
+          this.lastRequestTime = Date.now();
+          resolve();
+        }
+      });
+    });
+  }
+
+  private releaseSlot(): void {
+    this.activeCount--;
+    const next = this.waitQueue.shift();
+    if (next) {
+      next();
+    }
+    if (this.activeCount < 0) this.activeCount = 0;
   }
 
   setHeader(key: string, value: string) {
@@ -95,14 +143,19 @@ export class TauriHttpClient {
     while (attempt <= retries) {
       this.checkAbort(signal);
 
-      await this.handleRetryDelay(attempt, retries, url);
+      await this.handleRetryDelay(attempt, retries, url, lastResponse?.status);
 
       const headers = this.prepareHeaders();
 
       try {
-        const response = await this.executeRequest(fullUrl, headers, timeoutMs, signal);
-        lastResponse = response;
-        return this.parseResponse<T>(response);
+        await this.acquireSlot();
+        try {
+          const response = await this.executeRequest(fullUrl, headers, timeoutMs, signal);
+          lastResponse = response;
+          return this.parseResponse<T>(response);
+        } finally {
+          this.releaseSlot();
+        }
       } catch (error) {
         lastError = error as Error;
         const shouldRetry = await this.shouldRetryAfterError(
@@ -185,13 +238,14 @@ export class TauriHttpClient {
     );
   }
 
-  private async handleRetryDelay(attempt: number, retries: number, url: string): Promise<void> {
+  private async handleRetryDelay(attempt: number, retries: number, url: string, status?: number): Promise<void> {
     if (attempt > 0) {
       logger.info(`Retry attempt ${attempt}/${retries} for ${url}`);
-      const baseDelay = 500;
-      const jitter = Math.random() * 300;
+      // 429 needs longer backoff to let the portal rate limit window reset
+      const baseDelay = status === 429 ? 1500 : 500;
+      const jitter = Math.random() * 500;
       const exponentialDelay = baseDelay * 2 ** attempt;
-      await this.delay(Math.min(exponentialDelay + jitter, 5000));
+      await this.delay(Math.min(exponentialDelay + jitter, 10000));
     }
   }
 
@@ -368,8 +422,8 @@ export class TauriHttpClient {
       return false;
     }
 
-    // Status code based: 5xx are retryable
-    if (status && status >= 500) {
+    // Status code based: 5xx and 429 are retryable
+    if (status && (status >= 500 || status === 429)) {
       return true;
     }
 

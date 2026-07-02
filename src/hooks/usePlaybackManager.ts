@@ -65,6 +65,46 @@ export const usePlaybackManager = ({
 
     player.setBuffering(true);
 
+    // Clean portalUrl - extract valid URL and ignore trailing garbage
+    const rawPortalUrl = client.getAccount()?.portalUrl || '';
+    let cleanPortalUrl = rawPortalUrl;
+
+    // Use URL constructor for proper URL parsing
+    try {
+      const u = new URL(rawPortalUrl);
+      cleanPortalUrl = u.origin + '/';
+    } catch {
+      // Fallback: remove any trailing characters that are not URL-safe
+      cleanPortalUrl = cleanPortalUrl.replace(/[^a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$/, '');
+      // Ensure it ends with /
+      if (!cleanPortalUrl.endsWith('/')) {
+        cleanPortalUrl += '/';
+      }
+    }
+
+    const genreId = (channel.tv_genre_id || (channel as any).genreId)?.toString();
+
+    // Save the currently focused element ID before opening player (main content becomes hidden)
+    const activeElement = document.activeElement as HTMLElement;
+    const focusedId = activeElement?.dataset?.tvId || activeElement?.id || (globalThis as any).__tvLastFocusedElement?.dataset?.tvId || (globalThis as any).__tvLastFocusedElement?.id;
+    if (focusedId) {
+      player.setLastFocusedElementId(focusedId);
+    }
+
+    // Open player immediately with empty URL - player UI shows "Connecting..." while URL is resolved
+    player.setMedia({
+      url: '',
+      name: channel.name,
+      channelId: Number.parseInt(String(channel.id)),
+      isVod: vodFlag,
+      movieId,
+      resumePosition: resumePos,
+      portalUrl: cleanPortalUrl,
+      mac: client.getAccount()?.mac || '',
+      token: client.token || '',
+      genreId,
+    });
+
     try {
       // Ensure authentication before getting stream URL
       await client.ensureAuthenticated();
@@ -91,40 +131,12 @@ export const usePlaybackManager = ({
       // Check if request was aborted before continuing
       if (controller.signal.aborted) return;
 
-      // Clean portalUrl - extract valid URL and ignore trailing garbage
-      const rawPortalUrl = client.getAccount()?.portalUrl || '';
-      let cleanPortalUrl = rawPortalUrl;
-
-      // Use URL constructor for proper URL parsing
-      try {
-        const u = new URL(rawPortalUrl);
-        cleanPortalUrl = u.origin + '/';
-      } catch {
-        // Fallback: remove any trailing characters that are not URL-safe
-        cleanPortalUrl = cleanPortalUrl.replace(/[^a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$/, '');
-        // Ensure it ends with /
-        if (!cleanPortalUrl.endsWith('/')) {
-          cleanPortalUrl += '/';
-        }
-      }
-
-      const genreId = (channel.tv_genre_id || (channel as any).genreId)?.toString();
-
-      player.setMedia({
-        url,
-        name: channel.name,
-        channelId: Number.parseInt(String(channel.id)),
-        isVod: vodFlag,
-        movieId,
-        resumePosition: resumePos,
-        portalUrl: cleanPortalUrl,
-        mac: client.getAccount()?.mac || '',
-        token: client.token || '',
-        genreId,
-      });
+      // Update player with resolved URL - this triggers actual stream loading
+      player.updateUrl(url);
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
         console.error('Failed to play channel:', error);
+        player.stop();
       }
     } finally {
       player.setBuffering(false);

@@ -89,28 +89,37 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const lastFocusedElementIdRef = useRef<string | null>(null);
 
   const saveFocusedElementId = () => {
+    // Try document.activeElement first
     const activeElement = document.activeElement as HTMLElement;
-    if (activeElement?.closest('[data-tv-container="navigation"]')) {
+    if (activeElement && (activeElement.dataset.tvId || activeElement.id)) {
       lastFocusedElementIdRef.current = activeElement.dataset.tvId || activeElement.id;
+      return;
+    }
+    // Fallback: TV navigation system tracks the last focused element globally
+    const tvLastFocused = (globalThis as any).__tvLastFocusedElement as HTMLElement | null;
+    if (tvLastFocused && (tvLastFocused.dataset.tvId || tvLastFocused.id)) {
+      lastFocusedElementIdRef.current = tvLastFocused.dataset.tvId || tvLastFocused.id;
     }
   };
 
-  const restoreFocusBySavedId = (navigationContainer: HTMLElement): boolean => {
-    if (!lastFocusedElementIdRef.current) return false;
-
-    const elementToFocus = navigationContainer.querySelector(
-      `[data-tv-id="${lastFocusedElementIdRef.current}"], #${lastFocusedElementIdRef.current}`
-    ) as HTMLElement;
-
-    if (elementToFocus) {
-      elementToFocus.focus();
+  const restoreNavigationFocus = () => {
+    // First try to restore focus to the exact element that had focus (e.g. channel card)
+    if (lastFocusedElementIdRef.current) {
+      const elementToFocus = document.querySelector(
+        `[data-tv-id="${lastFocusedElementIdRef.current}"], #${lastFocusedElementIdRef.current}`
+      ) as HTMLElement;
+      if (elementToFocus) {
+        elementToFocus.focus();
+        lastFocusedElementIdRef.current = null;
+        return;
+      }
       lastFocusedElementIdRef.current = null;
-      return true;
     }
-    return false;
-  };
 
-  const restoreFocusFallback = (navigationContainer: HTMLElement) => {
+    // Fallback: restore focus to navigation container
+    const navigationContainer = document.querySelector('[data-tv-container="navigation"]') as HTMLElement;
+    if (!navigationContainer) return;
+
     const lastFocused = navigationContainer.querySelector('.tv-focused') as HTMLElement;
     if (lastFocused) {
       lastFocused.focus();
@@ -129,15 +138,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     }
   };
 
-  const restoreNavigationFocus = () => {
-    const navigationContainer = document.querySelector('[data-tv-container="navigation"]') as HTMLElement;
-    if (!navigationContainer) return;
-
-    if (!restoreFocusBySavedId(navigationContainer)) {
-      restoreFocusFallback(navigationContainer);
-    }
-  };
-
   useEffect(() => {
     // Save the last focused element ID when player opens
     if (player.current && !wasPlayerOpenRef.current) {
@@ -145,16 +145,39 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       wasPlayerOpenRef.current = true;
     }
 
-    // Restore focus when player closes
+      // Restore focus when player closes
     if (!player.current && wasPlayerOpenRef.current) {
       wasPlayerOpenRef.current = false;
+      // Use the ID saved by usePlaybackManager before player opened
+      const savedId = lastFocusedElementIdRef.current || player.lastFocusedElementId;
+      lastFocusedElementIdRef.current = null;
+      const androidPlatform = (() => { try { return platform() === 'android'; } catch { return false; } })();
+      const initialDelay = androidPlatform ? 200 : 50;
+      const maxAttempts = androidPlatform ? 10 : 5;
+      const retryDelay = androidPlatform ? 100 : 50;
       setTimeout(() => {
-        document.dispatchEvent(new CustomEvent('tv-navigation-rebuild'));
-        setTimeout(() => {
-          (document.activeElement as HTMLElement)?.blur();
-          setTimeout(restoreNavigationFocus, 50);
-        }, 50);
-      }, 50);
+        (document.activeElement as HTMLElement)?.blur();
+        // Retry focus restoration with increasing delays in case virtualizer hasn't rendered the card yet
+        const tryRestore = (attempts: number) => {
+          if (attempts <= 0) {
+            // Fallback: restore to navigation, then rebuild
+            restoreNavigationFocus();
+            document.dispatchEvent(new CustomEvent('tv-navigation-rebuild'));
+            return;
+          }
+          if (savedId) {
+            const el = document.querySelector(`[data-tv-id="${savedId}"], #${savedId}`) as HTMLElement;
+            if (el) {
+              el.focus();
+              // Dispatch rebuild AFTER focus so navigation system picks up the correct element
+              document.dispatchEvent(new CustomEvent('tv-navigation-rebuild'));
+              return;
+            }
+          }
+          setTimeout(() => tryRestore(attempts - 1), retryDelay);
+        };
+        tryRestore(maxAttempts);
+      }, initialDelay);
     }
   }, [player.current]);
 
@@ -187,9 +210,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           className={player.current ? 'hidden' : ''}
         />
 
-        {/* Main Content - hidden when player active */}
-        {!player.current && (
-          <div id="main" data-tv-container="main" className="flex-1 flex flex-col min-w-0 overflow-x-hidden overflow-y-auto">
+        {/* Main Content - hidden when player active but kept in DOM to preserve state */}
+        <div id="main" data-tv-container="main" className={`flex-1 flex flex-col min-w-0 overflow-x-hidden overflow-y-auto ${player.current ? 'hidden' : ''}`}>
             {/* Search Bar - only show for list views */}
             {activeView !== 'portals' && activeView !== 'movie-details' && activeView !== 'series-details' && activePortal && (
               <div className="px-4 pt-4 pb-0">
@@ -209,8 +231,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
             {/* Active View */}
             {children}
-          </div>
-        )}
+        </div>
 
         {/* Player - lazy loaded for both mobile and desktop */}
         {player.current && (

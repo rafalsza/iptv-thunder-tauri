@@ -38,16 +38,21 @@ export interface PlaybackState {
   // Content type tracking
   contentType: 'tv' | 'movies' | 'series' | null;
 
+  // Last focused element ID before player opened (for focus restoration)
+  lastFocusedElementId: string | null;
+
   // Settings (persisted)
   settings: PlaybackSettings;
 
   // Actions
   setMedia: (media: PlayerMedia | null) => void;
+  updateUrl: (url: string) => void;
   setBuffering: (value: boolean) => void;
   setContentType: (type: 'tv' | 'movies' | 'series' | null) => void;
   setError: (error: string | null) => void;
   setVolume: (volume: number) => void;
   setMuted: (muted: boolean) => void;
+  setLastFocusedElementId: (id: string | null) => void;
   stop: () => void;
   close: () => void;
 }
@@ -59,6 +64,7 @@ export const usePlaybackStore = create<PlaybackState>()(
       buffering: false,
       error: null,
       contentType: null,
+      lastFocusedElementId: null,
       settings: {
         volume: 1,
         muted: false,
@@ -68,6 +74,14 @@ export const usePlaybackStore = create<PlaybackState>()(
         set((state) => {
           state.current = media;
           state.error = null;
+        });
+      },
+
+      updateUrl: (url) => {
+        set((state) => {
+          if (state.current) {
+            state.current.url = url;
+          }
         });
       },
 
@@ -98,6 +112,12 @@ export const usePlaybackStore = create<PlaybackState>()(
       setMuted: (muted) => {
         set((state) => {
           state.settings.muted = muted;
+        });
+      },
+
+      setLastFocusedElementId: (id) => {
+        set((state) => {
+          state.lastFocusedElementId = id;
         });
       },
 

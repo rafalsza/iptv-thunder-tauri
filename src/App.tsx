@@ -248,7 +248,7 @@ export const App: React.FC = () => {
   return (
     <PersistQueryClientProvider
       client={queryClient}
-      persistOptions={{ persister, maxAge: 7 * 24 * 60 * 60 * 1000, buster: 'iptv-v1' }}
+      persistOptions={{ persister, maxAge: 30 * 24 * 60 * 60 * 1000, buster: 'iptv-v1' }}
     >
       <div className={`app-wrapper ${isAndroid ? 'android-tv' : ''}`}>
         <ToastProvider>

@@ -3,6 +3,7 @@
 // =========================
 import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { invoke } from '@tauri-apps/api/core';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
 import { StalkerChannel, StalkerEPG } from '@/types';
 import { usePortalsStore, PREDEFINED_EPG_SERVICES, EpgService } from '@/store/portals.store';
@@ -71,6 +72,13 @@ export const useEpgCacheManager = () => {
       
       prevEpgUrl.current = effectiveEpgUrl;
       prevPortalId.current = portalId;
+
+      // Prefetch XMLTV in Rust background cache so it's ready when player opens
+      if (effectiveEpgUrl) {
+        invoke('prefetch_epg_xml', {
+          url: effectiveEpgUrl,
+        }).catch(() => {});
+      }
     }
   }, [effectiveEpgUrl, portalId, clearAllEPG, queryClient]);
 };
@@ -102,7 +110,7 @@ export const useChannelEPG = (client: StalkerClient | undefined, channelId: numb
           result = await getChannelEPG(client, channelId, from, to);
         }
       } catch (error) {
-        // Silent fail
+        console.warn('[EPG] Failed to fetch EPG data:', error);
       }
 
       if (portalId) {

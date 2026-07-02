@@ -20,7 +20,8 @@ class RemoteController(
     private val getCurrentPosition: () -> Long,
     private val onSeekTo: (Long) -> Unit,
     private val focusSeekBar: () -> Boolean,
-    private val focusPlayPause: () -> Boolean
+    private val focusPlayPause: () -> Boolean,
+    private val onShowEpg: () -> Unit = {}
 ) {
     fun handleKeyEvent(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) {
@@ -63,6 +64,16 @@ class RemoteController(
 
             KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
                 onSeekBackward()
+                true
+            }
+
+            KeyEvent.KEYCODE_GUIDE -> {
+                if (!isVod()) onShowEpg()
+                true
+            }
+
+            KeyEvent.KEYCODE_INFO -> {
+                if (!isVod()) onShowEpg()
                 true
             }
 

@@ -93,6 +93,9 @@ const MpvPlayerComponent: React.FC<PlayerProps> = ({
 
   // Initial load on URL change
   useEffect(() => {
+    // Skip when URL is empty - player is shown with "Connecting..." while create_link resolves
+    if (!url) return;
+
     const { cleanup, loadUrl, getRankedUrls, setStreamState, setStatusMsg } = mpv;
     hasResumedRef.current = false;
 

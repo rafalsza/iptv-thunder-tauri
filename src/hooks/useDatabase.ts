@@ -12,13 +12,17 @@ export async function getDb(): Promise<Database> {
 // =========================
 // 📺 CHANNELS API
 // =========================
-export async function saveChannels(channels: Channel[], portalId: string): Promise<void> {
-  console.log('[Database] saveChannels called with', channels.length, 'channels for portal', portalId);
+export async function saveChannels(channels: Channel[], portalId: string, genreId?: string): Promise<void> {
+  console.log('[Database] saveChannels called with', channels.length, 'channels for portal', portalId, 'genre', genreId);
   const now = Date.now();
 
   await withTransaction(async (db) => {
-    // Remove old channels for this portal
-    await db.execute('DELETE FROM channels WHERE portal_id = ?', [portalId]);
+    // Remove old channels for this portal+genre only (not all genres)
+    if (genreId) {
+      await db.execute('DELETE FROM channels WHERE portal_id = ? AND genre_id = ?', [portalId, genreId]);
+    } else {
+      await db.execute('DELETE FROM channels WHERE portal_id = ? AND genre_id IS NULL', [portalId]);
+    }
 
     if (channels.length === 0) {
       return;

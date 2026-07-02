@@ -55,6 +55,9 @@ const ChannelCard = React.memo<ChannelCardProps>(({
     delay: 500,
   });
 
+  // Guard to prevent double onSelect from onKeyUp + onClick (Enter on focused element fires both)
+  const enterPressedRef = useRef(false);
+
   const handleKeyDown = () => {
     // Let useLongPress handle mouse/touch, but we'll handle TV separately
   };
@@ -64,12 +67,17 @@ const ChannelCard = React.memo<ChannelCardProps>(({
       // Check if long press was triggered - if so, don't call onSelect
       if (!tvLongPressState.getPreventClick()) {
         e.preventDefault();
+        enterPressedRef.current = true;
         onSelect(channel);
+        // Reset after click event would have fired
+        setTimeout(() => { enterPressedRef.current = false; }, 300);
       }
     }
   };
 
   const handleClick = () => {
+    // Skip if triggered by Enter key (onKeyUp already handled it)
+    if (enterPressedRef.current) return;
     // For mouse/touch, let useLongPress handle it
     if (!isLongPress && !tvLongPressState.getPreventClick()) {
       onSelect(channel);
@@ -96,9 +104,8 @@ const ChannelCard = React.memo<ChannelCardProps>(({
       }}
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
-      initial={{ opacity: 0, y: 20 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
       whileHover={{ scale: 1.05, y: -4, boxShadow: '0 10px 40px rgba(34, 197, 94, 0.2)' }}
       whileTap={{ scale: 0.98 }}
       className="p-2 rounded-lg cursor-pointer dark:bg-slate-800/30 bg-gray-100/30 dark:hover:bg-slate-700/50 hover:bg-gray-200/50 dark:hover:border-green-700 hover:border-green-700 transition-all dark:focus:bg-slate-700/50 focus:bg-gray-200/50 dark:focus:border-green-700 focus:border-green-700 backdrop-blur-sm"
@@ -229,9 +236,13 @@ export const TVList: React.FC<TVListProps> = ({
     timeoutsRef.current.clear();
   }, [selectedCategory?.id]);
 
-  // Focus first channel after category change or initial load
+  // Focus first channel after category change only (not on re-render when player closes)
+  const prevCategoryRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (allChannels.length > 0) {
+    const categoryId = selectedCategory?.id;
+    // Only focus first channel when category actually changes
+    if (allChannels.length > 0 && prevCategoryRef.current !== categoryId) {
+      prevCategoryRef.current = categoryId;
       setTimeout(() => {
         const firstChannel = document.querySelector('[data-tv-group="tv-channels"][data-tv-initial]') as HTMLElement;
         if (firstChannel) {
@@ -255,13 +266,21 @@ export const TVList: React.FC<TVListProps> = ({
     const existingTimeout = timeoutsRef.current.get(channelId);
     if (existingTimeout) clearTimeout(existingTimeout);
 
-    // Set new timeout for this channel (300ms debounce)
+    // Set new timeout for this channel (500ms debounce)
     timeoutsRef.current.set(channelId, setTimeout(() => {
       preload(channel);
       lastPreloadedRef.current = channelId;
       prefetchCountRef.current++;
-    }, 300));
+    }, 500));
   }, [preload]);
+
+  // Wrap onChannelSelect to cancel any pending prefetch timeouts
+  const handleSelect = useCallback((channel: StalkerChannel) => {
+    // Clear all pending prefetch timeouts - no need to prefetch if we're playing now
+    timeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+    timeoutsRef.current.clear();
+    onChannelSelect(channel);
+  }, [onChannelSelect]);
 
   const handleLongPress = useCallback((channel: StalkerChannel) => {
     toggleItemFavorite('live', String(channel.id), {
@@ -397,7 +416,7 @@ export const TVList: React.FC<TVListProps> = ({
                       channel={channel}
                       index={globalIndex}
                       isItemFavorite={isItemFavorite}
-                      onSelect={onChannelSelect}
+                      onSelect={handleSelect}
                       onToggleFavorite={handleToggleFavorite}
                       onLongPress={handleLongPress}
                       onPrefetch={debouncedPreload}

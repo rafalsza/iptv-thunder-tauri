@@ -3,6 +3,7 @@ import { TauriHttpClient } from './tauriHttp';
 import { StalkerAccount, HandshakeResponse, StalkerProfile, StalkerChannel, StalkerGenre, StalkerVOD, StalkerEPG } from '@/types';
 import { createLogger, createDebugRequestContext, logDebugRequest, logDebugSuccess, logDebugError } from './logger';
 import { platform } from '@tauri-apps/plugin-os';
+import { usePortalsStore } from '@/store/portals.store';
 
 // Re-export types for consumers
 export type { StalkerAccount, StalkerProfile, StalkerChannel, StalkerGenre, StalkerVOD, StalkerEPG } from '@/types';
@@ -197,7 +198,8 @@ export class StalkerClient {
       const data = this.useTauri ? response : response.data as HandshakeResponse;
 
       if (!data?.js?.token) {
-        throw new Error('Handshake failed - no token received');
+        this.logger.error('Handshake response missing token. Full response:', JSON.stringify(data, null, 2));
+        throw new Error(`Handshake failed - no token received. Response: ${JSON.stringify(data).substring(0, 500)}`);
       }
 
       this.token = data.js.token;
@@ -205,7 +207,6 @@ export class StalkerClient {
       
       // Persist token to portal store so it survives app restarts
       try {
-        const { usePortalsStore } = await import('@/store/portals.store');
         usePortalsStore.getState().updatePortal(this.account.id, {
           token: data.js.token,
           tokenExpiresAt: this.tokenExpiresAt,
@@ -400,7 +401,6 @@ export class StalkerClient {
       hd: '0',
       mac: this.account.mac,
       JsHttpRequest: '1-xml',
-      max_page_items: '500',
     };
 
     if (categoryId && categoryId !== '*' && categoryId !== '') {

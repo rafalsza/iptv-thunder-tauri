@@ -31,6 +31,7 @@ class UiController(
     private val seekBackwardButton: MaterialButton?,
     private val seekToBeginningButton: MaterialButton?,
     private val trackSelectButton: MaterialButton?,
+    private val epgButton: MaterialButton?,
     private val statusIndicator: View?,
     private val getDuration: () -> Long,
     private val onSeek: (positionMs: Long) -> Unit,
@@ -41,7 +42,8 @@ class UiController(
     private val formatTime: (Long) -> String,
     private val getTrackInfo: () -> PlayerController.PlayerUiState? = { null },
     private val onSelectAudioTrack: (String?) -> Unit = {},
-    private val onSelectSubtitleTrack: (String?) -> Unit = {}
+    private val onSelectSubtitleTrack: (String?) -> Unit = {},
+    private val onShowEpg: () -> Unit = {}
 ) {
     companion object {
         private const val HIDE_DELAY_MS = 5000L
@@ -56,7 +58,7 @@ class UiController(
         private set
 
     private val focusableButtons by lazy {
-        listOf(seekToBeginningButton, playPauseButton, seekBackwardButton, seekForwardButton, trackSelectButton)
+        listOf(seekToBeginningButton, playPauseButton, seekBackwardButton, seekForwardButton, trackSelectButton, epgButton)
     }
 
     private var currentTrackInfo: PlayerController.PlayerUiState? = null
@@ -86,6 +88,7 @@ class UiController(
         seekBackwardButton?.isFocusable = true
         seekToBeginningButton?.isFocusable = true
         trackSelectButton?.isFocusable = true
+        epgButton?.isFocusable = true
 
         playPauseButton?.nextFocusRightId = seekForwardButton?.id ?: 0
         playPauseButton?.nextFocusLeftId = seekBackwardButton?.id ?: 0
@@ -95,6 +98,8 @@ class UiController(
         seekForwardButton?.nextFocusLeftId = playPauseButton?.id ?: 0
         seekForwardButton?.nextFocusRightId = trackSelectButton?.id ?: 0
         trackSelectButton?.nextFocusLeftId = seekForwardButton?.id ?: 0
+        trackSelectButton?.nextFocusRightId = epgButton?.id ?: 0
+        epgButton?.nextFocusLeftId = trackSelectButton?.id ?: 0
     }
 
     private fun setupTrackButton() {
@@ -170,6 +175,15 @@ class UiController(
         playPauseButton?.visibility = if (isVod) View.VISIBLE else View.GONE
     }
 
+    fun updateSeekButtonsVisibility(isVod: Boolean) {
+        seekForwardButton?.visibility = if (isVod) View.VISIBLE else View.GONE
+        seekBackwardButton?.visibility = if (isVod) View.VISIBLE else View.GONE
+    }
+
+    fun updateEpgButtonVisibility(isVod: Boolean) {
+        epgButton?.visibility = if (!isVod) View.VISIBLE else View.GONE
+    }
+
     fun updateTrackInfo(info: PlayerController.PlayerUiState) {
         currentTrackInfo = info
         updateTrackButtonVisibility(info.hasMultipleTracks)
@@ -217,6 +231,11 @@ class UiController(
 
         seekToBeginningButton?.setOnClickListener {
             onSeekToBeginning()
+            resetHideTimer()
+        }
+
+        epgButton?.setOnClickListener {
+            onShowEpg()
             resetHideTimer()
         }
     }

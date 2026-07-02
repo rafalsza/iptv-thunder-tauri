@@ -71,6 +71,11 @@ const safeRemoveItem = (key: string): void => {
   }
 };
 
+// Live TV channels rarely change, so cache them for 30 days
+const CHANNEL_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const getChannelLastFetchKey = (accountId: string, genreId?: string) =>
+  `iptv-channels-lastfetch-${accountId}-${genreId || '*'}`;
+
 export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG: boolean = true, enabled: boolean = true) => {
   const accountId = client?.['account']?.id || 'default';
   const prevSignatureRef = useRef<string>('');
@@ -79,9 +84,30 @@ export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG
     queryKey: ['channels', accountId, genreId],
     enabled: enabled && !!client,
     queryFn: async ({ signal }) => {
-      // Always use paginated fetching - get_all_channels endpoint is deprecated
+      // Try SQLite cache first - avoids unnecessary API requests (429 errors)
       const targetGenreId = genreId || '*';
-      
+      const cached = await getChannelsFromDB(accountId, targetGenreId === '*' ? undefined : targetGenreId);
+      if (cached && cached.length > 0) {
+        const lastFetchKey = getChannelLastFetchKey(accountId, targetGenreId);
+        const lastFetch = Number(safeGetItem(lastFetchKey) || '0');
+        const cacheAge = lastFetch ? Date.now() - lastFetch : Infinity;
+        const isFresh = lastFetch > 0 && cacheAge < CHANNEL_CACHE_TTL_MS;
+        // Return cached channels if fresh, or even if lastFetchKey is missing
+        // (better to show cached data than make unnecessary API calls)
+        if (isFresh || lastFetch === 0) {
+          return cached.map(ch => ({
+            id: ch.id,
+            name: ch.name,
+            cmd: ch.streamUrl ?? '',
+            logo: ch.iconUrl,
+            tv_genre_id: ch.genreId ? Number.parseInt(ch.genreId) : undefined,
+            number: ch.orderNum ?? 0,
+            censored: false,
+          })) as StalkerChannel[];
+        }
+      }
+
+      // Cache miss or stale - fetch from API
       // Fetch page 1 first to determine total count
       const firstPage = await getChannels(client, {
         genre: targetGenreId,
@@ -112,7 +138,7 @@ export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG
       const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
       
       // Fetch remaining pages in batches with throttling to avoid overwhelming the portal
-      const BATCH = 5;
+      const BATCH = 2;
       for (let i = 0; i < remainingPages.length; i += BATCH) {
         if (signal?.aborted) break;
         
@@ -153,8 +179,8 @@ export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG
 
       return Array.from(uniqueChannels.values());
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    staleTime: CHANNEL_CACHE_TTL_MS,
+    gcTime: CHANNEL_CACHE_TTL_MS,
   });
   
   // Save channels to SQLite when data changes (replaces onSuccess callback)
@@ -181,9 +207,11 @@ export const useChannels = (client: StalkerClient, genreId?: string, prefetchEPG
       iconUrl: ch.logo_url || ch.logo || '',
       genreId: genreId || ch.tv_genre_id?.toString(),
       orderNum: ch.number || 0,
-    })), accountId).then(() => {
-      // Mark as saved
+    })), accountId, genreId).then(() => {
+      // Mark as saved and update lastFetchKey so cache is considered fresh
       safeSetItem(savedSignatureKey, signature);
+      const targetGenreId = genreId || '*';
+      safeSetItem(getChannelLastFetchKey(accountId, targetGenreId), String(Date.now()));
     }).catch(err => console.error('[DB] Failed to save channels:', err));
   }, [query.data, accountId, genreId]);
   
@@ -293,6 +321,7 @@ const MAX_ALL_CHANNELS = 1000;
 export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
   const isAllCategory = !genreId || genreId === '*';
   const accountId = client?.['account']?.id || 'default';
+  const lastFetchKey = getChannelLastFetchKey(accountId, genreId);
   const [allChannels, setAllChannels] = React.useState<StalkerChannel[]>([]);
   const [hasMore, setHasMore] = React.useState(true);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -303,6 +332,7 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
   const generationRef = React.useRef(0);
   const prevSignatureRef = useRef<string>('');
   const initialLoadDoneRef = React.useRef(false);
+  const prevGenreRef = React.useRef<string | undefined>(undefined);
   const pageRef = React.useRef(1);
   const hasMoreRef = React.useRef(true);
   const autoLoadTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -365,6 +395,8 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
     if (shouldStop) {
       const savedSignatureKey = `iptv-channels-saved-${accountId}-${genreId || '*'}`;
       safeRemoveItem(savedSignatureKey);
+      // Mark the cache as fresh for the 30-day TTL
+      safeSetItem(lastFetchKey, String(Date.now()));
     }
   };
 
@@ -390,7 +422,7 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
     }
   };
 
-  const LOAD_BATCH = 5; // pages fetched in parallel per loadMore call
+  const LOAD_BATCH = 2; // pages fetched in parallel per loadMore call
 
   const loadMore = React.useCallback(async () => {
     if (shouldSkipLoad()) return;
@@ -455,22 +487,27 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
 
   // Reset when genre changes - load from SQLite first
   React.useEffect(() => {
+    // Skip if we already have channels for this genre (e.g. player closed → remount)
+    if (initialLoadDoneRef.current && allChannels.length > 0 && prevGenreRef.current === genreId) {
+      return;
+    }
+    prevGenreRef.current = genreId;
     generationRef.current += 1; // Invalidate any in-flight requests
     setAllChannels([]);
-    setHasMore(true);
+    setHasMore(false); // Don't allow loadMore until cache check completes
     loadedPagesRef.current.clear();
-    loadingRef.current = false;
+    loadingRef.current = true; // Block loadMore during cache check
     prevSignatureRef.current = '';
     initialLoadDoneRef.current = false;
     pageRef.current = 1;
-    hasMoreRef.current = true;
+    hasMoreRef.current = false;
     totalExpectedRef.current = null;
     // Clear any pending auto-load timeout
     if (autoLoadTimeoutRef.current) {
       clearTimeout(autoLoadTimeoutRef.current);
       autoLoadTimeoutRef.current = null;
     }
-    // Try to load from SQLite first
+    // Try to load from SQLite first, but also start fetching page 1 from API immediately
     const loadFromCache = async () => {
       // Prevent double load
       if (initialLoadDoneRef.current) return;
@@ -493,22 +530,60 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
 
           // Check if we have complete data from previous API session (use localStorage for persistence)
           const cacheKey = `iptv-channels-total-${accountId}-${genreId || '*'}`;
+          const pageSizeKey = `iptv-channels-pagesize-${accountId}-${genreId || '*'}`;
+          const savedSignatureKey = `iptv-channels-saved-${accountId}-${genreId || '*'}`;
           const totalExpected = safeGetItem(cacheKey);
           const expectedCount = totalExpected ? Number.parseInt(totalExpected, 10) : 0;
 
-          // If we have complete data (cached >= expected), or 'All' cap reached, skip API call
           const allCapReached = isAllCategory && channels.length >= MAX_ALL_CHANNELS;
-          if (allCapReached || (expectedCount > 0 && channels.length >= expectedCount)) {
+          const isComplete = allCapReached || (expectedCount > 0 && channels.length >= expectedCount);
+          const lastFetch = Number(safeGetItem(lastFetchKey) || '0');
+          const cacheAge = lastFetch ? Date.now() - lastFetch : Infinity;
+          const isFresh = lastFetch > 0 && cacheAge < CHANNEL_CACHE_TTL_MS;
+
+          if (isComplete && isFresh) {
+            // Complete cache younger than 30 days: skip API entirely
             hasMoreRef.current = false;
             setHasMore(false);
+            loadingRef.current = false;
+            setIsLoading(false);
+            return;
+          }
+
+          if (isComplete && !isFresh) {
+            // Stale complete cache: force a full refresh from page 1
+            safeRemoveItem(cacheKey);
+            safeRemoveItem(pageSizeKey);
+            safeRemoveItem(savedSignatureKey);
+            safeRemoveItem(lastFetchKey);
+            setAllChannels([]);
+            loadedPagesRef.current.clear();
+            pageRef.current = 1;
+            setHasMore(true);
+            setTimeout(() => {
+              if (mountedRef.current) {
+                loadingRef.current = false;
+                loadMore();
+              }
+            }, 100);
+            return;
+          }
+
+          // If we have cached channels and cache is fresh but completeness is unknown,
+          // trust the cache — the localStorage total key may simply not have been set
+          if (isFresh && channels.length > 0) {
+            hasMoreRef.current = false;
+            setHasMore(false);
+            loadingRef.current = false;
+            setIsLoading(false);
             return;
           }
 
           // Otherwise, continue loading from API to get remaining channels
+          loadingRef.current = false; // loadMore will set it back to true
           setHasMore(true);
           // Calculate which page to load next based on cached channels count
           // Use stored page size if available, otherwise fall back to 14
-          const pageSizeKey = `iptv-channels-pagesize-${accountId}-${genreId || '*'}`;
           const storedPageSize = parseInt(safeGetItem(pageSizeKey) || '14', 10);
           pageRef.current = Math.ceil(channels.length / storedPageSize) + 1;
           setTimeout(async () => {
@@ -516,15 +591,38 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
               await loadMore();
             }
           }, 100);
-        } else if (client && !loadingRef.current && !initialLoadDoneRef.current) {
-          // No cached data - load from API
+        } else if (client && !initialLoadDoneRef.current) {
+          // No cached data - fetch page 1 from API immediately, then continue loading
           initialLoadDoneRef.current = true;
-          await loadMore();
+          loadingRef.current = false;
+          hasMoreRef.current = true;
+          setHasMore(true);
+          try {
+            const page1 = await getChannels(client, {
+              genre: genreId || '*',
+              page: 1,
+              sortby: 'number',
+            });
+            if (page1 && !isStaleRequest(generationRef.current + 1)) {
+              handleChannelData(page1, 1);
+            }
+            if (hasMoreRef.current && mountedRef.current) {
+              scheduleAutoLoad();
+            }
+          } catch {
+            // Page 1 failed, let loadMore retry
+            if (mountedRef.current) {
+              await loadMore();
+            }
+          }
         }
       } catch (err) {
         // On error, load from API
-        if (client && !loadingRef.current && !initialLoadDoneRef.current) {
+        if (client && !initialLoadDoneRef.current) {
           initialLoadDoneRef.current = true;
+          loadingRef.current = false;
+          hasMoreRef.current = true;
+          setHasMore(true);
           await loadMore();
         }
       }
@@ -561,7 +659,7 @@ export const useLazyChannels = (client: StalkerClient, genreId?: string) => {
       iconUrl: ch.logo_url || ch.logo || '',
       genreId: genreId || ch.tv_genre_id?.toString(),
       orderNum: ch.number || 0,
-    })), accountId).then(() => {
+    })), accountId, genreId).then(() => {
       // Mark as saved
       safeSetItem(savedSignatureKey, signature);
     }).catch(err => console.error('[DB] Failed to save channels:', err));
@@ -648,7 +746,7 @@ export const useChannelSearch = (accountId: string, query: string, backgroundLoa
 // Prefetch stream URL
 // Module-level tracking to prevent request flooding when entering a category
 const inFlightTvPrefetches = new Set<string>();
-const MAX_CONCURRENT_TV_PREFETCHES = 5;
+const MAX_CONCURRENT_TV_PREFETCHES = 2;
 
 export const usePrefetchStream = (client: StalkerClient) => {
   const queryClient = useQueryClient();

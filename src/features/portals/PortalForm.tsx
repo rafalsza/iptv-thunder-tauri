@@ -25,7 +25,7 @@ export const PortalForm: React.FC<PortalFormProps> = ({ portal, onClose }) => {
     login: '',
     password: '',
     portalUrl: 'http://troublesupport.my.to/c/',
-    mac: '00:1A:79:BF:C3:62',
+    mac: '00:1A:79:C7:29:B2',
     description: '',
     tags: [],
   });

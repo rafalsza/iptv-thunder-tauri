@@ -115,7 +115,9 @@ async fn stalker_request(
     // cookies.push("timezone=Europe%2FWarsaw".to_string());
     
     let cookie_string = cookies.join("; ");
-    request = request.header("Cookie", &cookie_string);
+    if !cookie_string.is_empty() {
+        request = request.header("Cookie", &cookie_string);
+    }
 
     // Minimal headers - server might be blocking based on specific headers
     request = request.header("Accept", "*/*");
@@ -302,6 +304,376 @@ async fn fetch_epg_gz(url: String) -> Result<String, String> {
     }
 }
 
+#[derive(serde::Serialize, Clone)]
+struct EpgProgram {
+    title: String,
+    start: String,
+    stop: String,
+    desc: String,
+    category: String,
+}
+
+// EPG parsed cache: stores all channels and their programs, parsed from XMLTV
+// Key = channel id from XMLTV, Value = (display_name, programs)
+struct EpgParsedCache {
+    channels: std::collections::HashMap<String, (String, Vec<EpgProgram>)>, // id -> (display_name, programs)
+    timestamp: std::time::Instant,
+}
+
+static EPG_PARSED_CACHE: LazyLock<Mutex<Option<EpgParsedCache>>> = LazyLock::new(|| Mutex::new(None));
+static EPG_FETCH_LOCK: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));
+const EPG_CACHE_TTL_SECS: u64 = 3600; // 1 hour
+
+/// Download XMLTV EPG and return only programs matching the given channel name.
+/// Uses a pre-parsed cache so subsequent calls are instant.
+#[tauri::command]
+async fn fetch_epg_for_channel(
+    url: String,
+    channel_name: String,
+) -> Result<Vec<EpgProgram>, String> {
+    // Check parsed cache first - instant lookup, no XML parsing
+    {
+        let cache = EPG_PARSED_CACHE.lock().unwrap();
+        if let Some(ref cached) = *cache {
+            if cached.timestamp.elapsed().as_secs() < EPG_CACHE_TTL_SECS {
+                return Ok(find_programs_for_channel(&cached.channels, &channel_name));
+            }
+        }
+    }
+
+    // Acquire fetch lock so concurrent calls share one download
+    let _fetch_guard = EPG_FETCH_LOCK.lock().await;
+
+    // Double-check cache after acquiring lock
+    {
+        let cache = EPG_PARSED_CACHE.lock().unwrap();
+        if let Some(ref cached) = *cache {
+            if cached.timestamp.elapsed().as_secs() < EPG_CACHE_TTL_SECS {
+                return Ok(find_programs_for_channel(&cached.channels, &channel_name));
+            }
+        }
+    }
+
+    // Use the shared HTTP_CLIENT (has danger_accept_invalid_certs to avoid rustls panic on Android)
+    let client = &*HTTP_CLIENT;
+
+    let response = client
+        .get(&url)
+        .header("Accept", "application/gzip, */*")
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP error: {}", response.status()));
+    }
+
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+
+    // Decompress if gzipped
+    let xml_bytes: Vec<u8> = if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
+        let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
+        let mut decompressed = Vec::new();
+        std::io::Read::read_to_end(&mut decoder, &mut decompressed).map_err(|e| e.to_string())?;
+        decompressed
+    } else {
+        bytes.to_vec()
+    };
+
+    let xml_str = String::from_utf8_lossy(&xml_bytes).into_owned();
+
+    // Parse ALL channels and programs at once, store in cache
+    let channels = parse_all_epg(&xml_str)?;
+    let result = find_programs_for_channel(&channels, &channel_name);
+
+    {
+        let mut cache = EPG_PARSED_CACHE.lock().unwrap();
+        *cache = Some(EpgParsedCache {
+            channels,
+            timestamp: std::time::Instant::now(),
+        });
+    }
+
+    Ok(result)
+}
+
+/// Prefetch EPG XMLTV: download and cache parsed data without returning anything.
+/// Called from frontend when portal becomes active, so EPG is ready before player opens.
+#[tauri::command]
+async fn prefetch_epg_xml(url: String) -> Result<(), String> {
+    // Check if already cached
+    {
+        let cache = EPG_PARSED_CACHE.lock().unwrap();
+        if let Some(ref cached) = *cache {
+            if cached.timestamp.elapsed().as_secs() < EPG_CACHE_TTL_SECS {
+                return Ok(());
+            }
+        }
+    }
+
+    let _fetch_guard = EPG_FETCH_LOCK.lock().await;
+
+    // Double-check after lock
+    {
+        let cache = EPG_PARSED_CACHE.lock().unwrap();
+        if let Some(ref cached) = *cache {
+            if cached.timestamp.elapsed().as_secs() < EPG_CACHE_TTL_SECS {
+                return Ok(());
+            }
+        }
+    }
+
+    // Use the shared HTTP_CLIENT (has danger_accept_invalid_certs to avoid rustls panic on Android)
+    let client = &*HTTP_CLIENT;
+
+    let response = client
+        .get(&url)
+        .header("Accept", "application/gzip, */*")
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP error: {}", response.status()));
+    }
+
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+
+    let xml_bytes: Vec<u8> = if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
+        let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
+        let mut decompressed = Vec::new();
+        std::io::Read::read_to_end(&mut decoder, &mut decompressed).map_err(|e| e.to_string())?;
+        decompressed
+    } else {
+        bytes.to_vec()
+    };
+
+    let xml_str = String::from_utf8_lossy(&xml_bytes).into_owned();
+    let channels = parse_all_epg(&xml_str)?;
+
+    {
+        let mut cache = EPG_PARSED_CACHE.lock().unwrap();
+        *cache = Some(EpgParsedCache {
+            channels,
+            timestamp: std::time::Instant::now(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Parse entire XMLTV in a single pass: extract all channels and all programmes.
+/// Returns HashMap<channel_id, (display_name, Vec<EpgProgram>)>.
+fn parse_all_epg(xml_str: &str) -> Result<std::collections::HashMap<String, (String, Vec<EpgProgram>)>, String> {
+    use quick_xml::Reader;
+    use quick_xml::events::Event;
+
+    let mut channels: std::collections::HashMap<String, (String, Vec<EpgProgram>)> = std::collections::HashMap::new();
+    let mut buf = Vec::new();
+    let mut reader = Reader::from_str(xml_str);
+    reader.config_mut().trim_text(true);
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) if e.name().as_ref() == b"channel" => {
+                let id = e.attributes().find_map(|a| {
+                    let a = a.ok()?;
+                    if a.key.as_ref() == b"id" {
+                        Some(String::from_utf8_lossy(a.value.as_ref()).to_string())
+                    } else { None }
+                });
+
+                let mut display_name = String::new();
+                loop {
+                    match reader.read_event_into(&mut buf) {
+                        Ok(Event::Start(ref inner)) if inner.name().as_ref() == b"display-name" => {
+                            let text = reader.read_text(inner.name()).unwrap_or_default();
+                            if display_name.is_empty() {
+                                display_name = text.to_string();
+                            }
+                        }
+                        Ok(Event::End(ref inner)) if inner.name().as_ref() == b"channel" => break,
+                        Ok(Event::Eof) => break,
+                        Err(_) => break,
+                        _ => {}
+                    }
+                }
+
+                if let Some(id) = id {
+                    channels.entry(id).or_insert((display_name, Vec::new()));
+                }
+            }
+            Ok(Event::Start(ref e)) if e.name().as_ref() == b"programme" => {
+                let prog_channel = e.attributes().find_map(|a| {
+                    let a = a.ok()?;
+                    if a.key.as_ref() == b"channel" {
+                        Some(String::from_utf8_lossy(a.value.as_ref()).to_string())
+                    } else { None }
+                });
+
+                let start = e.attributes().find_map(|a| {
+                    let a = a.ok()?;
+                    if a.key.as_ref() == b"start" {
+                        Some(String::from_utf8_lossy(a.value.as_ref()).to_string())
+                    } else { None }
+                }).unwrap_or_default();
+                let stop = e.attributes().find_map(|a| {
+                    let a = a.ok()?;
+                    if a.key.as_ref() == b"stop" {
+                        Some(String::from_utf8_lossy(a.value.as_ref()).to_string())
+                    } else { None }
+                }).unwrap_or_default();
+
+                let mut title = String::new();
+                let mut desc = String::new();
+                let mut category = String::new();
+
+                loop {
+                    match reader.read_event_into(&mut buf) {
+                        Ok(Event::Start(ref inner)) => {
+                            let tag = String::from_utf8_lossy(inner.name().as_ref()).to_string();
+                            let text = reader.read_text(inner.name()).unwrap_or_default();
+                            match tag.as_str() {
+                                "title" => title = text.to_string(),
+                                "desc" => desc = text.to_string(),
+                                "category" => category = text.to_string(),
+                                _ => {}
+                            }
+                        }
+                        Ok(Event::End(ref inner)) if inner.name().as_ref() == b"programme" => break,
+                        Ok(Event::Eof) => break,
+                        Err(_) => break,
+                        _ => {}
+                    }
+                }
+
+                if let Some(ch_id) = prog_channel {
+                    if !start.is_empty() && !stop.is_empty() {
+                        if let Some(entry) = channels.get_mut(&ch_id) {
+                            entry.1.push(EpgProgram { title, start, stop, desc, category });
+                        }
+                    }
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    Ok(channels)
+}
+
+/// Find programs for a channel by fuzzy-matching the channel name against all cached channels.
+fn find_programs_for_channel(
+    channels: &std::collections::HashMap<String, (String, Vec<EpgProgram>)>,
+    channel_name: &str,
+) -> Vec<EpgProgram> {
+    const GENERIC_TERMS: &[&str] = &[
+        "international", "channel", "tv", "television", "network",
+        "hd", "sd", "raw", "live", "news", "sports", "movies", "music",
+    ];
+
+    let clean_channel_name = |s: &str| -> String {
+        let mut result = s.to_lowercase();
+        result = result.trim_start_matches(|c: char| !c.is_alphanumeric()).to_string();
+        if let Some(pos) = result.find('|') {
+            let prefix = &result[..pos];
+            if prefix.chars().all(|c| c.is_alphanumeric() || c == '+') {
+                result = result[pos + 1..].to_string();
+            }
+        }
+        result.retain(|c| !matches!(c, 'ᴿ' | 'ᴬ' | 'ᵂ' | 'ᴴ' | 'ᴰ' | 'ᵁ' | 'ᴮ' | 'ᴱ' | 'ᴵ' | 'ᴼ' | 'ᵀ' | 'ᴳ' | 'ᴷ' | 'ᴸ' | 'ᴹ' | 'ᴺ' | 'ᴾ' | 'ᵍ' | 'ᵏ' | 'ᵐ' | 'ⁿ' | 'ᵖ'));
+        result = result.replace('+', "");
+        result = result.replace('|', " ");
+        result.retain(|c| c.is_alphanumeric() || c == ' ');
+        let mut normalized = String::new();
+        let mut prev_space = false;
+        for c in result.chars() {
+            if c == ' ' {
+                if !prev_space && !normalized.is_empty() {
+                    normalized.push(' ');
+                }
+                prev_space = true;
+            } else {
+                normalized.push(c);
+                prev_space = false;
+            }
+        }
+        normalized.trim().to_string()
+    };
+
+    let extract_channel_number = |s: &str| -> Option<i64> {
+        let trimmed = s.trim_end();
+        let digits: String = trimmed.chars().rev().take_while(|c| c.is_ascii_digit()).collect::<String>().chars().rev().collect();
+        if digits.is_empty() { None } else { digits.parse::<i64>().ok() }
+    };
+
+    let is_generic = |w: &str| -> bool {
+        GENERIC_TERMS.iter().any(|t| *t == w)
+    };
+
+    let target_name_clean = clean_channel_name(channel_name);
+    let target_channel_number = extract_channel_number(channel_name);
+
+    let mut best_score: f64 = 0.0;
+    let mut best_programs: Vec<EpgProgram> = Vec::new();
+
+    for (_, (display_name, programs)) in channels {
+        if programs.is_empty() { continue; }
+
+        let xmltv_name_clean = clean_channel_name(display_name);
+        let xmltv_channel_number = extract_channel_number(display_name);
+
+        let score = if target_name_clean.is_empty() || xmltv_name_clean.is_empty() {
+            0.0
+        } else if target_name_clean == xmltv_name_clean {
+            1000.0
+        } else if xmltv_name_clean.contains(&target_name_clean)
+            || target_name_clean.contains(&xmltv_name_clean)
+        {
+            100.0 + target_name_clean.len().max(xmltv_name_clean.len()) as f64
+        } else {
+            let target_words: std::collections::HashSet<&str> =
+                target_name_clean.split_whitespace()
+                    .filter(|w| w.len() > 2 && !is_generic(w))
+                    .collect();
+            let xmltv_words: std::collections::HashSet<&str> =
+                xmltv_name_clean.split_whitespace()
+                    .filter(|w| w.len() > 2 && !is_generic(w))
+                    .collect();
+            let matching = target_words.intersection(&xmltv_words).count();
+            if matching >= 2 {
+                matching as f64 * 10.0
+            } else if matching == 1 && target_words.len() == 1 {
+                10.0
+            } else if matching == 1 && target_words.len() > 1 {
+                5.0
+            } else {
+                0.0
+            }
+        };
+
+        let score = if let (Some(tn), Some(xn)) = (target_channel_number, xmltv_channel_number) {
+            if tn != xn { score - 500.0 } else { score }
+        } else { score };
+
+        let score = if score > 0.0 {
+            score - (xmltv_name_clean.len() as f64 * 0.1)
+        } else { score };
+
+        if score > best_score {
+            best_score = score;
+            best_programs = programs.clone();
+        }
+    }
+
+    best_programs
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg_attr(target_os = "android", allow(unused_mut))]
@@ -339,7 +711,9 @@ pub fn run() {
             cancel_request,
             fetch_image,
             check_mpv_available,
-            fetch_epg_gz
+            fetch_epg_gz,
+            fetch_epg_for_channel,
+            prefetch_epg_xml
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

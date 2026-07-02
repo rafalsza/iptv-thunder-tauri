@@ -237,6 +237,7 @@ export const useSeriesAll = (client: StalkerClient, categoryId?: string, search?
     staleTime: 0,
     gcTime:    30 * 60 * 1000,
     placeholderData: (previousData) => previousData,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });

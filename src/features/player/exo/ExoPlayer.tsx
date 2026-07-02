@@ -3,12 +3,13 @@
 // =========================
 
 import React, { useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { platform } from '@tauri-apps/plugin-os';
 import { createLogger } from '@/lib/logger';
 import { usePlaybackStore } from '@/store/playback.store';
 import { usePortalsStore } from '@/store/portals.store';
 import { StalkerClient } from '@/lib/stalkerAPI_new';
-import { getChannelEPG, getCurrentProgram, getNextProgram, formatEPGTime, fetchExternalEPG } from '@/features/epg/epg.api';
+import { getChannelEPG, getCurrentProgram, getNextProgram } from '@/features/epg/epg.api';
 import { useChannels } from '@/features/tv/tv.hooks';
 import { useRecentViewed } from '@/hooks/useRecentItems';
 
@@ -36,17 +37,52 @@ const fetchEPGData = async (channelId: number, isVod: boolean, channelName?: str
     }
 
     const effectiveEpgUrl = usePortalsStore.getState().getEffectiveEpgUrl();
-    logger.info('[ExoPlayer] Fetching EPG data for channel:', channelId, 'name:', channelName, 'externalEpg:', !!effectiveEpgUrl);
+    logger.info('[ExoPlayer] fetchEPGData: channelId=' + channelId + ', channelName=' + channelName + ', effectiveEpgUrl=' + effectiveEpgUrl);
 
     let epg;
     if (effectiveEpgUrl && channelName) {
-      epg = await fetchExternalEPG(effectiveEpgUrl, channelId, undefined, undefined, channelName);
+      logger.info('[ExoPlayer] Using external EPG: ' + effectiveEpgUrl);
+      // Always use Rust-side parsing - it caches XML and returns only matching programs
+      const programs = await invoke('fetch_epg_for_channel', {
+        url: effectiveEpgUrl,
+        channelName: channelName,
+      }) as Array<{ title: string; start: string; stop: string; desc: string; category: string }>;
+
+      // Convert XMLTV time format (e.g. "20260126180000 +0100") to unix timestamp seconds
+      const parseXmltvTime = (t: string): number => {
+        // Format: YYYYMMDDHHmmss [timezone offset like +0100 or -0500]
+        const m = t.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
+        if (!m) return 0;
+        const [, y, mo, d, h, mi, s, tz] = m;
+        // Build ISO string with timezone if present, otherwise use local time
+        if (tz) {
+          const tzSign = tz[0];
+          const tzH = tz.slice(1, 3);
+          const tzM = tz.slice(3, 5);
+          const isoTz = `${tzSign}${tzH}:${tzM}`;
+          return Math.floor(new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}${isoTz}`).getTime() / 1000);
+        }
+        // No timezone in XMLTV - treat as UTC
+        return Math.floor(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)) / 1000);
+      };
+
+      epg = programs.map((p) => ({
+        id: 0,
+        name: p.title,
+        start_time: String(parseXmltvTime(p.start)),
+        end_time: String(parseXmltvTime(p.stop)),
+        description: p.desc,
+        category: p.category,
+        channel_id: channelId,
+      }));
     } else {
+      logger.info('[ExoPlayer] Using internal EPG (portal API)');
       const client = StalkerClient.getOrCreate(activePortal as any);
       epg = await getChannelEPG(client, channelId);
     }
 
     if (!epg || epg.length === 0) {
+      logger.warn('[ExoPlayer] No EPG data returned for channelId=' + channelId);
       return {};
     }
 
@@ -56,19 +92,29 @@ const fetchEPGData = async (channelId: number, isVod: boolean, channelName?: str
     const result: any = {};
     if (currentProgram) {
       result.epgTitle = currentProgram.name || '';
-      result.epgStart = formatEPGTime(currentProgram.start_time);
-      result.epgEnd = formatEPGTime(currentProgram.end_time);
+      result.epgStart = currentProgram.start_time || '';
+      result.epgEnd = currentProgram.end_time || '';
       result.epgCategory = currentProgram.category || '';
+      result.epgDesc = currentProgram.description || '';
       logger.info('[ExoPlayer] Current program:', result.epgTitle, result.epgStart, '-', result.epgEnd, result.epgCategory);
     }
 
     if (nextProgram) {
       result.epgNextTitle = nextProgram.name || '';
-      result.epgNextStart = formatEPGTime(nextProgram.start_time);
-      result.epgNextEnd = formatEPGTime(nextProgram.end_time);
+      result.epgNextStart = nextProgram.start_time || '';
+      result.epgNextEnd = nextProgram.end_time || '';
       result.epgNextCategory = nextProgram.category || '';
       logger.info('[ExoPlayer] Next program:', result.epgNextTitle, result.epgNextStart, result.epgNextCategory);
     }
+
+    // Include full program list for Android auto-refresh
+    result.epgProgramsJson = JSON.stringify(epg.map(p => ({
+      title: p.name || '',
+      start: p.start_time || '',
+      end: p.end_time || '',
+      category: p.category || '',
+      desc: p.description || '',
+    })));
 
     return result;
   } catch (error) {
@@ -92,36 +138,6 @@ const validatePlayerParams = (params: any) => {
   return true;
 };
 
-// Helper to load and send EPG data to Android player
-const loadEpgData = async (channelId: number | undefined, isVod: boolean | undefined, channelName?: string) => {
-  try {
-    const epgData = await fetchEPGData(channelId || 0, isVod || false, channelName);
-
-    if (!epgData || Object.keys(epgData).length === 0) {
-      return;
-    }
-
-    const exoPlayer = (globalThis.window as any).ExoPlayer;
-    if (!exoPlayer || typeof exoPlayer.update_epg !== 'function') {
-      return;
-    }
-
-    exoPlayer.update_epg(
-      epgData.epgTitle || '',
-      epgData.epgStart || '',
-      epgData.epgEnd || '',
-      epgData.epgNextTitle || '',
-      epgData.epgNextStart || '',
-      epgData.epgNextEnd || '',
-      epgData.epgCategory || '',
-      epgData.epgNextCategory || ''
-    );
-    logger.info('[ExoPlayer] EPG data sent to Android player');
-  } catch (e) {
-    logger.warn('[ExoPlayer] Background EPG loading failed:', e);
-  }
-};
-
 // Helper to refresh EPG data periodically
 const refreshEpgData = async (channelId: number, channelName?: string) => {
   try {
@@ -143,7 +159,8 @@ const refreshEpgData = async (channelId: number, channelName?: string) => {
       epgData.epgNextStart || '',
       epgData.epgNextEnd || '',
       epgData.epgCategory || '',
-      epgData.epgNextCategory || ''
+      epgData.epgNextCategory || '',
+      epgData.epgDesc || ''
     );
     logger.info('[ExoPlayer] EPG data refreshed and sent to Android player');
   } catch (e) {
@@ -156,13 +173,11 @@ export interface ExoPlayerProps {
   name?: string;
   channelId?: number;
   client?: any;
-  buffering?: boolean;
   isVod?: boolean;
   movieId?: string;
   resumePosition?: number;
   setPosition: (id: string, pos: number, duration?: number) => void;
   genreId?: string;
-  onChannelChange?: (channel: any) => void;
   onClose: () => void;
   onEnded?: () => void;
 }
@@ -178,7 +193,6 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
   client,
   setPosition,
   onClose,
-  onChannelChange,
   onEnded: _onEnded
 }) => {
   // Fetch channels from the same category/genre for carousel (only for TV channels, not VOD/movies)
@@ -256,13 +270,12 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
           }
         }
 
-        // Also call React onChannelChange if provided
-        if (onChannelChange) {
-          onChannelChange({ id: channelId, cmd, name, tv_genre_id: genreId });
-        }
+        // Do NOT call React onChannelChange here on Android.
+        // It triggers handleChannelSelect → play() → getStreamUrl() → duplicate create_link → HTTP 429.
+        // Android native player handles channel switching entirely via set_resolved_url.
 
-        // Fetch and send EPG data for the new channel (non-blocking)
-        loadEpgData(channelId, false, name);
+        // EPG is fetched via onPlayerReady callback from Android after channel change.
+        // Do NOT await EPG here - it blocks the URL return and prevents channel switching.
 
         // Update periodic EPG refresh to use the new channelId
         if (epgIntervalRef.current) {
@@ -278,7 +291,78 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
     };
 
     logger.info('[ExoPlayer] onChannelChange bridge registered globally');
-  }, [client, onChannelChange]);
+  }, [client]);
+
+  // Register onEpgRequest bridge - called by Android when player is ready
+  // Android calls this via evaluateJavascript, which wakes up JS even when WebView is paused
+  React.useEffect(() => {
+    if (!isAndroid()) return;
+
+    if ((globalThis.window as any).onEpgRequest) return;
+
+    let epgRequestToken = 0;
+    (globalThis.window as any).onEpgRequest = async (channelId: number, channelName: string): Promise<void> => {
+      const myToken = ++epgRequestToken;
+      const sendEpg = (epgData: any) => {
+        if (myToken !== epgRequestToken) {
+          logger.info('[ExoPlayer] onEpgRequest: stale request, ignoring for channel:', channelName);
+          return false;
+        }
+        const exoPlayer = (globalThis.window as any).ExoPlayer;
+        if (!exoPlayer || !epgData) return false;
+        let sent = false;
+        if (epgData.epgProgramsJson) {
+          exoPlayer.update_epg_list(epgData.epgProgramsJson);
+          logger.info('[ExoPlayer] onEpgRequest: sent EPG list');
+          sent = true;
+        }
+        if (epgData.epgTitle) {
+          exoPlayer.update_epg(
+            epgData.epgTitle || '',
+            epgData.epgStart || '',
+            epgData.epgEnd || '',
+            epgData.epgNextTitle || '',
+            epgData.epgNextStart || '',
+            epgData.epgNextEnd || '',
+            epgData.epgCategory || '',
+            epgData.epgNextCategory || '',
+            epgData.epgDesc || ''
+          );
+          logger.info('[ExoPlayer] onEpgRequest: sent current/next EPG:', epgData.epgTitle);
+          sent = true;
+        }
+        return sent;
+      };
+
+      // Retry up to 5 times with 3s delay — XMLTV prefetch may still be downloading
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        if (myToken !== epgRequestToken) {
+          logger.info('[ExoPlayer] onEpgRequest: aborted stale request for channel:', channelName);
+          return;
+        }
+        try {
+          logger.info('[ExoPlayer] onEpgRequest attempt ' + attempt + ' for channel:', channelId, channelName);
+          const epgData = await fetchEPGData(channelId, false, channelName);
+          if (myToken !== epgRequestToken) {
+            logger.info('[ExoPlayer] onEpgRequest: aborted stale request after fetch for channel:', channelName);
+            return;
+          }
+          if (sendEpg(epgData)) {
+            return; // Success
+          }
+          logger.warn('[ExoPlayer] onEpgRequest: no EPG data on attempt ' + attempt);
+        } catch (e) {
+          logger.error('[ExoPlayer] onEpgRequest attempt ' + attempt + ' failed:', e);
+        }
+        if (attempt < 5) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+      }
+      logger.warn('[ExoPlayer] onEpgRequest: gave up after 5 attempts for channel:', channelName);
+    };
+
+    logger.info('[ExoPlayer] onEpgRequest bridge registered globally');
+  }, []);
 
   // Register onSavePosition bridge for Android player - saves position when player closes
   React.useEffect(() => {
@@ -310,8 +394,23 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
     logger.info('[ExoPlayer] onSavePosition bridge registered globally');
   }, [setPosition]);
 
+  // Register onPlayerClosed bridge - called by Android when native player is destroyed (back button)
+  React.useEffect(() => {
+    if (!isAndroid()) return;
+
+    (globalThis.window as any).onPlayerClosed = () => {
+      logger.info('[ExoPlayer] onPlayerClosed called from native');
+      onClose();
+    };
+
+    logger.info('[ExoPlayer] onPlayerClosed bridge registered globally');
+  }, [onClose]);
+
   // Open native player first
   React.useEffect(() => {
+    // Skip when URL is empty - player is waiting for create_link to resolve URL
+    if (!url) return;
+
     // Prevent multiple calls
     if (hasOpenedRef.current) {
       return;
@@ -321,7 +420,6 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
     // Reset tracking on new player open
     lastChannelIdRef.current = undefined;
     lastSavedMovieIdRef.current = null; // Reset saved movieId for new session
-    setPlayerOpened(true);
 
     const openNativePlayer = async () => {
       if (!isAndroid()) {
@@ -354,7 +452,6 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
       // Get volume from persisted store
       const volume = Math.round((usePlaybackStore.getState().settings.volume) * 100) || 80;
 
-      // Open player immediately with minimal data
       const exoPlayer = (globalThis.window as any).ExoPlayer;
       if (!exoPlayer || typeof exoPlayer.open_compose_player !== 'function') {
         logger.error('ExoPlayer.open_compose_player method not available');
@@ -362,6 +459,8 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         return;
       }
 
+      // Open player immediately - no EPG wait.
+      // onEpgRequest (called from Android's onPlayerReady) will fetch EPG with retries.
       const params = {
         url,
         channelName: name,
@@ -385,7 +484,9 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         epgNextTitle: '',
         epgNextStart: '',
         epgNextEnd: '',
-        epgNextCategory: ''
+        epgNextCategory: '',
+        epgDesc: '',
+        epgProgramsJson: ''
       };
 
       if (!validatePlayerParams(params)) {
@@ -402,10 +503,9 @@ export const ExoPlayer: React.FC<ExoPlayerProps> = ({
         return;
       }
 
-      // Load EPG data in background (non-blocking)
-      loadEpgData(channelId, isVod, name);
+      // Player is now open - set flag so channel sending useEffect can proceed
+      setPlayerOpened(true);
 
-      // Start periodic EPG refresh (every 30 seconds for live TV)
       if (!isVod && channelId) {
         epgIntervalRef.current = setInterval(() => refreshEpgData(channelId, name), 30000);
       }

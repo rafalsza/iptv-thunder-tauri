@@ -1,13 +1,13 @@
 // =========================
 // 🧭 NAVIGATION COMPONENT
 // =========================
-import React, { useState, memo, useRef, useMemo } from 'react';
+import React, { useState, memo, useRef, useMemo, useEffect } from 'react';
 import { ChevronDown, Power, Lock } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { exit } from '@tauri-apps/plugin-process';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
-import packageJson from '../../../package.json';
+import { getVersion } from '@tauri-apps/api/app';
 
 // Detect Android platform
 const isAndroid = () => {
@@ -66,6 +66,11 @@ export const Navigation: React.FC<NavigationProps> = memo(({ items, className = 
   const { t } = useTranslation();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const manuallyInteracted = useRef<Set<string>>(new Set());
+  const [appVersion, setAppVersion] = useState<string>('');
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => setAppVersion(''));
+  }, []);
 
   const toggleSubmenu = (itemId: string) => {
     manuallyInteracted.current.add(itemId);
@@ -256,7 +261,7 @@ export const Navigation: React.FC<NavigationProps> = memo(({ items, className = 
         </motion.button>
 
         <div className="text-center py-2 md:py-3">
-          <p className="text-xs md:text-sm dark:text-slate-500 text-slate-400">v{packageJson.version}</p>
+          <p className="text-xs md:text-sm dark:text-slate-500 text-slate-400">v{appVersion || '...'}</p>
         </div>
       </div>
     </div>
